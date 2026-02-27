@@ -51,7 +51,6 @@ impl JiraClient {
             let query = [
                 ("startAt", start_at.to_string()),
                 ("maxResults", max_results.to_string()),
-                ("type", "scrum,kanban".to_string()),
             ];
             let payload = self.get_json("/rest/agile/1.0/board", &query).await?;
             let values = payload

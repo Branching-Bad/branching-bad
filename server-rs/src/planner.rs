@@ -180,6 +180,12 @@ pub fn generate_plan_with_agent_strict(
         .map(|c| format!("\nRevision request from user:\n{c}\n"))
         .unwrap_or_default();
 
+    let sentry_section = if task.source == "sentry" {
+        build_sentry_prompt_section(task)
+    } else {
+        String::new()
+    };
+
     let prompt = format!(
         r#"You are planning implementation for a coding task.
 
@@ -206,7 +212,7 @@ Task:
 - issue_key: {issue_key}
 - title: {title}
 - description: {description}
-{revision_section}
+{revision_section}{sentry_section}
 Repository context:
 {repo_structure}
 
@@ -1243,4 +1249,29 @@ fn keyword_tokens(text: &str) -> Vec<String> {
         .filter(|part| part.len() >= 4)
         .map(ToString::to_string)
         .collect()
+}
+
+fn build_sentry_prompt_section(_task: &TaskWithPayload) -> String {
+    // The task description already contains detailed Sentry context (stack trace etc.)
+    // from the create-task handler. Add explicit instructions for bug-fix focus.
+    format!(
+        r#"
+## Bug Fix Instructions (Sentry Error)
+
+This task was created from a Sentry error report. The description above contains the full error details and stack trace.
+
+Instructions:
+- ONLY fix the bug. Do NOT change any behavior beyond fixing the error.
+- Include a "Root Cause" section in plan_markdown explaining why this error occurs.
+- Include an "Error Description" section with the full error details.
+- If the task title starts with "[SENTRY]" and the description mentions regression,
+  note whether a previous fix may not have been deployed to all environments.
+- Focus on minimal, targeted changes. No refactoring.
+- The plan_markdown MUST contain these sections:
+  1. Root Cause
+  2. Error Description
+  3. Fix Strategy
+  4. Files to Change
+"#
+    )
 }

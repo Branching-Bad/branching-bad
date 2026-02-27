@@ -239,6 +239,62 @@ pub struct JiraMe {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SentryAccount {
+    pub id: String,
+    pub base_url: String,
+    pub org_slug: String,
+    pub auth_token: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SentryProject {
+    pub id: String,
+    pub sentry_account_id: String,
+    pub project_slug: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoSentryBinding {
+    pub repo_id: String,
+    pub sentry_account_id: String,
+    pub sentry_project_id: String,
+    pub environments: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SentryIssueRecord {
+    pub id: String,
+    pub sentry_account_id: String,
+    pub sentry_project_id: String,
+    pub sentry_issue_id: String,
+    pub title: String,
+    pub culprit: Option<String>,
+    pub level: Option<String>,
+    pub first_seen: Option<String>,
+    pub last_seen: Option<String>,
+    pub occurrence_count: i64,
+    pub environments: String,
+    pub status: String,
+    pub linked_task_id: Option<String>,
+    pub latest_event_json: Option<String>,
+    pub metadata_json: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+pub struct SentryOrg {
+    pub slug: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredProfile {
     pub provider: String,
     pub agent_name: String,

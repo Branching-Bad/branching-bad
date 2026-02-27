@@ -530,3 +530,131 @@ fn is_structured_cli_event(line: &str) -> bool {
         .and_then(|v| v.get("type").and_then(Value::as_str).map(|_| ()))
         .is_some()
 }
+
+/// Detect the base branch of a repo (main or master).
+pub fn detect_base_branch(repo_path: &str) -> Result<String> {
+    for candidate in &["main", "master"] {
+        let output = Command::new("git")
+            .args(["-C", repo_path, "rev-parse", "--verify", candidate])
+            .output()
+            .context("failed to invoke git rev-parse")?;
+        if output.status.success() {
+            return Ok(candidate.to_string());
+        }
+    }
+    Err(anyhow!("could not detect base branch (tried main, master)"))
+}
+
+pub struct ApplyResult {
+    pub files_changed: usize,
+    pub base_branch: String,
+}
+
+pub struct MergeConflictError {
+    pub conflicted_files: Vec<String>,
+}
+
+impl std::fmt::Display for MergeConflictError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "merge conflict in {} files", self.conflicted_files.len())
+    }
+}
+
+/// Apply task branch changes to the base branch as unstaged changes.
+/// Uses git merge --squash --no-commit, then git reset HEAD.
+/// On conflict, aborts and returns the list of conflicted files.
+pub fn apply_branch_to_base_unstaged(
+    repo_path: &str,
+    task_branch: &str,
+    base_branch: &str,
+) -> std::result::Result<ApplyResult, ApplyError> {
+    // Stash any existing work
+    let stash_output = Command::new("git")
+        .args(["-C", repo_path, "stash"])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    let had_stash = stash_output.status.success()
+        && !String::from_utf8_lossy(&stash_output.stdout)
+            .trim()
+            .contains("No local changes");
+
+    // Checkout base branch
+    let checkout = Command::new("git")
+        .args(["-C", repo_path, "checkout", base_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    if !checkout.status.success() {
+        // Restore stash if we had one
+        if had_stash {
+            let _ = Command::new("git").args(["-C", repo_path, "stash", "pop"]).output();
+        }
+        return Err(ApplyError::Internal(anyhow!(
+            "failed to checkout {}: {}",
+            base_branch,
+            String::from_utf8_lossy(&checkout.stderr).trim()
+        )));
+    }
+
+    // Attempt merge --squash --no-commit
+    let merge = Command::new("git")
+        .args(["-C", repo_path, "merge", "--squash", "--no-commit", task_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+
+    if !merge.status.success() {
+        // Conflict — collect conflicted files
+        let diff = Command::new("git")
+            .args(["-C", repo_path, "diff", "--name-only", "--diff-filter=U"])
+            .output()
+            .ok();
+        let conflicted_files: Vec<String> = diff
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .filter(|l| !l.is_empty())
+                    .map(|l| l.to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Abort merge
+        let _ = Command::new("git")
+            .args(["-C", repo_path, "merge", "--abort"])
+            .output();
+        // Go back to task branch
+        let _ = Command::new("git")
+            .args(["-C", repo_path, "checkout", task_branch])
+            .output();
+        // Restore stash
+        if had_stash {
+            let _ = Command::new("git").args(["-C", repo_path, "stash", "pop"]).output();
+        }
+
+        return Err(ApplyError::Conflict(MergeConflictError { conflicted_files }));
+    }
+
+    // Success — unstage everything
+    let _ = Command::new("git")
+        .args(["-C", repo_path, "reset", "HEAD"])
+        .output();
+
+    // Count changed files
+    let status = Command::new("git")
+        .args(["-C", repo_path, "status", "--porcelain"])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    let files_changed = String::from_utf8_lossy(&status.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
+
+    Ok(ApplyResult {
+        files_changed,
+        base_branch: base_branch.to_string(),
+    })
+}
+
+pub enum ApplyError {
+    Internal(anyhow::Error),
+    Conflict(MergeConflictError),
+}

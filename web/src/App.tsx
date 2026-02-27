@@ -83,6 +83,14 @@ type ReviewComment = {
   addressed_at: string | null;
   created_at: string;
 };
+type SentryAccount = { id: string; base_url: string; org_slug: string };
+type SentryProject = { id: string; sentry_account_id: string; project_slug: string; name: string };
+type SentryIssue = {
+  id: string; sentry_issue_id: string; title: string; culprit: string | null;
+  level: string | null; first_seen: string | null; last_seen: string | null;
+  occurrence_count: number; environments: string; status: string;
+  linked_task_id: string | null;
+};
 type LaneKey = "todo" | "inprogress" | "inreview" | "done" | "archived";
 
 const EMPTY_TASK_RUN_STATE: TaskRunState = {
@@ -467,6 +475,12 @@ function SettingsModal({
   onRepoSubmit, onConnectJira, bindBoard, discoverAgents, saveAgentSelection,
   repoPath, setRepoPath, repoName, setRepoName,
   jiraBaseUrl, setJiraBaseUrl, jiraEmail, setJiraEmail, jiraToken, setJiraToken,
+  sentryAccounts, sentryProjects,
+  sentryBaseUrl, setSentryBaseUrl, sentryOrgSlug, setSentryOrgSlug,
+  sentryAuthToken, setSentryAuthToken,
+  selectedSentryAccountId, setSelectedSentryAccountId,
+  selectedSentryProjectId, setSelectedSentryProjectId,
+  onConnectSentry, fetchSentryProjects, bindSentryProject,
 }: {
   open: boolean; onClose: () => void;
   repos: Repo[]; accounts: JiraAccount[]; boards: JiraBoard[]; agentProfiles: AgentProfile[];
@@ -486,14 +500,24 @@ function SettingsModal({
   jiraBaseUrl: string; setJiraBaseUrl: (v: string) => void;
   jiraEmail: string; setJiraEmail: (v: string) => void;
   jiraToken: string; setJiraToken: (v: string) => void;
+  sentryAccounts: SentryAccount[]; sentryProjects: SentryProject[];
+  sentryBaseUrl: string; setSentryBaseUrl: (v: string) => void;
+  sentryOrgSlug: string; setSentryOrgSlug: (v: string) => void;
+  sentryAuthToken: string; setSentryAuthToken: (v: string) => void;
+  selectedSentryAccountId: string; setSelectedSentryAccountId: (v: string) => void;
+  selectedSentryProjectId: string; setSelectedSentryProjectId: (v: string) => void;
+  onConnectSentry: (e: FormEvent) => void;
+  fetchSentryProjects: () => void;
+  bindSentryProject: () => void;
 }) {
-  const [tab, setTab] = useState<"repo" | "jira" | "agent">("repo");
+  const [tab, setTab] = useState<"repo" | "jira" | "sentry" | "agent">("repo");
 
   if (!open) return null;
 
   const tabs = [
     { key: "repo" as const, label: "Repository" },
     { key: "jira" as const, label: "Jira" },
+    { key: "sentry" as const, label: "Sentry" },
     { key: "agent" as const, label: "AI Agent" },
   ];
 
@@ -604,6 +628,44 @@ function SettingsModal({
               </div>
               <button onClick={bindBoard} disabled={busy} className={btnPrimary}>
                 Bind Repo to Board
+              </button>
+            </div>
+          )}
+
+          {tab === "sentry" && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border-default bg-surface-200 p-4">
+                <h3 className="mb-3 text-sm font-medium text-text-secondary">Connect Sentry</h3>
+                <form onSubmit={onConnectSentry} className="space-y-3">
+                  <input className={inputClass} placeholder="https://sentry.io" value={sentryBaseUrl} onChange={(e) => setSentryBaseUrl(e.target.value)} />
+                  <input className={inputClass} placeholder="Organization slug" value={sentryOrgSlug} onChange={(e) => setSentryOrgSlug(e.target.value)} />
+                  <input className={inputClass} placeholder="Auth token (Internal Integration)" type="password" value={sentryAuthToken} onChange={(e) => setSentryAuthToken(e.target.value)} />
+                  <button type="submit" disabled={busy} className={btnPrimary}>Connect</button>
+                </form>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Account</label>
+                <select className={selectClass} value={selectedSentryAccountId} onChange={(e) => { setSelectedSentryAccountId(e.target.value); }}>
+                  <option value="">Select Sentry account</option>
+                  {sentryAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.org_slug} ({a.base_url})</option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={fetchSentryProjects} disabled={busy || !selectedSentryAccountId} className={btnSecondary}>
+                Fetch Projects
+              </button>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Project</label>
+                <select className={selectClass} value={selectedSentryProjectId} onChange={(e) => setSelectedSentryProjectId(e.target.value)}>
+                  <option value="">Select project</option>
+                  {sentryProjects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.project_slug})</option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={bindSentryProject} disabled={busy} className={btnPrimary}>
+                Bind Repo to Sentry Project
               </button>
             </div>
           )}
@@ -920,6 +982,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [applyConflicts, setApplyConflicts] = useState<string[]>([]);
   const [taskRunStates, setTaskRunStates] = useState<Record<string, TaskRunState>>({});
   const [taskPlanStates, setTaskPlanStates] = useState<Record<string, TaskPlanState>>({});
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -952,6 +1015,18 @@ export default function App() {
   const [manualPlanJsonText, setManualPlanJsonText] = useState("");
   const [manualTasklistJsonText, setManualTasklistJsonText] = useState("");
   const [tasklistValidationError, setTasklistValidationError] = useState("");
+
+  // Sentry state
+  const [sentryAccounts, setSentryAccounts] = useState<SentryAccount[]>([]);
+  const [sentryProjects, setSentryProjects] = useState<SentryProject[]>([]);
+  const [sentryIssues, setSentryIssues] = useState<SentryIssue[]>([]);
+  const [sentryBaseUrl, setSentryBaseUrl] = useState("https://sentry.io");
+  const [sentryOrgSlug, setSentryOrgSlug] = useState("");
+  const [sentryAuthToken, setSentryAuthToken] = useState("");
+  const [selectedSentryAccountId, setSelectedSentryAccountId] = useState("");
+  const [selectedSentryProjectId, setSelectedSentryProjectId] = useState("");
+  const [sentryIssuesCount, setSentryIssuesCount] = useState(0);
+  const [showSentryPanel, setShowSentryPanel] = useState(false);
 
   const selectedTask = useMemo(() => tasks.find((t) => t.id === selectedTaskId) ?? null, [tasks, selectedTaskId]);
   const latestPlan = plans[0] ?? null;
@@ -1028,10 +1103,12 @@ export default function App() {
 
   const bootstrap = useCallback(async () => {
     try {
-      const payload = await api<{ repos: Repo[]; jiraAccounts: JiraAccount[]; agentProfiles: AgentProfile[] }>("/api/bootstrap");
+      const payload = await api<{ repos: Repo[]; jiraAccounts: JiraAccount[]; agentProfiles: AgentProfile[]; sentryAccounts?: SentryAccount[]; sentryIssuesCount?: number }>("/api/bootstrap");
       setRepos(payload.repos);
       setAccounts(payload.jiraAccounts);
       setAgentProfiles(payload.agentProfiles ?? []);
+      setSentryAccounts(payload.sentryAccounts ?? []);
+      setSentryIssuesCount(payload.sentryIssuesCount ?? 0);
       if (!selectedRepoId && payload.repos.length > 0) setSelectedRepoId(payload.repos[0].id);
       if (!selectedAccountId && payload.jiraAccounts.length > 0) setSelectedAccountId(payload.jiraAccounts[0].id);
     } catch (e) { setError((e as Error).message); }
@@ -1169,6 +1246,79 @@ export default function App() {
       setInfo("Agent profile saved for repo.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+
+  // ── Sentry Actions ──
+
+  async function connectSentry(e: FormEvent) {
+    e.preventDefault();
+    if (!sentryOrgSlug || !sentryAuthToken) { setError("Org slug and auth token required."); return; }
+    setError(""); setInfo(""); setBusy(true);
+    try {
+      await api("/api/sentry/connect", { method: "POST", body: JSON.stringify({ baseUrl: sentryBaseUrl, orgSlug: sentryOrgSlug, authToken: sentryAuthToken }) });
+      setSentryAuthToken("");
+      const payload = await api<{ accounts: SentryAccount[] }>("/api/sentry/accounts");
+      setSentryAccounts(payload.accounts);
+      setInfo("Sentry account connected.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function fetchSentryProjects() {
+    if (!selectedSentryAccountId) return;
+    setError(""); setBusy(true);
+    try {
+      const payload = await api<{ projects: SentryProject[] }>(`/api/sentry/accounts/${selectedSentryAccountId}/projects`);
+      setSentryProjects(payload.projects);
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function bindSentryProject() {
+    if (!selectedRepoId || !selectedSentryAccountId || !selectedSentryProjectId) {
+      setError("Repo, Sentry account and project required."); return;
+    }
+    setError(""); setInfo(""); setBusy(true);
+    try {
+      await api("/api/sentry/bind", { method: "POST", body: JSON.stringify({ repoId: selectedRepoId, sentryAccountId: selectedSentryAccountId, sentryProjectId: selectedSentryProjectId }) });
+      setInfo("Sentry project bound to repo.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function fetchSentryIssues() {
+    if (!selectedRepoId) return;
+    try {
+      const payload = await api<{ issues: SentryIssue[] }>(`/api/sentry/issues/${selectedRepoId}`);
+      setSentryIssues(payload.issues);
+    } catch { /* silent */ }
+  }
+
+  async function sentrySyncNow() {
+    if (!selectedRepoId) return;
+    setError(""); setBusy(true);
+    try {
+      const payload = await api<{ synced: number; issues: SentryIssue[] }>(`/api/sentry/sync/${selectedRepoId}`, { method: "POST" });
+      setSentryIssues(payload.issues);
+      setInfo(`Synced ${payload.synced} Sentry issues.`);
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function sentryIgnoreIssue(issueId: string) {
+    try {
+      await api(`/api/sentry/issues/${issueId}/action`, { method: "POST", body: JSON.stringify({ action: "ignore" }) });
+      setSentryIssues((prev) => prev.filter((i) => i.id !== issueId));
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function sentryCreateTask(issueId: string) {
+    setError(""); setBusy(true);
+    try {
+      await api(`/api/sentry/issues/${issueId}/create-task`, { method: "POST" });
+      setSentryIssues((prev) => prev.map((i) => i.id === issueId ? { ...i, status: "accepted" } : i));
+      await syncTasks();
+      setInfo("Task created from Sentry issue. Plan generation started.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  // Auto-fetch sentry issues when repo changes
+  useEffect(() => { if (selectedRepoId) fetchSentryIssues(); }, [selectedRepoId]);
 
   async function syncTasks() {
     if (!selectedRepoId) { setError("Select a repo first."); return; }
@@ -1681,6 +1831,26 @@ export default function App() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
+  async function applyToMain() {
+    if (!selectedTaskId) return;
+    setError(""); setInfo(""); setBusy(true); setApplyConflicts([]);
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(selectedTaskId)}/apply-to-main`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (res.status === 409 && data.conflict) {
+        setApplyConflicts(data.conflictedFiles ?? []);
+      } else if (res.ok && data.applied) {
+        setApplyConflicts([]);
+        setInfo(`Changes applied to ${data.baseBranch} as unstaged (${data.filesChanged} files).`);
+      } else {
+        setError(data.error ?? "Failed to apply changes.");
+      }
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
   // Auto-scroll logs
   useEffect(() => {
     if (logContainerRef.current) {
@@ -2009,6 +2179,78 @@ export default function App() {
 
       {/* ─── Main Content ─── */}
       <main className="mx-auto max-w-7xl px-5 py-6">
+
+        {/* Sentry Issues Toggle */}
+        {sentryAccounts.length > 0 && (
+          <div className="mb-4">
+            <button
+              onClick={() => { setShowSentryPanel(!showSentryPanel); if (!showSentryPanel) fetchSentryIssues(); }}
+              className="flex items-center gap-2 rounded-lg border border-border-default bg-surface-100 px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-surface-200"
+            >
+              Sentry Hatalari
+              {sentryIssuesCount > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+                  {sentryIssuesCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Sentry Issues Panel */}
+        {showSentryPanel && (
+          <section className="mb-6 rounded-2xl border border-border-default bg-surface-100 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-medium text-text-primary">Sentry Issues</h2>
+              <button onClick={sentrySyncNow} disabled={busy} className="rounded-md border border-border-default bg-surface-200 px-3 py-1 text-xs font-medium text-text-secondary transition hover:bg-surface-300">
+                Sync Now
+              </button>
+            </div>
+            {sentryIssues.filter((i) => i.status === "pending" || i.status === "regression").length === 0 ? (
+              <p className="text-sm text-text-muted">No pending Sentry issues.</p>
+            ) : (
+              <div className="space-y-2">
+                {sentryIssues
+                  .filter((i) => i.status === "pending" || i.status === "regression")
+                  .map((issue) => (
+                    <div key={issue.id} className="flex items-start justify-between gap-3 rounded-xl border border-border-default bg-surface-200 p-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block h-2 w-2 rounded-full ${issue.level === "fatal" ? "bg-red-600" : issue.level === "error" ? "bg-red-400" : "bg-yellow-400"}`} />
+                          <span className="truncate text-sm font-medium text-text-primary">{issue.title}</span>
+                          {issue.status === "regression" && (
+                            <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400 uppercase">Regression</span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-text-muted">
+                          {issue.culprit && <span>Culprit: {issue.culprit}</span>}
+                          <span>Level: {issue.level ?? "error"}</span>
+                          <span>Count: {issue.occurrence_count}</span>
+                          {issue.last_seen && <span>Last: {formatDate(issue.last_seen)}</span>}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-1.5">
+                        <button
+                          onClick={() => sentryCreateTask(issue.id)}
+                          disabled={busy}
+                          className="rounded-md bg-brand px-3 py-1 text-xs font-medium text-white transition hover:bg-brand-hover"
+                        >
+                          Fix
+                        </button>
+                        <button
+                          onClick={() => sentryIgnoreIssue(issue.id)}
+                          className="rounded-md border border-border-default px-3 py-1 text-xs font-medium text-text-muted transition hover:bg-surface-300"
+                        >
+                          Ignore
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Kanban Board */}
         <section className="mb-6">
           <div className="mb-4 flex items-center justify-between">
@@ -2314,7 +2556,7 @@ export default function App() {
                   Run Output
                   {detailsTab === "run" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
                 </button>
-                {selectedTask?.status === "IN_REVIEW" && (
+                {(selectedTask?.status === "IN_REVIEW" || selectedTask?.status === "DONE") && (
                   <button
                     onClick={() => setDetailsTab("review")}
                     className={`relative px-3 py-2.5 text-sm font-medium transition ${
@@ -2658,14 +2900,41 @@ export default function App() {
                     <div className="rounded-xl border border-border-default bg-surface-200 p-3">
                       <div className="mb-3 flex items-center justify-between">
                         <h4 className="text-xs font-medium text-text-secondary">Review Feedback</h4>
-                        <button
-                          onClick={() => void markTaskDone()}
-                          disabled={busy}
-                          className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
-                        >
-                          Mark as Done
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => void applyToMain()}
+                            disabled={busy}
+                            className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
+                          >
+                            Apply to Main
+                          </button>
+                          {selectedTask?.status !== "DONE" && (
+                            <button
+                              onClick={() => void markTaskDone()}
+                              disabled={busy}
+                              className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
+                            >
+                              Mark as Done
+                            </button>
+                          )}
+                        </div>
                       </div>
+
+                      {applyConflicts.length > 0 && (
+                        <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
+                          <p className="mb-1 text-xs font-medium text-red-400">
+                            Merge Conflicts ({applyConflicts.length} {applyConflicts.length === 1 ? "file" : "files"})
+                          </p>
+                          <ul className="mb-1 space-y-0.5">
+                            {applyConflicts.map((f) => (
+                              <li key={f} className="text-[11px] text-red-300">- {f}</li>
+                            ))}
+                          </ul>
+                          <p className="text-[10px] text-red-400/70">
+                            Resolve conflicts on the task branch before applying.
+                          </p>
+                        </div>
+                      )}
 
                       {reviewComments.length > 0 && (
                         <div className="mb-3 space-y-2">
@@ -2747,6 +3016,13 @@ export default function App() {
         jiraBaseUrl={jiraBaseUrl} setJiraBaseUrl={setJiraBaseUrl}
         jiraEmail={jiraEmail} setJiraEmail={setJiraEmail}
         jiraToken={jiraToken} setJiraToken={setJiraToken}
+        sentryAccounts={sentryAccounts} sentryProjects={sentryProjects}
+        sentryBaseUrl={sentryBaseUrl} setSentryBaseUrl={setSentryBaseUrl}
+        sentryOrgSlug={sentryOrgSlug} setSentryOrgSlug={setSentryOrgSlug}
+        sentryAuthToken={sentryAuthToken} setSentryAuthToken={setSentryAuthToken}
+        selectedSentryAccountId={selectedSentryAccountId} setSelectedSentryAccountId={setSelectedSentryAccountId}
+        selectedSentryProjectId={selectedSentryProjectId} setSelectedSentryProjectId={setSelectedSentryProjectId}
+        onConnectSentry={connectSentry} fetchSentryProjects={fetchSentryProjects} bindSentryProject={bindSentryProject}
       />
 
       <CreateTaskModal

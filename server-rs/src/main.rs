@@ -6,6 +6,7 @@ mod models;
 mod msg_store;
 mod planner;
 mod process_manager;
+mod sentry;
 
 use std::{
     convert::Infallible,
@@ -38,7 +39,10 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     discovery::discover_agent_profiles,
-    executor::{create_execution_branch, save_plan_artifact, spawn_agent},
+    executor::{
+        create_execution_branch, save_plan_artifact, spawn_agent,
+        detect_base_branch, apply_branch_to_base_unstaged, ApplyError,
+    },
     jira::JiraClient,
     models::{CreateTaskPayload, PlanJob, TaskWithPayload},
     msg_store::{LogMsg, MsgStore},
@@ -47,6 +51,7 @@ use crate::{
         validate_tasklist_payload,
     },
     process_manager::ProcessManager,
+    sentry::SentryClient,
 };
 
 use command_group::AsyncCommandGroup;
@@ -84,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
     let process_manager = ProcessManager::new();
     let state = AppState { db, process_manager };
     spawn_autostart_worker(state.clone());
+    spawn_sentry_sync_worker(state.clone());
 
     let app = Router::new()
         .route("/api/health", get(health))
@@ -125,10 +131,21 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/tasks/{task_id}/review", post(submit_review))
         .route("/api/tasks/{task_id}/reviews", get(list_reviews))
         .route("/api/tasks/{task_id}/complete", post(complete_task))
+        .route("/api/tasks/{task_id}/apply-to-main", post(apply_to_main))
         .route("/api/agents/discover", get(discover_agents))
         .route("/api/agents", get(list_agents))
         .route("/api/agents/select", post(select_repo_agent))
         .route("/api/agents/selection", get(get_repo_agent_selection))
+        .route("/api/sentry/connect", post(connect_sentry))
+        .route("/api/sentry/accounts", get(list_sentry_accounts))
+        .route("/api/sentry/accounts/{id}", axum::routing::delete(delete_sentry_account))
+        .route("/api/sentry/accounts/{id}/projects", get(list_sentry_projects))
+        .route("/api/sentry/bind", post(bind_repo_to_sentry))
+        .route("/api/sentry/bindings", get(list_sentry_bindings))
+        .route("/api/sentry/issues/{repo_id}", get(list_sentry_issues))
+        .route("/api/sentry/issues/{id}/action", post(sentry_issue_action))
+        .route("/api/sentry/issues/{id}/create-task", post(sentry_create_task))
+        .route("/api/sentry/sync/{repo_id}", post(sentry_manual_sync))
         .route("/api/fs/list", get(fs_list))
         .layer(
             CorsLayer::new()
@@ -175,10 +192,23 @@ async fn bootstrap(State(state): State<AppState>) -> Result<Json<Value>, ApiErro
         .map(masked_account)
         .collect::<Vec<_>>();
     let agent_profiles = state.db.list_agent_profiles().map_err(ApiError::internal)?;
+    let sentry_accounts = state
+        .db
+        .list_sentry_accounts()
+        .map_err(ApiError::internal)?
+        .into_iter()
+        .map(masked_sentry_account)
+        .collect::<Vec<_>>();
+    let sentry_issues_count = state
+        .db
+        .count_pending_sentry_issues()
+        .map_err(ApiError::internal)?;
     Ok(Json(json!({
       "repos": repos,
       "jiraAccounts": jira_accounts,
-      "agentProfiles": agent_profiles
+      "agentProfiles": agent_profiles,
+      "sentryAccounts": sentry_accounts,
+      "sentryIssuesCount": sentry_issues_count
     })))
 }
 
@@ -1563,7 +1593,7 @@ async fn start_run(
     let agent_segment = sanitize_branch_segment(&profile.provider);
     let task_segment = sanitize_branch_segment(&task.jira_issue_key);
     let branch_name = format!(
-        "codex/{}-{}-{}",
+        "agent/{}-{}-{}",
         if agent_segment.is_empty() {
             "agent".to_string()
         } else {
@@ -2126,6 +2156,59 @@ async fn complete_task(
     Ok(Json(json!({ "status": "DONE", "taskId": path.task_id })))
 }
 
+async fn apply_to_main(
+    State(state): State<AppState>,
+    Path(path): Path<TaskPath>,
+) -> Result<Response, ApiError> {
+    let task = state
+        .db
+        .get_task_by_id(&path.task_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Task not found."))?;
+
+    if task.status != "IN_REVIEW" && task.status != "DONE" {
+        return Err(ApiError::bad_request(
+            "Task must be in IN_REVIEW or DONE status to apply changes.",
+        ));
+    }
+
+    let run = state
+        .db
+        .get_latest_run_by_task(&path.task_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::bad_request("No run found for this task."))?;
+
+    let repo = state
+        .db
+        .get_repo_by_id(&task.repo_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Repo not found."))?;
+
+    let base_branch =
+        detect_base_branch(&repo.path).map_err(|e| ApiError::bad_request(&e.to_string()))?;
+
+    match apply_branch_to_base_unstaged(&repo.path, &run.branch_name, &base_branch) {
+        Ok(result) => Ok((
+            StatusCode::OK,
+            Json(json!({
+                "applied": true,
+                "filesChanged": result.files_changed,
+                "baseBranch": result.base_branch,
+            })),
+        )
+            .into_response()),
+        Err(ApplyError::Conflict(conflict)) => Ok((
+            StatusCode::CONFLICT,
+            Json(json!({
+                "conflict": true,
+                "conflictedFiles": conflict.conflicted_files,
+            })),
+        )
+            .into_response()),
+        Err(ApplyError::Internal(e)) => Err(ApiError::internal(e)),
+    }
+}
+
 async fn discover_agents(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
     let discovered = discover_agent_profiles();
     let synced = state
@@ -2576,6 +2659,492 @@ fn masked_account(account: crate::models::JiraAccount) -> Value {
     })
 }
 
+fn masked_sentry_account(account: crate::models::SentryAccount) -> Value {
+    json!({
+      "id": account.id,
+      "base_url": account.base_url,
+      "org_slug": account.org_slug,
+      "auth_token": "********",
+      "created_at": account.created_at,
+      "updated_at": account.updated_at
+    })
+}
+
+// ── Sentry Handlers ──
+
+async fn connect_sentry(
+    State(state): State<AppState>,
+    Json(payload): Json<ConnectSentryPayload>,
+) -> Result<Json<Value>, ApiError> {
+    if !payload.base_url.starts_with("http://") && !payload.base_url.starts_with("https://") {
+        return Err(ApiError::bad_request("Sentry baseUrl must start with http:// or https://"));
+    }
+    if payload.auth_token.trim().len() < 3 {
+        return Err(ApiError::bad_request("Auth token is too short."));
+    }
+
+    let client = SentryClient::new(&payload.base_url, &payload.org_slug, &payload.auth_token);
+    let org = client
+        .validate_credentials()
+        .await
+        .map_err(ApiError::bad_request_from)?;
+    let account = state
+        .db
+        .create_or_update_sentry_account(&payload.base_url, &payload.org_slug, &payload.auth_token)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({
+      "account": masked_sentry_account(account),
+      "org": { "slug": org.slug, "name": org.name },
+      "warning": "Token is stored locally in plaintext for this MVP build."
+    })))
+}
+
+async fn list_sentry_accounts(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
+    let accounts = state
+        .db
+        .list_sentry_accounts()
+        .map_err(ApiError::internal)?
+        .into_iter()
+        .map(masked_sentry_account)
+        .collect::<Vec<_>>();
+    Ok(Json(json!({ "accounts": accounts })))
+}
+
+async fn delete_sentry_account(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    state
+        .db
+        .delete_sentry_account(&id)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "deleted": true })))
+}
+
+async fn list_sentry_projects(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let account = state
+        .db
+        .get_sentry_account_by_id(&id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Sentry account not found."))?;
+    let client = SentryClient::new(&account.base_url, &account.org_slug, &account.auth_token);
+    let projects = client.list_projects().await.map_err(ApiError::bad_request_from)?;
+
+    // Upsert into local DB
+    let pairs: Vec<(String, String)> = projects.iter().map(|p| (p.slug.clone(), p.name.clone())).collect();
+    state
+        .db
+        .upsert_sentry_projects(&account.id, &pairs)
+        .map_err(ApiError::internal)?;
+
+    let local_projects = state
+        .db
+        .list_sentry_projects_by_account(&account.id)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "projects": local_projects })))
+}
+
+async fn bind_repo_to_sentry(
+    State(state): State<AppState>,
+    Json(payload): Json<BindSentryPayload>,
+) -> Result<Json<Value>, ApiError> {
+    if state
+        .db
+        .get_repo_by_id(&payload.repo_id)
+        .map_err(ApiError::internal)?
+        .is_none()
+    {
+        return Err(ApiError::not_found("Repo not found."));
+    }
+    if state
+        .db
+        .get_sentry_account_by_id(&payload.sentry_account_id)
+        .map_err(ApiError::internal)?
+        .is_none()
+    {
+        return Err(ApiError::not_found("Sentry account not found."));
+    }
+    if state
+        .db
+        .get_sentry_project_by_id(&payload.sentry_project_id)
+        .map_err(ApiError::internal)?
+        .is_none()
+    {
+        return Err(ApiError::not_found("Sentry project not found."));
+    }
+
+    let envs = payload.environments.as_deref().unwrap_or("[]");
+    let binding = state
+        .db
+        .create_repo_sentry_binding(
+            &payload.repo_id,
+            &payload.sentry_account_id,
+            &payload.sentry_project_id,
+            envs,
+        )
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "binding": binding })))
+}
+
+async fn list_sentry_bindings(
+    State(state): State<AppState>,
+    Query(query): Query<RepoQuery>,
+) -> Result<Json<Value>, ApiError> {
+    let bindings = state
+        .db
+        .list_repo_sentry_bindings(&query.repo_id)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "bindings": bindings })))
+}
+
+async fn list_sentry_issues(
+    State(state): State<AppState>,
+    Path(repo_id): Path<String>,
+    Query(query): Query<SentryIssueQuery>,
+) -> Result<Json<Value>, ApiError> {
+    let issues = state
+        .db
+        .list_sentry_issues_by_repo(&repo_id, query.status.as_deref())
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "issues": issues })))
+}
+
+async fn sentry_issue_action(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(payload): Json<SentryIssueActionPayload>,
+) -> Result<Json<Value>, ApiError> {
+    let issue = state
+        .db
+        .get_sentry_issue_by_id(&id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Sentry issue not found."))?;
+
+    match payload.action.as_str() {
+        "ignore" => {
+            state
+                .db
+                .update_sentry_issue_status(&issue.id, "ignored")
+                .map_err(ApiError::internal)?;
+            Ok(Json(json!({ "status": "ignored" })))
+        }
+        _ => Err(ApiError::bad_request("Unsupported action. Use 'ignore'.")),
+    }
+}
+
+async fn sentry_create_task(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let issue = state
+        .db
+        .get_sentry_issue_by_id(&id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Sentry issue not found."))?;
+
+    if issue.linked_task_id.is_some() && issue.status != "regression" {
+        return Err(ApiError::bad_request("This issue already has a linked task."));
+    }
+
+    // Find the repo via binding
+    let bindings = state
+        .db
+        .list_all_repo_sentry_bindings()
+        .map_err(ApiError::internal)?;
+    let binding = bindings
+        .iter()
+        .find(|b| {
+            b.sentry_account_id == issue.sentry_account_id
+                && b.sentry_project_id == issue.sentry_project_id
+        })
+        .ok_or_else(|| ApiError::bad_request("No repo binding found for this Sentry project."))?;
+
+    // Build description with error context
+    let stack_trace = issue
+        .latest_event_json
+        .as_deref()
+        .and_then(|json_str| {
+            serde_json::from_str::<Value>(json_str)
+                .ok()
+                .and_then(|v| extract_stack_trace(&v))
+        })
+        .unwrap_or_default();
+
+    let description = format!(
+        "## Sentry Error\n\n\
+         **Error:** {title}\n\
+         **Culprit:** {culprit}\n\
+         **Level:** {level}\n\
+         **Environments:** {envs}\n\
+         **Occurrences:** {count}\n\
+         **First Seen:** {first_seen}\n\
+         **Last Seen:** {last_seen}\n\
+         {regression_note}\n\
+         ### Stack Trace\n```\n{stack_trace}\n```\n",
+        title = issue.title,
+        culprit = issue.culprit.as_deref().unwrap_or("unknown"),
+        level = issue.level.as_deref().unwrap_or("error"),
+        envs = issue.environments,
+        count = issue.occurrence_count,
+        first_seen = issue.first_seen.as_deref().unwrap_or("unknown"),
+        last_seen = issue.last_seen.as_deref().unwrap_or("unknown"),
+        regression_note = if issue.status == "regression" {
+            "\n**WARNING: This error was previously fixed but has regressed.**\n"
+        } else {
+            ""
+        },
+    );
+
+    let task_payload = CreateTaskPayload {
+        repo_id: binding.repo_id.clone(),
+        title: format!("[SENTRY] {}", issue.title),
+        description: Some(description),
+        status: Some("To Do".to_string()),
+        priority: Some("High".to_string()),
+        require_plan: Some(true),
+        auto_start: Some(false),
+        auto_approve_plan: Some(false),
+    };
+
+    let task = state
+        .db
+        .create_manual_task(&task_payload)
+        .map_err(ApiError::internal)?;
+
+    state
+        .db
+        .link_sentry_issue_to_task(&issue.id, &task.id)
+        .map_err(ApiError::internal)?;
+
+    // Auto-trigger plan generation if agent is configured
+    if let Some(agent_command) = resolve_agent_command(&state, &binding.repo_id) {
+        if let Ok(Some(repo)) = state.db.get_repo_by_id(&binding.repo_id) {
+            if let Ok(job) = state.db.create_plan_job(&task.id, "auto_sentry", None) {
+                let store = MsgStore::new();
+                state
+                    .process_manager
+                    .register_store(&plan_store_key(&job.id), store.clone())
+                    .await;
+                spawn_plan_generation_job(
+                    state.clone(),
+                    job,
+                    task.clone(),
+                    repo.path.clone(),
+                    agent_command,
+                    "auto_sentry",
+                    store,
+                    None,
+                );
+            }
+        }
+    }
+
+    Ok(Json(json!({ "task": task, "issueId": issue.id })))
+}
+
+async fn sentry_manual_sync(
+    State(state): State<AppState>,
+    Path(repo_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let bindings = state
+        .db
+        .list_repo_sentry_bindings(&repo_id)
+        .map_err(ApiError::internal)?;
+    if bindings.is_empty() {
+        return Err(ApiError::bad_request("No Sentry bindings for this repo."));
+    }
+
+    let mut total_synced = 0usize;
+    for binding in &bindings {
+        let account = match state.db.get_sentry_account_by_id(&binding.sentry_account_id) {
+            Ok(Some(a)) => a,
+            _ => continue,
+        };
+        let project = match state.db.get_sentry_project_by_id(&binding.sentry_project_id) {
+            Ok(Some(p)) => p,
+            _ => continue,
+        };
+
+        let client = SentryClient::new(&account.base_url, &account.org_slug, &account.auth_token);
+        let since = state
+            .db
+            .get_last_sentry_sync_time(&account.id, &project.id)
+            .unwrap_or(None);
+
+        let issues = match client
+            .fetch_new_issues(&project.project_slug, since.as_deref())
+            .await
+        {
+            Ok(issues) => issues,
+            Err(e) => {
+                eprintln!("Sentry sync error for {}: {e}", project.project_slug);
+                continue;
+            }
+        };
+
+        let mut issue_data = Vec::new();
+        for issue in &issues {
+            let event_json = match client.fetch_latest_event(&issue.id).await {
+                Ok(v) => Some(v.to_string()),
+                Err(_) => None,
+            };
+            let metadata = if issue.metadata.is_null() {
+                None
+            } else {
+                Some(issue.metadata.to_string())
+            };
+            issue_data.push((
+                issue.id.clone(),
+                issue.title.clone(),
+                issue.culprit.clone(),
+                issue.level.clone(),
+                issue.first_seen.clone(),
+                issue.last_seen.clone(),
+                issue.count,
+                event_json,
+                metadata,
+            ));
+        }
+
+        if !issue_data.is_empty() {
+            let count = state
+                .db
+                .upsert_sentry_issues(&account.id, &project.id, &issue_data)
+                .unwrap_or(0);
+            total_synced += count;
+        }
+    }
+
+    let issues = state
+        .db
+        .list_sentry_issues_by_repo(&repo_id, None)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "synced": total_synced, "issues": issues })))
+}
+
+fn extract_stack_trace(event: &Value) -> Option<String> {
+    // Try to extract stack trace from Sentry event payload
+    let entries = event
+        .get("entries")
+        .and_then(Value::as_array)?;
+    for entry in entries {
+        if entry.get("type").and_then(Value::as_str) == Some("exception") {
+            if let Some(values) = entry
+                .pointer("/data/values")
+                .and_then(Value::as_array)
+            {
+                let mut traces = Vec::new();
+                for exc in values {
+                    let exc_type = exc.get("type").and_then(Value::as_str).unwrap_or("Exception");
+                    let exc_value = exc.get("value").and_then(Value::as_str).unwrap_or("");
+                    traces.push(format!("{exc_type}: {exc_value}"));
+                    if let Some(frames) = exc
+                        .pointer("/stacktrace/frames")
+                        .and_then(Value::as_array)
+                    {
+                        for frame in frames.iter().rev().take(15) {
+                            let filename = frame.get("filename").and_then(Value::as_str).unwrap_or("?");
+                            let lineno = frame.get("lineNo").and_then(Value::as_i64).unwrap_or(0);
+                            let function = frame.get("function").and_then(Value::as_str).unwrap_or("?");
+                            traces.push(format!("  at {function} ({filename}:{lineno})"));
+                        }
+                    }
+                }
+                return Some(traces.join("\n"));
+            }
+        }
+    }
+    None
+}
+
+fn spawn_sentry_sync_worker(state: AppState) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(300)).await; // 5 minutes
+
+            let bindings = match state.db.list_all_repo_sentry_bindings() {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("Sentry sync worker: failed to list bindings: {e}");
+                    continue;
+                }
+            };
+
+            for binding in &bindings {
+                let account = match state.db.get_sentry_account_by_id(&binding.sentry_account_id) {
+                    Ok(Some(a)) => a,
+                    _ => continue,
+                };
+                let project = match state.db.get_sentry_project_by_id(&binding.sentry_project_id) {
+                    Ok(Some(p)) => p,
+                    _ => continue,
+                };
+
+                let client =
+                    SentryClient::new(&account.base_url, &account.org_slug, &account.auth_token);
+                let since = state
+                    .db
+                    .get_last_sentry_sync_time(&account.id, &project.id)
+                    .unwrap_or(None);
+
+                let issues = match client
+                    .fetch_new_issues(&project.project_slug, since.as_deref())
+                    .await
+                {
+                    Ok(issues) => issues,
+                    Err(e) => {
+                        eprintln!(
+                            "Sentry sync worker: fetch error for {}: {e}",
+                            project.project_slug
+                        );
+                        continue;
+                    }
+                };
+
+                let mut issue_data = Vec::new();
+                for issue in &issues {
+                    let event_json = match client.fetch_latest_event(&issue.id).await {
+                        Ok(v) => Some(v.to_string()),
+                        Err(_) => None,
+                    };
+                    let metadata = if issue.metadata.is_null() {
+                        None
+                    } else {
+                        Some(issue.metadata.to_string())
+                    };
+                    issue_data.push((
+                        issue.id.clone(),
+                        issue.title.clone(),
+                        issue.culprit.clone(),
+                        issue.level.clone(),
+                        issue.first_seen.clone(),
+                        issue.last_seen.clone(),
+                        issue.count,
+                        event_json,
+                        metadata,
+                    ));
+                }
+
+                if !issue_data.is_empty() {
+                    if let Err(e) =
+                        state
+                            .db
+                            .upsert_sentry_issues(&account.id, &project.id, &issue_data)
+                    {
+                        eprintln!(
+                            "Sentry sync worker: upsert error for {}: {e}",
+                            project.project_slug
+                        );
+                    }
+                }
+            }
+        }
+    });
+}
+
 #[derive(Debug)]
 struct ApiError {
     status: StatusCode,
@@ -2766,4 +3335,35 @@ struct UpdateTaskPayload {
     auto_start: Option<bool>,
     #[serde(rename = "autoApprovePlan")]
     auto_approve_plan: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConnectSentryPayload {
+    #[serde(rename = "baseUrl")]
+    base_url: String,
+    #[serde(rename = "orgSlug")]
+    org_slug: String,
+    #[serde(rename = "authToken")]
+    auth_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct BindSentryPayload {
+    #[serde(rename = "repoId")]
+    repo_id: String,
+    #[serde(rename = "sentryAccountId")]
+    sentry_account_id: String,
+    #[serde(rename = "sentryProjectId")]
+    sentry_project_id: String,
+    environments: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SentryIssueQuery {
+    status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SentryIssueActionPayload {
+    action: String,
 }
