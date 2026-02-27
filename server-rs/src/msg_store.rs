@@ -29,6 +29,7 @@ pub struct MsgStore {
     history: RwLock<VecDeque<LogMsg>>,
     history_bytes: RwLock<usize>,
     tx: broadcast::Sender<LogMsg>,
+    session_id: RwLock<Option<String>>,
 }
 
 impl MsgStore {
@@ -38,6 +39,7 @@ impl MsgStore {
             history: RwLock::new(VecDeque::new()),
             history_bytes: RwLock::new(0),
             tx,
+            session_id: RwLock::new(None),
         })
     }
 
@@ -75,6 +77,14 @@ impl MsgStore {
             status: status.into(),
         })
         .await;
+    }
+
+    pub async fn set_session_id(&self, id: String) {
+        *self.session_id.write().await = Some(id);
+    }
+
+    pub async fn get_session_id(&self) -> Option<String> {
+        self.session_id.read().await.clone()
     }
 
     /// Returns an SSE stream: history first, then live messages.

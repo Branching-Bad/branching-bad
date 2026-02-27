@@ -49,6 +49,10 @@ use crate::{
     process_manager::ProcessManager,
 };
 
+use command_group::AsyncCommandGroup;
+use tokio::io::AsyncBufReadExt as MainAsyncBufReadExt;
+use tokio::io::AsyncWriteExt as MainAsyncWriteExt;
+
 #[derive(Clone)]
 struct AppState {
     db: Arc<Db>,
@@ -118,6 +122,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/runs/{run_id}", get(get_run))
         .route("/api/runs/{run_id}/logs", get(stream_run_logs))
         .route("/api/runs/{run_id}/stop", post(stop_run))
+        .route("/api/tasks/{task_id}/review", post(submit_review))
+        .route("/api/tasks/{task_id}/reviews", get(list_reviews))
+        .route("/api/tasks/{task_id}/complete", post(complete_task))
         .route("/api/agents/discover", get(discover_agents))
         .route("/api/agents", get(list_agents))
         .route("/api/agents/select", post(select_repo_agent))
@@ -1872,6 +1879,253 @@ async fn stop_run(
     Ok(Json(json!({ "status": "cancelled", "run_id": path.run_id })))
 }
 
+async fn submit_review(
+    State(state): State<AppState>,
+    Path(path): Path<TaskPath>,
+    Json(payload): Json<SubmitReviewPayload>,
+) -> Result<(StatusCode, Json<Value>), ApiError> {
+    let comment = payload.comment.trim();
+    if comment.is_empty() {
+        return Err(ApiError::bad_request("Comment cannot be empty."));
+    }
+
+    let task = state
+        .db
+        .get_task_by_id(&path.task_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Task not found."))?;
+
+    if task.status != "IN_REVIEW" {
+        return Err(ApiError::bad_request("Task must be in IN_REVIEW status to submit feedback."));
+    }
+
+    let latest_run = state
+        .db
+        .get_latest_run_by_task(&path.task_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("No completed run found for this task."))?;
+
+    let repo = state
+        .db
+        .get_repo_by_id(&task.repo_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Repo not found."))?;
+
+    if state
+        .db
+        .has_running_run_for_repo(&repo.id)
+        .map_err(ApiError::internal)?
+    {
+        return Err(ApiError::conflict(
+            "Another run is already active for this repository.",
+        ));
+    }
+
+    // Create review comment
+    let review_comment = state
+        .db
+        .add_review_comment(&task.id, &latest_run.id, comment)
+        .map_err(ApiError::internal)?;
+    state
+        .db
+        .update_review_comment_status(&review_comment.id, "processing", None)
+        .map_err(ApiError::internal)?;
+
+    // Resolve agent profile
+    let profile = if let Some(profile_id) = payload.profile_id.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+        state
+            .db
+            .get_agent_profile_by_id(profile_id)
+            .map_err(ApiError::internal)?
+            .ok_or_else(|| ApiError::bad_request("Agent profile not found."))?
+    } else {
+        let preference = state
+            .db
+            .get_repo_agent_preference(&repo.id)
+            .map_err(ApiError::internal)?
+            .ok_or_else(|| ApiError::bad_request("Select an AI profile for this repo."))?;
+        state
+            .db
+            .get_agent_profile_by_id(&preference.agent_profile_id)
+            .map_err(ApiError::internal)?
+            .ok_or_else(|| ApiError::bad_request("Agent profile not found."))?
+    };
+    let agent_command = build_agent_command(&profile);
+
+    // Create a new run linked to the review comment
+    let run = state
+        .db
+        .create_run(
+            &task.id,
+            &latest_run.plan_id,
+            "running",
+            &latest_run.branch_name,
+            Some(&profile.id),
+        )
+        .map_err(ApiError::internal)?;
+    state
+        .db
+        .update_run_review_comment_id(&run.id, &review_comment.id)
+        .map_err(ApiError::internal)?;
+    state
+        .db
+        .update_review_comment_status(&review_comment.id, "processing", Some(&run.id))
+        .map_err(ApiError::internal)?;
+
+    let response = json!({
+        "reviewComment": review_comment,
+        "run": { "id": run.id, "status": run.status }
+    });
+
+    // Spawn agent in background
+    let run_id = run.id.clone();
+    let task_id = task.id.clone();
+    let repo_path = repo.path.clone();
+    let session_id = latest_run.agent_session_id.clone();
+    let db = state.db.clone();
+    let pm = state.process_manager.clone();
+    let store = MsgStore::new();
+    pm.register_store(&run_id, store.clone()).await;
+    let comment_text = comment.to_string();
+
+    tokio::spawn(async move {
+        store
+            .push(LogMsg::AgentText("Starting review feedback run...".to_string()))
+            .await;
+
+        // Build prompt with review comment
+        let prompt = format!(
+            "Review feedback on previous work:\n\n{}\n\nPlease address this feedback and make the necessary changes.",
+            comment_text
+        );
+
+        // Build command — use --resume for Claude if session_id is available
+        let agent_kind = if agent_command.to_lowercase().contains("claude") {
+            "claude"
+        } else {
+            "other"
+        };
+
+        let spawn_result = if agent_kind == "claude" && session_id.is_some() {
+            let sid = session_id.unwrap();
+            // Build a custom command with --resume
+            let parts: Vec<&str> = agent_command.split_whitespace().collect();
+            let (bin, extra_args) = parts.split_first().unwrap();
+            let mut cmd = tokio::process::Command::new(bin);
+            cmd.args(extra_args.iter().copied());
+            cmd.current_dir(&repo_path);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            cmd.stdin(std::process::Stdio::piped());
+            cmd.env_remove("CLAUDECODE");
+            cmd.env_remove("CLAUDE_CODE_ENTRYPOINT");
+            cmd.arg("--resume").arg(&sid);
+            cmd.arg("-p").arg(&prompt);
+            cmd.arg("--permission-mode").arg("bypassPermissions");
+            cmd.arg("--dangerously-skip-permissions");
+            cmd.arg("--output-format").arg("stream-json");
+            cmd.arg("--verbose");
+
+            let child_result = cmd.group_spawn();
+            match child_result {
+                Ok(mut child) => {
+                    // Close stdin
+                    if let Some(mut stdin) = child.inner().stdin.take() {
+                        tokio::spawn(async move {
+                            let _ = stdin.shutdown().await;
+                        });
+                    }
+                    // Spawn stdout reader
+                    if let Some(stdout) = child.inner().stdout.take() {
+                        let store_clone = store.clone();
+                        tokio::spawn(async move {
+                            let reader = tokio::io::BufReader::new(stdout);
+                            let mut lines = reader.lines();
+                            while let Ok(Some(line)) = lines.next_line().await {
+                                if let Some((msg, sid)) = crate::executor::parse_claude_stream_json_pub(&line) {
+                                    if let Some(s) = sid {
+                                        store_clone.set_session_id(s).await;
+                                    }
+                                    store_clone.push(msg).await;
+                                    continue;
+                                }
+                                store_clone.push_stdout(line).await;
+                            }
+                        });
+                    }
+                    // Spawn stderr reader
+                    if let Some(stderr) = child.inner().stderr.take() {
+                        let store_clone = store.clone();
+                        tokio::spawn(async move {
+                            let reader = tokio::io::BufReader::new(stderr);
+                            let mut lines = reader.lines();
+                            while let Ok(Some(line)) = lines.next_line().await {
+                                store_clone.push_stderr(line).await;
+                            }
+                        });
+                    }
+                    Ok(child)
+                }
+                Err(e) => Err(anyhow::anyhow!("{}", e)),
+            }
+        } else {
+            spawn_agent(&agent_command, &prompt, &repo_path, store.clone()).await
+        };
+
+        match spawn_result {
+            Ok(child) => {
+                if let Some(pid) = child.id() {
+                    let _ = db.update_run_pid(&run_id, pid as i64);
+                }
+                let _ = db.add_run_event(&run_id, "agent_spawned", &json!({ "command": agent_command, "isReviewRun": true }));
+                pm.attach_child(&run_id, child).await;
+                pm.spawn_exit_monitor(run_id, task_id, repo_path, db).await;
+            }
+            Err(e) => {
+                store.push_stderr(format!("Failed to spawn agent: {}", e)).await;
+                store.push_finished(None, "failed").await;
+                let _ = db.add_run_event(&run_id, "run_failed", &json!({ "error": e.to_string() }));
+                let _ = db.update_run_status(&run_id, "failed", true);
+            }
+        }
+    });
+
+    Ok((StatusCode::ACCEPTED, Json(response)))
+}
+
+async fn list_reviews(
+    State(state): State<AppState>,
+    Path(path): Path<TaskPath>,
+) -> Result<Json<Value>, ApiError> {
+    let comments = state
+        .db
+        .list_review_comments(&path.task_id)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "reviewComments": comments })))
+}
+
+async fn complete_task(
+    State(state): State<AppState>,
+    Path(path): Path<TaskPath>,
+) -> Result<Json<Value>, ApiError> {
+    let task = state
+        .db
+        .get_task_by_id(&path.task_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Task not found."))?;
+
+    if task.status != "IN_REVIEW" {
+        return Err(ApiError::bad_request("Task must be in IN_REVIEW status to complete."));
+    }
+
+    state
+        .db
+        .update_task_status(&path.task_id, "DONE")
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(json!({ "status": "DONE", "taskId": path.task_id })))
+}
+
 async fn discover_agents(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
     let discovered = discover_agent_profiles();
     let synced = state
@@ -2492,6 +2746,13 @@ struct TaskPath {
 #[derive(Debug, Deserialize)]
 struct UpdateTaskStatusPayload {
     status: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SubmitReviewPayload {
+    comment: String,
+    #[serde(rename = "profileId")]
+    profile_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

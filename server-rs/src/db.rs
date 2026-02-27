@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::models::{
     AgentProfile, AgentProfileWithMetadata, AutostartJob, ClearPipelineResult, CreateTaskPayload,
     DiscoveredProfile, JiraAccount, JiraBoard, Plan, PlanJob, PlanWithParsed, Repo,
-    RepoAgentPreference, RepoBinding, Run, RunEvent, TaskWithPayload,
+    RepoAgentPreference, RepoBinding, ReviewComment, Run, RunEvent, TaskWithPayload,
 };
 
 pub struct Db {
@@ -269,6 +269,27 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
         )?;
         self.ensure_column_exists(&conn, "plans", "validation_errors_json", "TEXT")?;
         self.ensure_column_exists(&conn, "plan_jobs", "agent_session_id", "TEXT")?;
+        self.ensure_column_exists(&conn, "runs", "agent_session_id", "TEXT")?;
+        self.ensure_column_exists(&conn, "runs", "review_comment_id", "TEXT")?;
+
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS review_comments (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  comment TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  result_run_id TEXT,
+  addressed_at TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+  FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_review_comments_task ON review_comments(task_id, created_at DESC);
+"#,
+        )?;
+
         self.migrate_tasks_nullable_jira(&conn)?;
         Ok(())
     }
@@ -1440,7 +1461,7 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
     pub fn get_run_by_id(&self, run_id: &str) -> Result<Option<Run>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, started_at, completed_at, created_at, updated_at FROM runs WHERE id = ?1",
+            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, started_at, completed_at, created_at, updated_at FROM runs WHERE id = ?1",
             [run_id],
             |row| {
                 Ok(Run {
@@ -1452,10 +1473,12 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
                     agent_profile_id: row.get(5)?,
                     pid: row.get(6)?,
                     exit_code: row.get(7)?,
-                    started_at: row.get(8)?,
-                    completed_at: row.get(9)?,
-                    created_at: row.get(10)?,
-                    updated_at: row.get(11)?,
+                    agent_session_id: row.get(8)?,
+                    review_comment_id: row.get(9)?,
+                    started_at: row.get(10)?,
+                    completed_at: row.get(11)?,
+                    created_at: row.get(12)?,
+                    updated_at: row.get(13)?,
                 })
             },
         )
@@ -1753,7 +1776,7 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
     pub fn get_latest_run_by_task(&self, task_id: &str) -> Result<Option<Run>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, started_at, completed_at, created_at, updated_at FROM runs WHERE task_id = ?1 ORDER BY created_at DESC LIMIT 1",
+            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, started_at, completed_at, created_at, updated_at FROM runs WHERE task_id = ?1 ORDER BY created_at DESC LIMIT 1",
             [task_id],
             |row| {
                 Ok(Run {
@@ -1765,15 +1788,100 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
                     agent_profile_id: row.get(5)?,
                     pid: row.get(6)?,
                     exit_code: row.get(7)?,
-                    started_at: row.get(8)?,
-                    completed_at: row.get(9)?,
-                    created_at: row.get(10)?,
-                    updated_at: row.get(11)?,
+                    agent_session_id: row.get(8)?,
+                    review_comment_id: row.get(9)?,
+                    started_at: row.get(10)?,
+                    completed_at: row.get(11)?,
+                    created_at: row.get(12)?,
+                    updated_at: row.get(13)?,
                 })
             },
         )
         .optional()
         .map_err(anyhow::Error::from)
+    }
+
+    pub fn update_run_session_id(&self, run_id: &str, session_id: &str) -> Result<()> {
+        let conn = self.connect()?;
+        conn.execute(
+            "UPDATE runs SET agent_session_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![session_id, now_iso(), run_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_run_review_comment_id(&self, run_id: &str, review_comment_id: &str) -> Result<()> {
+        let conn = self.connect()?;
+        conn.execute(
+            "UPDATE runs SET review_comment_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![review_comment_id, now_iso(), run_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn add_review_comment(
+        &self,
+        task_id: &str,
+        run_id: &str,
+        comment: &str,
+    ) -> Result<ReviewComment> {
+        let conn = self.connect()?;
+        let id = Uuid::new_v4().to_string();
+        let ts = now_iso();
+        conn.execute(
+            "INSERT INTO review_comments (id, task_id, run_id, comment, status, created_at) VALUES (?1, ?2, ?3, ?4, 'pending', ?5)",
+            params![id, task_id, run_id, comment, ts],
+        )?;
+        Ok(ReviewComment {
+            id,
+            task_id: task_id.to_string(),
+            run_id: run_id.to_string(),
+            comment: comment.to_string(),
+            status: "pending".to_string(),
+            result_run_id: None,
+            addressed_at: None,
+            created_at: ts,
+        })
+    }
+
+    pub fn list_review_comments(&self, task_id: &str) -> Result<Vec<ReviewComment>> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, run_id, comment, status, result_run_id, addressed_at, created_at FROM review_comments WHERE task_id = ?1 ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map([task_id], |row| {
+            Ok(ReviewComment {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                run_id: row.get(2)?,
+                comment: row.get(3)?,
+                status: row.get(4)?,
+                result_run_id: row.get(5)?,
+                addressed_at: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::from)
+    }
+
+    pub fn update_review_comment_status(
+        &self,
+        id: &str,
+        status: &str,
+        result_run_id: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.connect()?;
+        let addressed_at: Option<String> = if status == "addressed" {
+            Some(now_iso())
+        } else {
+            None
+        };
+        conn.execute(
+            "UPDATE review_comments SET status = ?1, result_run_id = ?2, addressed_at = ?3 WHERE id = ?4",
+            params![status, result_run_id, addressed_at, id],
+        )?;
+        Ok(())
     }
 }
 

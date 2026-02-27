@@ -170,7 +170,10 @@ pub async fn spawn_agent(
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 if kind == "claude" {
-                    if let Some(msg) = parse_claude_stream_json(&line) {
+                    if let Some((msg, session_id)) = parse_claude_stream_json(&line) {
+                        if let Some(sid) = session_id {
+                            store_clone.set_session_id(sid).await;
+                        }
                         store_clone.push(msg).await;
                         continue;
                     }
@@ -207,9 +210,15 @@ pub async fn spawn_agent(
     Ok(child)
 }
 
+/// Public wrapper for parsing Claude stream JSON from outside this module.
+pub fn parse_claude_stream_json_pub(line: &str) -> Option<(LogMsg, Option<String>)> {
+    parse_claude_stream_json(line)
+}
+
 /// Parse a single line of Claude Code `--output-format stream-json`.
 /// Returns a structured LogMsg if recognized, None to fall back to raw stdout.
-fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
+/// The second element of the tuple is an optional session_id extracted from "result" events.
+fn parse_claude_stream_json(line: &str) -> Option<(LogMsg, Option<String>)> {
     let v: Value = serde_json::from_str(line).ok()?;
 
     let msg_type = v.get("type")?.as_str()?;
@@ -227,14 +236,14 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                                 if let Some(text) = block.get("thinking").and_then(|t| t.as_str())
                                 {
                                     if !text.is_empty() {
-                                        return Some(LogMsg::Thinking(text.to_string()));
+                                        return Some((LogMsg::Thinking(text.to_string()), None));
                                     }
                                 }
                             }
                             "text" => {
                                 if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
                                     if !text.is_empty() {
-                                        return Some(LogMsg::AgentText(text.to_string()));
+                                        return Some((LogMsg::AgentText(text.to_string()), None));
                                     }
                                 }
                             }
@@ -251,10 +260,10 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                                         truncate_preview(&s, 500)
                                     })
                                     .unwrap_or_default();
-                                return Some(LogMsg::ToolUse {
+                                return Some((LogMsg::ToolUse {
                                     tool,
                                     input_preview: input,
-                                });
+                                }, None));
                             }
                             _ => {}
                         }
@@ -274,7 +283,7 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                             .and_then(|t| t.as_str())
                             .unwrap_or("");
                         if !text.is_empty() {
-                            return Some(LogMsg::Thinking(text.to_string()));
+                            return Some((LogMsg::Thinking(text.to_string()), None));
                         }
                     }
                     "text" => {
@@ -283,7 +292,7 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                             .and_then(|t| t.as_str())
                             .unwrap_or("");
                         if !text.is_empty() {
-                            return Some(LogMsg::AgentText(text.to_string()));
+                            return Some((LogMsg::AgentText(text.to_string()), None));
                         }
                     }
                     "tool_use" => {
@@ -292,10 +301,10 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                             .and_then(|n| n.as_str())
                             .unwrap_or("unknown")
                             .to_string();
-                        return Some(LogMsg::ToolUse {
+                        return Some((LogMsg::ToolUse {
                             tool,
                             input_preview: String::new(),
-                        });
+                        }, None));
                     }
                     _ => {}
                 }
@@ -314,13 +323,13 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                             .and_then(|t| t.as_str())
                             .unwrap_or("");
                         if !text.is_empty() {
-                            return Some(LogMsg::Thinking(text.to_string()));
+                            return Some((LogMsg::Thinking(text.to_string()), None));
                         }
                     }
                     "text_delta" => {
                         let text = delta.get("text").and_then(|t| t.as_str()).unwrap_or("");
                         if !text.is_empty() {
-                            return Some(LogMsg::AgentText(text.to_string()));
+                            return Some((LogMsg::AgentText(text.to_string()), None));
                         }
                     }
                     _ => {}
@@ -342,17 +351,17 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                         .and_then(|n| n.as_str())
                         .unwrap_or("unknown")
                         .to_string();
-                    return Some(LogMsg::ToolUse {
+                    return Some((LogMsg::ToolUse {
                         tool,
                         input_preview: String::new(),
-                    });
+                    }, None));
                 }
             }
             None
         }
 
         // Tool result
-        "tool_result" | "result" => {
+        "tool_result" => {
             let tool = v
                 .get("tool_name")
                 .or_else(|| v.get("name"))
@@ -371,10 +380,40 @@ fn parse_claude_stream_json(line: &str) -> Option<LogMsg> {
                     truncate_preview(&s, 500)
                 })
                 .unwrap_or_default();
-            Some(LogMsg::ToolResult {
+            Some((LogMsg::ToolResult {
                 tool,
                 output_preview: output,
-            })
+            }, None))
+        }
+
+        // Final result — extract session_id
+        "result" => {
+            let session_id = v
+                .get("session_id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+            let tool = v
+                .get("tool_name")
+                .or_else(|| v.get("name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("tool")
+                .to_string();
+            let output = v
+                .get("output")
+                .or_else(|| v.get("content"))
+                .map(|o| {
+                    let s = if o.is_string() {
+                        o.as_str().unwrap_or("").to_string()
+                    } else {
+                        o.to_string()
+                    };
+                    truncate_preview(&s, 500)
+                })
+                .unwrap_or_default();
+            Some((LogMsg::ToolResult {
+                tool,
+                output_preview: output,
+            }, session_id))
         }
 
         // System init message — skip

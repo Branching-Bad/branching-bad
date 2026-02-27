@@ -138,14 +138,45 @@ impl ProcessManager {
             // Update exit code in DB
             let _ = db.update_run_exit_code(&run_id, exit_code.map(|c| c as i64));
 
+            // Save session_id from agent stream
+            if let Some(store) = pm.stores.read().await.get(&run_id) {
+                if let Some(sid) = store.get_session_id().await {
+                    let _ = db.update_run_session_id(&run_id, &sid);
+                }
+            }
+
+            // Check if this is a review-triggered run
+            let review_comment_id = db
+                .get_run_by_id(&run_id)
+                .ok()
+                .flatten()
+                .and_then(|r| r.review_comment_id.clone());
+
             // Determine final status
             let (run_status, task_status) = match exit_code {
-                Some(0) => ("done", "DONE"),
-                _ => ("failed", "FAILED"),
+                Some(0) => {
+                    // If review run, mark comment as addressed and keep task IN_REVIEW
+                    if let Some(ref rc_id) = review_comment_id {
+                        let _ = db.update_review_comment_status(rc_id, "addressed", Some(&run_id));
+                        ("done", "IN_REVIEW")
+                    } else {
+                        ("done", "IN_REVIEW")
+                    }
+                }
+                _ => {
+                    // If review run failed, mark comment back to pending
+                    if let Some(ref rc_id) = review_comment_id {
+                        let _ = db.update_review_comment_status(rc_id, "pending", None);
+                    }
+                    ("failed", "FAILED")
+                }
             };
 
             let _ = db.update_run_status(&run_id, run_status, true);
-            let _ = db.update_task_status(&task_id, task_status);
+            // Only update task status if not a review run (task stays IN_REVIEW)
+            if review_comment_id.is_none() {
+                let _ = db.update_task_status(&task_id, task_status);
+            }
 
             let _ = db.add_run_event(
                 &run_id,

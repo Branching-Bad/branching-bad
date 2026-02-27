@@ -167,6 +167,8 @@ pub struct Run {
     pub agent_profile_id: Option<String>,
     pub pid: Option<i64>,
     pub exit_code: Option<i64>,
+    pub agent_session_id: Option<String>,
+    pub review_comment_id: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
     pub created_at: String,
@@ -219,6 +221,17 @@ pub struct RepoAgentPreference {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewComment {
+    pub id: String,
+    pub task_id: String,
+    pub run_id: String,
+    pub comment: String,
+    pub status: String,
+    pub result_run_id: Option<String>,
+    pub addressed_at: Option<String>,
+    pub created_at: String,
+}
+
 pub struct JiraMe {
     pub account_id: String,
     pub display_name: String,

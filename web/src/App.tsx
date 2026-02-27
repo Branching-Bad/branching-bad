@@ -73,6 +73,16 @@ type TaskPlanState = {
   planLogs: RunLogEntry[];
   planFinished: boolean;
 };
+type ReviewComment = {
+  id: string;
+  task_id: string;
+  run_id: string;
+  comment: string;
+  status: "pending" | "processing" | "addressed";
+  result_run_id: string | null;
+  addressed_at: string | null;
+  created_at: string;
+};
 type LaneKey = "todo" | "inprogress" | "inreview" | "done" | "archived";
 
 const EMPTY_TASK_RUN_STATE: TaskRunState = {
@@ -920,7 +930,7 @@ export default function App() {
   const planJobTaskIndexRef = useRef<Map<string, string>>(new Map());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [detailsTab, setDetailsTab] = useState<"plan" | "tasklist" | "run">("plan");
+  const [detailsTab, setDetailsTab] = useState<"plan" | "tasklist" | "run" | "review">("plan");
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
   const [editTaskModalOpen, setEditTaskModalOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -936,6 +946,8 @@ export default function App() {
   const [editTaskAutoApprovePlan, setEditTaskAutoApprovePlan] = useState(false);
   const [editTaskAutoStart, setEditTaskAutoStart] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [reviewComments, setReviewComments] = useState<ReviewComment[]>([]);
+  const [reviewText, setReviewText] = useState("");
   const [manualPlanMarkdown, setManualPlanMarkdown] = useState("");
   const [manualPlanJsonText, setManualPlanJsonText] = useState("");
   const [manualTasklistJsonText, setManualTasklistJsonText] = useState("");
@@ -1070,18 +1082,23 @@ export default function App() {
       setManualPlanJsonText("");
       setManualTasklistJsonText("");
       setTasklistValidationError("");
+      setReviewComments([]);
       return;
     }
     void (async () => {
       try {
-        const payload = await api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(selectedTaskId)}`);
-        setPlans(payload.plans);
-        const latest = payload.plans[0] ?? null;
+        const [planPayload, reviewPayload] = await Promise.all([
+          api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(selectedTaskId)}`),
+          api<{ reviewComments: ReviewComment[] }>(`/api/tasks/${encodeURIComponent(selectedTaskId)}/reviews`),
+        ]);
+        setPlans(planPayload.plans);
+        const latest = planPayload.plans[0] ?? null;
         setSelectedPlanId(latest?.id ?? "");
         setManualPlanMarkdown(latest?.plan_markdown ?? "");
         setManualPlanJsonText(latest ? JSON.stringify(latest.plan ?? {}, null, 2) : "{}");
         setManualTasklistJsonText(latest ? JSON.stringify(latest.tasklist ?? {}, null, 2) : "{}");
         setTasklistValidationError("");
+        setReviewComments(reviewPayload.reviewComments);
       } catch (e) { setError((e as Error).message); }
     })();
   }, [selectedTaskId]);
@@ -1326,6 +1343,11 @@ export default function App() {
               runFinished: runPayload.run.status !== "running",
             }));
           })
+          .catch(() => {});
+
+        // Refresh review comments when run finishes
+        api<{ reviewComments: ReviewComment[] }>(`/api/tasks/${encodeURIComponent(taskId)}/reviews`)
+          .then((payload) => setReviewComments(payload.reviewComments))
           .catch(() => {});
 
         setInfo("Run finished.");
@@ -1606,6 +1628,59 @@ export default function App() {
     } catch (e) { setError((e as Error).message); }
   }
 
+  async function submitReview() {
+    if (!selectedTaskId || !reviewText.trim()) return;
+    setError(""); setBusy(true);
+    try {
+      const payload = await api<{ reviewComment: ReviewComment; run: { id: string; status: string } }>(
+        `/api/tasks/${encodeURIComponent(selectedTaskId)}/review`,
+        { method: "POST", body: JSON.stringify({ comment: reviewText.trim() }) },
+      );
+      setReviewComments((prev) => [...prev, { ...payload.reviewComment, status: "processing", result_run_id: payload.run.id }]);
+      setReviewText("");
+
+      // Attach to the new review run's SSE stream
+      const reviewRunId = payload.run.id;
+      updateTaskRunState(selectedTaskId, (prev) => ({
+        ...prev,
+        activeRun: { id: reviewRunId, status: "running", branch_name: prev.activeRun?.branch_name ?? "" },
+        runLogs: [],
+        runFinished: false,
+        runResult: null,
+      }));
+      setDetailsTab("run");
+
+      // Poll for run to be available then attach stream
+      const pollForReviewRun = async () => {
+        for (let i = 0; i < 20; i++) {
+          try {
+            const runData = await api<{ run: { id: string; status: string } }>(`/api/runs/${reviewRunId}`);
+            if (runData.run) {
+              attachRunLogStream(reviewRunId, selectedTaskId, selectedRepoId);
+              return;
+            }
+          } catch { /* not ready yet */ }
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      };
+      void pollForReviewRun();
+      setInfo("Review feedback submitted. Agent is processing...");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function markTaskDone() {
+    if (!selectedTaskId) return;
+    setError(""); setBusy(true);
+    try {
+      await api(`/api/tasks/${encodeURIComponent(selectedTaskId)}/complete`, { method: "POST" });
+      if (selectedRepoId) {
+        const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
+        setTasks(t.tasks);
+      }
+      setInfo("Task marked as done.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
   // Auto-scroll logs
   useEffect(() => {
     if (logContainerRef.current) {
@@ -1630,6 +1705,17 @@ export default function App() {
   useEffect(() => {
     if (!selectedTask) setDetailsOpen(false);
   }, [selectedTask]);
+
+  // Auto-switch to review tab only when task ID changes (not on every poll)
+  const prevSelectedTaskIdRef = useRef("");
+  useEffect(() => {
+    if (selectedTaskId === prevSelectedTaskIdRef.current) return;
+    prevSelectedTaskIdRef.current = selectedTaskId;
+    if (!selectedTaskId) return;
+    const task = tasks.find((t) => t.id === selectedTaskId);
+    if (task?.status === "IN_REVIEW") setDetailsTab("review");
+    else if (detailsTab === "review") setDetailsTab("run");
+  }, [selectedTaskId, tasks]);
 
   useEffect(() => {
     if (!selectedPlan) return;
@@ -2228,6 +2314,22 @@ export default function App() {
                   Run Output
                   {detailsTab === "run" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
                 </button>
+                {selectedTask?.status === "IN_REVIEW" && (
+                  <button
+                    onClick={() => setDetailsTab("review")}
+                    className={`relative px-3 py-2.5 text-sm font-medium transition ${
+                      detailsTab === "review" ? "text-brand" : "text-text-muted hover:text-text-secondary"
+                    }`}
+                  >
+                    Review
+                    {reviewComments.length > 0 && (
+                      <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand/20 px-1 text-[10px] font-semibold text-brand">
+                        {reviewComments.length}
+                      </span>
+                    )}
+                    {detailsTab === "review" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
+                  </button>
+                )}
               </div>
 
               <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -2546,6 +2648,78 @@ export default function App() {
                           ))}
                         </div>
                       )}
+                    </div>
+
+                  </>
+                )}
+
+                {detailsTab === "review" && (
+                  <>
+                    <div className="rounded-xl border border-border-default bg-surface-200 p-3">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h4 className="text-xs font-medium text-text-secondary">Review Feedback</h4>
+                        <button
+                          onClick={() => void markTaskDone()}
+                          disabled={busy}
+                          className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
+                        >
+                          Mark as Done
+                        </button>
+                      </div>
+
+                      {reviewComments.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          {reviewComments.map((rc) => (
+                            <div key={rc.id} className="rounded-lg border border-border-strong bg-surface-100 px-3 py-2">
+                              <div className="mb-1 flex items-center gap-2">
+                                {rc.status === "processing" && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-400">
+                                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+                                    Processing
+                                  </span>
+                                )}
+                                {rc.status === "addressed" && (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-medium text-green-400"
+                                    title={rc.addressed_at ? `Addressed at ${new Date(rc.addressed_at).toLocaleString()}` : "Addressed"}
+                                  >
+                                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Addressed
+                                  </span>
+                                )}
+                                {rc.status === "pending" && (
+                                  <span className="text-[10px] font-medium text-text-muted">Pending</span>
+                                )}
+                                <span className="text-[10px] text-text-muted">{formatDate(rc.created_at)}</span>
+                              </div>
+                              <p className="text-[11px] text-text-secondary">{rc.comment}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {reviewComments.length === 0 && (
+                        <p className="mb-3 rounded-lg border border-dashed border-border-strong px-3 py-6 text-center text-xs text-text-muted">
+                          No review comments yet. Submit feedback below to request changes.
+                        </p>
+                      )}
+
+                      <textarea
+                        value={reviewText}
+                        onChange={(e) => setReviewText(e.target.value)}
+                        placeholder="Describe what needs to be changed..."
+                        rows={3}
+                        className="w-full rounded-lg border border-border-strong bg-surface-100 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                      />
+                      <button
+                        onClick={() => void submitReview()}
+                        disabled={busy || !reviewText.trim()}
+                        className="mt-2 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                      >
+                        Submit Feedback
+                      </button>
                     </div>
                   </>
                 )}
