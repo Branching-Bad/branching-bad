@@ -1,0 +1,54 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-surface-0: #121212;
+  --color-surface-100: #171717;
+  --color-surface-200: #1F1F1F;
+  --color-surface-300: #242424;
+  --color-border-default: #2E2E2E;
+  --color-border-strong: #363636;
+  --color-text-primary: #FAFAFA;
+  --color-text-secondary: #B4B4B4;
+  --color-text-muted: #898989;
+  --color-brand: #3ECF8E;
+  --color-brand-dark: #006239;
+  --color-brand-glow: rgba(62, 207, 142, 0.3);
+  --color-brand-tint: #002918;
+  --color-error-bg: hsl(358, 76%, 10%);
+  --color-error-border: hsl(357, 89%, 16%);
+  --color-error-text: hsl(358, 100%, 81%);
+  --color-info-bg: hsl(215, 100%, 6%);
+  --color-info-border: hsl(223, 100%, 12%);
+  --color-info-text: hsl(216, 87%, 65%);
+}
+
+@layer base {
+  body {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    background-color: #121212;
+    color: #FAFAFA;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code, pre {
+    font-family: "Source Code Pro", monospace;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #363636;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+  }
+}

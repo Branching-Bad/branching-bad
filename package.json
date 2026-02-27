@@ -1,0 +1,21 @@
+{
+  "name": "jira-approval-local-agent",
+  "version": "1.0.0",
+  "description": "Local approval-first Jira coding agent MVP",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "cargo run --manifest-path server-rs/Cargo.toml",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix web run build && cargo build --manifest-path server-rs/Cargo.toml",
+    "start": "cargo run --release --manifest-path server-rs/Cargo.toml",
+    "typecheck": "npm --prefix web run build",
+    "check:server": "cargo check --manifest-path server-rs/Cargo.toml"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
