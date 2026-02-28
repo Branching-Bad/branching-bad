@@ -78,6 +78,19 @@ export type ReviewComment = {
   result_run_id: string | null;
   addressed_at: string | null;
   created_at: string;
+  file_path?: string | null;
+  line_start?: number | null;
+  line_end?: number | null;
+  diff_hunk?: string | null;
+  review_mode?: string;
+  batch_id?: string | null;
+};
+export type LineComment = {
+  filePath: string;
+  lineStart: number;
+  lineEnd: number;
+  diffHunk: string;
+  text: string;
 };
 export type ProviderItem = {
   id: string; provider_id: string; external_id: string; title: string;

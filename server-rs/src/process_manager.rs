@@ -128,6 +128,9 @@ impl ProcessManager {
 
             // Capture diff from the agent's working directory
             let diff = capture_diff(&working_dir).unwrap_or_default();
+            if !diff.is_empty() {
+                let _ = db.save_run_diff(&run_id, &diff);
+            }
             let _ = db.add_run_event(
                 &run_id,
                 "working_tree_diff",

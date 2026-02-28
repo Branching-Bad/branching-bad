@@ -243,6 +243,12 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
         self.ensure_column_exists(&conn, "runs", "review_comment_id", "TEXT")?;
         self.ensure_column_exists(&conn, "tasks", "use_worktree", "INTEGER NOT NULL DEFAULT 1")?;
         self.ensure_column_exists(&conn, "runs", "worktree_path", "TEXT")?;
+        self.ensure_column_exists(&conn, "review_comments", "file_path", "TEXT")?;
+        self.ensure_column_exists(&conn, "review_comments", "line_start", "INTEGER")?;
+        self.ensure_column_exists(&conn, "review_comments", "line_end", "INTEGER")?;
+        self.ensure_column_exists(&conn, "review_comments", "diff_hunk", "TEXT")?;
+        self.ensure_column_exists(&conn, "review_comments", "review_mode", "TEXT NOT NULL DEFAULT 'instant'")?;
+        self.ensure_column_exists(&conn, "review_comments", "batch_id", "TEXT")?;
 
         conn.execute_batch(
             r#"
@@ -259,6 +265,13 @@ CREATE TABLE IF NOT EXISTS review_comments (
   FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_review_comments_task ON review_comments(task_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS run_diffs (
+    run_id TEXT PRIMARY KEY,
+    diff_text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
+);
 "#,
         )?;
 

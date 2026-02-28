@@ -57,6 +57,7 @@ use crate::{
 
 use command_group::AsyncCommandGroup;
 use tokio::io::AsyncBufReadExt as MainAsyncBufReadExt;
+use uuid::Uuid;
 use tokio::io::AsyncWriteExt as MainAsyncWriteExt;
 
 #[derive(Clone)]
@@ -134,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/runs/{run_id}", get(get_run))
         .route("/api/runs/{run_id}/logs", get(stream_run_logs))
         .route("/api/runs/{run_id}/stop", post(stop_run))
+        .route("/api/runs/{run_id}/diff", get(get_run_diff))
         .route("/api/tasks/{task_id}/review", post(submit_review))
         .route("/api/tasks/{task_id}/reviews", get(list_reviews))
         .route("/api/tasks/{task_id}/complete", post(complete_task))
@@ -1880,14 +1882,28 @@ async fn stop_run(
     Ok(Json(json!({ "status": "cancelled", "run_id": path.run_id })))
 }
 
+async fn get_run_diff(
+    State(state): State<AppState>,
+    Path(path): Path<RunPath>,
+) -> Result<Json<Value>, ApiError> {
+    let diff = state
+        .db
+        .get_run_diff(&path.run_id)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "diff": diff.unwrap_or_default() })))
+}
+
 async fn submit_review(
     State(state): State<AppState>,
     Path(path): Path<TaskPath>,
     Json(payload): Json<SubmitReviewPayload>,
 ) -> Result<(StatusCode, Json<Value>), ApiError> {
-    let comment = payload.comment.trim();
-    if comment.is_empty() {
-        return Err(ApiError::bad_request("Comment cannot be empty."));
+    let comment_text = payload.comment.as_deref().unwrap_or("").trim().to_string();
+    let line_comments = payload.line_comments.unwrap_or_default();
+    let review_mode = payload.mode.as_deref().unwrap_or("instant").to_string();
+
+    if comment_text.is_empty() && line_comments.is_empty() {
+        return Err(ApiError::bad_request("Comment or line comments required."));
     }
 
     let task = state
@@ -1922,15 +1938,64 @@ async fn submit_review(
         ));
     }
 
-    // Create review comment
-    let review_comment = state
-        .db
-        .add_review_comment(&task.id, &latest_run.id, comment)
-        .map_err(ApiError::internal)?;
-    state
-        .db
-        .update_review_comment_status(&review_comment.id, "processing", None)
-        .map_err(ApiError::internal)?;
+    // Create review comment(s)
+    let batch_id = if review_mode == "batch" && !line_comments.is_empty() {
+        Some(Uuid::new_v4().to_string())
+    } else {
+        None
+    };
+
+    // Store line comments as individual review_comment records
+    let mut stored_line_comments = Vec::new();
+    for lc in &line_comments {
+        let rc = state
+            .db
+            .add_review_comment_full(
+                &task.id,
+                &latest_run.id,
+                &lc.text,
+                Some(&lc.file_path),
+                Some(lc.line_start),
+                Some(lc.line_end),
+                Some(&lc.diff_hunk),
+                &review_mode,
+                batch_id.as_deref(),
+            )
+            .map_err(ApiError::internal)?;
+        stored_line_comments.push(rc);
+    }
+
+    // Store the general comment if present
+    let review_comment = if !comment_text.is_empty() {
+        let rc = state
+            .db
+            .add_review_comment_full(
+                &task.id,
+                &latest_run.id,
+                &comment_text,
+                None, None, None, None,
+                &review_mode,
+                batch_id.as_deref(),
+            )
+            .map_err(ApiError::internal)?;
+        Some(rc)
+    } else {
+        None
+    };
+
+    // Mark all comments as processing
+    for rc in &stored_line_comments {
+        state.db.update_review_comment_status(&rc.id, "processing", None).map_err(ApiError::internal)?;
+    }
+    if let Some(ref rc) = review_comment {
+        state.db.update_review_comment_status(&rc.id, "processing", None).map_err(ApiError::internal)?;
+    }
+
+    // Use first comment id as the primary review comment for linking
+    let primary_comment = review_comment.as_ref()
+        .or(stored_line_comments.first())
+        .cloned()
+        .ok_or_else(|| ApiError::bad_request("No comments to submit."))?;
 
     // Resolve agent profile
     let profile = if let Some(profile_id) = payload.profile_id.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
@@ -1953,7 +2018,7 @@ async fn submit_review(
     };
     let agent_command = build_agent_command(&profile);
 
-    // Create a new run linked to the review comment
+    // Create a new run linked to the primary review comment
     let run = state
         .db
         .create_run(
@@ -1967,15 +2032,19 @@ async fn submit_review(
         .map_err(ApiError::internal)?;
     state
         .db
-        .update_run_review_comment_id(&run.id, &review_comment.id)
-        .map_err(ApiError::internal)?;
-    state
-        .db
-        .update_review_comment_status(&review_comment.id, "processing", Some(&run.id))
+        .update_run_review_comment_id(&run.id, &primary_comment.id)
         .map_err(ApiError::internal)?;
 
+    // Link all comments to this run
+    for rc in &stored_line_comments {
+        state.db.update_review_comment_status(&rc.id, "processing", Some(&run.id)).map_err(ApiError::internal)?;
+    }
+    if let Some(ref rc) = review_comment {
+        state.db.update_review_comment_status(&rc.id, "processing", Some(&run.id)).map_err(ApiError::internal)?;
+    }
+
     let response = json!({
-        "reviewComment": review_comment,
+        "reviewComment": primary_comment,
         "run": { "id": run.id, "status": run.status }
     });
 
@@ -1989,18 +2058,38 @@ async fn submit_review(
     let pm = state.process_manager.clone();
     let store = MsgStore::new();
     pm.register_store(&run_id, store.clone()).await;
-    let comment_text = comment.to_string();
+
+    // Build enriched prompt with line comments
+    let prompt = {
+        let mut parts = Vec::new();
+        parts.push("Review feedback on previous work:\n".to_string());
+
+        for lc in &line_comments {
+            let line_range = if lc.line_start == lc.line_end {
+                format!("Line {}", lc.line_start)
+            } else {
+                format!("Lines {}-{}", lc.line_start, lc.line_end)
+            };
+            parts.push(format!("## File: {} ({})", lc.file_path, line_range));
+            parts.push(format!("```\n{}\n```", lc.diff_hunk));
+            parts.push(format!("> {}\n", lc.text));
+        }
+
+        if !comment_text.is_empty() {
+            if !line_comments.is_empty() {
+                parts.push("## General feedback".to_string());
+            }
+            parts.push(comment_text.clone());
+        }
+
+        parts.push("\nPlease address this feedback and make the necessary changes.".to_string());
+        parts.join("\n")
+    };
 
     tokio::spawn(async move {
         store
             .push(LogMsg::AgentText("Starting review feedback run...".to_string()))
             .await;
-
-        // Build prompt with review comment
-        let prompt = format!(
-            "Review feedback on previous work:\n\n{}\n\nPlease address this feedback and make the necessary changes.",
-            comment_text
-        );
 
         // Build command — use --resume for Claude if session_id is available
         let agent_kind = if agent_command.to_lowercase().contains("claude") {
@@ -3406,10 +3495,26 @@ struct UpdateTaskStatusPayload {
 }
 
 #[derive(Debug, Deserialize)]
+struct LineCommentPayload {
+    #[serde(rename = "filePath")]
+    file_path: String,
+    #[serde(rename = "lineStart")]
+    line_start: i64,
+    #[serde(rename = "lineEnd")]
+    line_end: i64,
+    #[serde(rename = "diffHunk")]
+    diff_hunk: String,
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct SubmitReviewPayload {
-    comment: String,
+    comment: Option<String>,
     #[serde(rename = "profileId")]
     profile_id: Option<String>,
+    mode: Option<String>,
+    #[serde(rename = "lineComments")]
+    line_comments: Option<Vec<LineCommentPayload>>,
 }
 
 #[derive(Debug, Deserialize)]

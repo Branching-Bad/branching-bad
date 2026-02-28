@@ -206,6 +206,12 @@ pub struct ReviewComment {
     pub result_run_id: Option<String>,
     pub addressed_at: Option<String>,
     pub created_at: String,
+    pub file_path: Option<String>,
+    pub line_start: Option<i64>,
+    pub line_end: Option<i64>,
+    pub diff_hunk: Option<String>,
+    pub review_mode: String,
+    pub batch_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

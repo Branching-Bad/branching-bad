@@ -52,3 +52,61 @@
     background: #4a4a4a;
   }
 }
+
+/* react-diff-view dark theme overrides */
+.diff-viewer-content .diff {
+  font-family: "Source Code Pro", monospace;
+  color: #e0e0e0;
+}
+.diff-viewer-content .diff table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.diff-viewer-content .diff-gutter {
+  background: #1a1a1a;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+  padding: 0 8px;
+  min-width: 40px;
+  text-align: right;
+}
+.diff-viewer-content .diff-gutter:hover {
+  color: #3ECF8E;
+  background: #1f2f1f;
+}
+.diff-viewer-content .diff-code {
+  background: #171717;
+  padding: 0 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diff-viewer-content .diff-code-insert {
+  background: rgba(62, 207, 142, 0.08);
+}
+.diff-viewer-content .diff-code-delete {
+  background: rgba(248, 81, 73, 0.08);
+}
+.diff-viewer-content .diff-gutter-insert {
+  background: rgba(62, 207, 142, 0.15);
+  color: #3ECF8E;
+}
+.diff-viewer-content .diff-gutter-delete {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+}
+.diff-viewer-content .diff-line-selected .diff-code,
+.diff-viewer-content .diff-line-selected .diff-gutter {
+  background: rgba(56, 139, 253, 0.15) !important;
+}
+.diff-viewer-content .diff-batch-commented .diff-code {
+  border-left: 2px solid #3ECF8E;
+}
+.diff-viewer-content .diff-hunk-header {
+  background: #1a1a2e;
+  color: #8b949e;
+  padding: 4px 12px;
+}
+.diff-viewer-content .diff-widget {
+  background: transparent;
+}

@@ -1,8 +1,9 @@
 import { useRef, useEffect } from "react";
-import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, ActiveRun } from "../types";
+import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun } from "../types";
 import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown } from "./icons";
 import { LogEntry } from "./LogEntry";
 import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
+import { DiffReviewPanel } from "./DiffReviewPanel";
 
 export function DetailsSidebar({
   selectedTask,
@@ -20,14 +21,20 @@ export function DetailsSidebar({
   manualTasklistJsonText, setManualTasklistJsonText,
   tasklistValidationError,
   reviewComments, reviewText, setReviewText,
+  runDiff, runDiffLoading,
+  reviewMode, setReviewMode,
+  batchLineComments, setBatchLineComments,
+  lineSelection, draftText, setDraftText,
   applyConflicts,
   busy,
   onClose,
   onEditTask, onDeleteTask,
   onCreatePlan, onPlanAction, onValidateTasklist, onSaveManualRevision,
   onStartRun, onStopRun,
-  onSubmitReview, onApplyToMain, onMarkTaskDone,
+  onSubmitReview, onSubmitBatchReview, onApplyToMain, onMarkTaskDone,
+  onLineSelect, onLineSave, onLineCancel,
   onRequeueAutostart, onClearTaskPipeline,
+  onExpandReview,
 }: {
   selectedTask: Task;
   plans: Plan[]; selectedPlanId: string; setSelectedPlanId: (v: string) => void;
@@ -45,6 +52,11 @@ export function DetailsSidebar({
   manualTasklistJsonText: string; setManualTasklistJsonText: (v: string) => void;
   tasklistValidationError: string;
   reviewComments: ReviewComment[]; reviewText: string; setReviewText: (v: string) => void;
+  runDiff: string; runDiffLoading: boolean;
+  reviewMode: "instant" | "batch"; setReviewMode: (v: "instant" | "batch") => void;
+  batchLineComments: LineComment[]; setBatchLineComments: (v: LineComment[]) => void;
+  lineSelection: { filePath: string; lineStart: number; lineEnd: number; hunk: string; anchorKey: string } | null;
+  draftText: string; setDraftText: (v: string) => void;
   applyConflicts: string[];
   busy: boolean;
   onClose: () => void;
@@ -57,10 +69,15 @@ export function DetailsSidebar({
   onStartRun: () => void;
   onStopRun: () => void;
   onSubmitReview: () => void;
+  onSubmitBatchReview: () => void;
   onApplyToMain: () => void;
   onMarkTaskDone: () => void;
+  onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
+  onLineSave: () => void;
+  onLineCancel: () => void;
   onRequeueAutostart: () => void;
   onClearTaskPipeline: () => void;
+  onExpandReview?: () => void;
 }) {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const planLogContainerRef = useRef<HTMLDivElement>(null);
@@ -588,103 +605,31 @@ export function DetailsSidebar({
             )}
 
             {detailsTab === "review" && (
-              <>
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-text-secondary">Review Feedback</h4>
-                    <div className="flex items-center gap-2">
-                      {selectedTask?.use_worktree !== false && (
-                        <button
-                          onClick={onApplyToMain}
-                          disabled={busy}
-                          className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
-                        >
-                          Apply to Main
-                        </button>
-                      )}
-                      {selectedTask?.status !== "DONE" && (
-                        <button
-                          onClick={onMarkTaskDone}
-                          disabled={busy}
-                          className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
-                        >
-                          Mark as Done
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {applyConflicts.length > 0 && (
-                    <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
-                      <p className="mb-1 text-xs font-medium text-red-400">
-                        Merge Conflicts ({applyConflicts.length} {applyConflicts.length === 1 ? "file" : "files"})
-                      </p>
-                      <ul className="mb-1 space-y-0.5">
-                        {applyConflicts.map((f) => (
-                          <li key={f} className="text-[11px] text-red-300">- {f}</li>
-                        ))}
-                      </ul>
-                      <p className="text-[10px] text-red-400/70">
-                        Resolve conflicts on the task branch before applying.
-                      </p>
-                    </div>
-                  )}
-
-                  {reviewComments.length > 0 && (
-                    <div className="mb-3 space-y-2">
-                      {reviewComments.map((rc) => (
-                        <div key={rc.id} className="rounded-lg border border-border-strong bg-surface-100 px-3 py-2">
-                          <div className="mb-1 flex items-center gap-2">
-                            {rc.status === "processing" && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-400">
-                                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
-                                Processing
-                              </span>
-                            )}
-                            {rc.status === "addressed" && (
-                              <span
-                                className="inline-flex items-center gap-1 text-[10px] font-medium text-green-400"
-                                title={rc.addressed_at ? `Addressed at ${new Date(rc.addressed_at).toLocaleString()}` : "Addressed"}
-                              >
-                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                                Addressed
-                              </span>
-                            )}
-                            {rc.status === "pending" && (
-                              <span className="text-[10px] font-medium text-text-muted">Pending</span>
-                            )}
-                            <span className="text-[10px] text-text-muted">{formatDate(rc.created_at)}</span>
-                          </div>
-                          <p className="text-[11px] text-text-secondary">{rc.comment}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {reviewComments.length === 0 && (
-                    <p className="mb-3 rounded-lg border border-dashed border-border-strong px-3 py-6 text-center text-xs text-text-muted">
-                      No review comments yet. Submit feedback below to request changes.
-                    </p>
-                  )}
-
-                  <textarea
-                    value={reviewText}
-                    onChange={(e) => setReviewText(e.target.value)}
-                    placeholder="Describe what needs to be changed..."
-                    rows={3}
-                    className="w-full rounded-lg border border-border-strong bg-surface-100 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-                  />
-                  <button
-                    onClick={onSubmitReview}
-                    disabled={busy || !reviewText.trim()}
-                    className="mt-2 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
-                  >
-                    Submit Feedback
-                  </button>
-                </div>
-              </>
+              <DiffReviewPanel
+                selectedTask={selectedTask}
+                reviewComments={reviewComments}
+                reviewText={reviewText}
+                setReviewText={setReviewText}
+                runDiff={runDiff}
+                runDiffLoading={runDiffLoading}
+                reviewMode={reviewMode}
+                setReviewMode={setReviewMode}
+                batchLineComments={batchLineComments}
+                setBatchLineComments={setBatchLineComments}
+                lineSelection={lineSelection}
+                draftText={draftText}
+                setDraftText={setDraftText}
+                applyConflicts={applyConflicts}
+                busy={busy}
+                onSubmitReview={onSubmitReview}
+                onSubmitBatchReview={onSubmitBatchReview}
+                onApplyToMain={onApplyToMain}
+                onMarkTaskDone={onMarkTaskDone}
+                onLineSelect={onLineSelect}
+                onLineSave={onLineSave}
+                onLineCancel={onLineCancel}
+                onExpandReview={onExpandReview}
+              />
             )}
           </div>
         </div>

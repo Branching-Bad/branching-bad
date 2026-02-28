@@ -1,0 +1,471 @@
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { parseDiff } from "react-diff-view";
+import type { FileData } from "react-diff-view";
+import type { Task, ReviewComment, LineComment } from "../types";
+import { DiffViewer } from "./DiffViewer";
+import { IconX } from "./icons";
+import { formatDate } from "./shared";
+
+type Selection = {
+  filePath: string;
+  lineStart: number;
+  lineEnd: number;
+  hunk: string;
+  anchorKey: string;
+};
+
+/* ---------- file tree helpers ---------- */
+
+type TreeNode = {
+  name: string;
+  path: string; // full path
+  children: TreeNode[];
+  file?: FileData;
+  additions: number;
+  deletions: number;
+  commentCount: number;
+};
+
+function filePath(file: FileData): string {
+  return file.newPath || file.oldPath || "unknown";
+}
+
+function fileStats(file: FileData): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of file.hunks) {
+    for (const change of hunk.changes) {
+      if (change.type === "insert") additions++;
+      else if (change.type === "delete") deletions++;
+    }
+  }
+  return { additions, deletions };
+}
+
+function buildTree(files: FileData[], batchComments: LineComment[]): TreeNode {
+  const root: TreeNode = { name: "", path: "", children: [], additions: 0, deletions: 0, commentCount: 0 };
+
+  for (const file of files) {
+    const fp = filePath(file);
+    const parts = fp.split("/");
+    let current = root;
+    for (let i = 0; i < parts.length; i++) {
+      const partPath = parts.slice(0, i + 1).join("/");
+      const isLast = i === parts.length - 1;
+      let child = current.children.find((c) => c.path === partPath);
+      if (!child) {
+        const stats = isLast ? fileStats(file) : { additions: 0, deletions: 0 };
+        const commentCount = isLast ? batchComments.filter((c) => c.filePath === fp).length : 0;
+        child = {
+          name: parts[i],
+          path: partPath,
+          children: [],
+          file: isLast ? file : undefined,
+          additions: stats.additions,
+          deletions: stats.deletions,
+          commentCount,
+        };
+        current.children.push(child);
+      }
+      if (isLast) {
+        // update stats in case it was created as a folder earlier
+        const stats = fileStats(file);
+        child.file = file;
+        child.additions = stats.additions;
+        child.deletions = stats.deletions;
+        child.commentCount = batchComments.filter((c) => c.filePath === fp).length;
+      }
+      current = child;
+    }
+  }
+
+  // Collapse single-child folders
+  const collapse = (node: TreeNode): TreeNode => {
+    node.children = node.children.map(collapse);
+    if (!node.file && node.children.length === 1 && !node.children[0].file) {
+      const child = node.children[0];
+      return { ...child, name: node.name ? `${node.name}/${child.name}` : child.name };
+    }
+    return node;
+  };
+
+  return collapse(root);
+}
+
+/* ---------- FileTree component ---------- */
+
+function FileTree({
+  node,
+  depth,
+  activeFile,
+  onSelect,
+}: {
+  node: TreeNode;
+  depth: number;
+  activeFile: string;
+  onSelect: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  if (node.file) {
+    const isActive = activeFile === node.path;
+    return (
+      <button
+        onClick={() => onSelect(node.path)}
+        className={`flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-left text-[11px] transition ${
+          isActive
+            ? "bg-brand/15 text-brand font-medium"
+            : "text-text-secondary hover:bg-surface-300 hover:text-text-primary"
+        }`}
+        style={{ paddingLeft: `${depth * 12 + 6}px` }}
+      >
+        <span className="truncate flex-1">{node.name}</span>
+        {node.commentCount > 0 && (
+          <span className="shrink-0 rounded-full bg-brand/20 px-1 text-[9px] font-medium text-brand">
+            {node.commentCount}
+          </span>
+        )}
+        <span className="shrink-0 flex items-center gap-1 text-[9px]">
+          {node.additions > 0 && <span className="text-green-400">+{node.additions}</span>}
+          {node.deletions > 0 && <span className="text-red-400">-{node.deletions}</span>}
+        </span>
+      </button>
+    );
+  }
+
+  // Folder node
+  return (
+    <div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-left text-[11px] text-text-muted hover:bg-surface-300 hover:text-text-secondary transition"
+        style={{ paddingLeft: `${depth * 12 + 6}px` }}
+      >
+        <svg
+          className={`h-2.5 w-2.5 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="truncate">{node.name}</span>
+      </button>
+      {expanded && node.children.map((child) => (
+        <FileTree key={child.path} node={child} depth={depth + 1} activeFile={activeFile} onSelect={onSelect} />
+      ))}
+    </div>
+  );
+}
+
+/* ---------- DiffReviewModal ---------- */
+
+export function DiffReviewModal({
+  open,
+  onClose,
+  selectedTask,
+  reviewComments,
+  reviewText,
+  setReviewText,
+  runDiff,
+  runDiffLoading,
+  reviewMode,
+  setReviewMode,
+  batchLineComments,
+  setBatchLineComments,
+  lineSelection,
+  draftText,
+  setDraftText,
+  applyConflicts,
+  busy,
+  onSubmitReview,
+  onSubmitBatchReview,
+  onApplyToMain,
+  onMarkTaskDone,
+  onLineSelect,
+  onLineSave,
+  onLineCancel,
+}: {
+  open: boolean;
+  onClose: () => void;
+  selectedTask: Task;
+  reviewComments: ReviewComment[];
+  reviewText: string;
+  setReviewText: (v: string) => void;
+  runDiff: string;
+  runDiffLoading: boolean;
+  reviewMode: "instant" | "batch";
+  setReviewMode: (v: "instant" | "batch") => void;
+  batchLineComments: LineComment[];
+  setBatchLineComments: (v: LineComment[]) => void;
+  lineSelection: Selection | null;
+  draftText: string;
+  setDraftText: (v: string) => void;
+  applyConflicts: string[];
+  busy: boolean;
+  onSubmitReview: () => void;
+  onSubmitBatchReview: () => void;
+  onApplyToMain: () => void;
+  onMarkTaskDone: () => void;
+  onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
+  onLineSave: () => void;
+  onLineCancel: () => void;
+}) {
+  const files = useMemo(() => {
+    if (!runDiff) return [];
+    try { return parseDiff(runDiff); } catch { return []; }
+  }, [runDiff]);
+
+  const tree = useMemo(() => buildTree(files, batchLineComments), [files, batchLineComments]);
+
+  const [activeFile, setActiveFile] = useState("");
+
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+
+  const [focusedFile, setFocusedFile] = useState("");
+
+  const scrollToFile = useCallback((path: string) => {
+    setActiveFile(path);
+    setFocusedFile(path);
+    // Scroll after React renders the expanded file
+    setTimeout(() => {
+      if (!rightPanelRef.current) return;
+      const el = rightPanelRef.current.querySelector(`[data-file-path="${CSS.escape(path)}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }, []);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border-default px-5 py-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-text-primary">
+              Review — {selectedTask.jira_issue_key}{" "}
+              <span className="font-normal text-text-secondary">{selectedTask.title}</span>
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary"
+          >
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body — two columns */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: file tree */}
+          <div className="w-56 shrink-0 overflow-y-auto border-r border-border-default bg-surface-200 p-2">
+            <h3 className="mb-1.5 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Files</h3>
+            {tree.children.length === 0 ? (
+              <p className="px-1.5 py-3 text-[11px] text-text-muted">No files in diff</p>
+            ) : (
+              tree.children.map((child) => (
+                <FileTree key={child.path} node={child} depth={0} activeFile={activeFile} onSelect={scrollToFile} />
+              ))
+            )}
+          </div>
+
+          {/* Right: diff + review controls */}
+          <div ref={rightPanelRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* Action bar */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1 rounded-lg border border-border-strong bg-surface-300 p-0.5">
+                <button
+                  onClick={() => setReviewMode("batch")}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                    reviewMode === "batch"
+                      ? "bg-surface-100 text-text-primary shadow-sm"
+                      : "text-text-muted hover:text-text-secondary"
+                  }`}
+                >
+                  Batch Review
+                </button>
+                <button
+                  onClick={() => setReviewMode("instant")}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                    reviewMode === "instant"
+                      ? "bg-surface-100 text-text-primary shadow-sm"
+                      : "text-text-muted hover:text-text-secondary"
+                  }`}
+                >
+                  Instant
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedTask?.use_worktree !== false && (
+                  <button
+                    onClick={onApplyToMain}
+                    disabled={busy}
+                    className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
+                  >
+                    Apply to Main
+                  </button>
+                )}
+                {selectedTask?.status !== "DONE" && (
+                  <button
+                    onClick={onMarkTaskDone}
+                    disabled={busy}
+                    className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
+                  >
+                    Mark as Done
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Conflict display */}
+            {applyConflicts.length > 0 && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
+                <p className="mb-1 text-xs font-medium text-red-400">
+                  Merge Conflicts ({applyConflicts.length} {applyConflicts.length === 1 ? "file" : "files"})
+                </p>
+                <ul className="mb-1 space-y-0.5">
+                  {applyConflicts.map((f) => (
+                    <li key={f} className="text-[11px] text-red-300">- {f}</li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-red-400/70">
+                  Resolve conflicts on the task branch before applying.
+                </p>
+              </div>
+            )}
+
+            {/* Diff viewer */}
+            {runDiffLoading ? (
+              <div className="flex items-center justify-center rounded-lg border border-dashed border-border-strong py-8">
+                <span className="text-xs text-text-muted animate-pulse">Loading diff...</span>
+              </div>
+            ) : runDiff ? (
+              <DiffViewer
+                diffText={runDiff}
+                batchComments={batchLineComments}
+                selection={lineSelection}
+                draftText={draftText}
+                reviewMode={reviewMode}
+                onLineSelect={onLineSelect}
+                onDraftChange={setDraftText}
+                onCommentSave={onLineSave}
+                onCommentCancel={onLineCancel}
+                focusedFile={focusedFile}
+              />
+            ) : null}
+
+            {/* Batch comments list */}
+            {reviewMode === "batch" && batchLineComments.length > 0 && (
+              <div className="space-y-1">
+                <h5 className="text-[11px] font-medium text-text-secondary">
+                  Pending Comments ({batchLineComments.length})
+                </h5>
+                {batchLineComments.map((lc, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start justify-between rounded-lg border border-brand/20 bg-brand/5 px-2 py-1.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-medium text-brand">
+                        {lc.filePath}:{lc.lineStart === lc.lineEnd ? lc.lineStart : `${lc.lineStart}-${lc.lineEnd}`}
+                      </span>
+                      <p className="mt-0.5 text-[11px] text-text-secondary">{lc.text}</p>
+                    </div>
+                    <button
+                      onClick={() => setBatchLineComments(batchLineComments.filter((_, i) => i !== idx))}
+                      className="ml-2 shrink-0 text-text-muted hover:text-red-400"
+                      title="Remove"
+                    >
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* General comment textarea */}
+            <textarea
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+              placeholder="General feedback (optional with line comments)..."
+              rows={3}
+              className="w-full rounded-lg border border-border-strong bg-surface-100 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+            />
+
+            {/* Submit area */}
+            {reviewMode === "batch" ? (
+              <button
+                onClick={onSubmitBatchReview}
+                disabled={busy || (batchLineComments.length === 0 && !reviewText.trim())}
+                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+              >
+                Review Gonder ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
+              </button>
+            ) : (
+              <button
+                onClick={onSubmitReview}
+                disabled={busy || !reviewText.trim()}
+                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+              >
+                Submit Feedback
+              </button>
+            )}
+
+            {/* Past review comments */}
+            {reviewComments.length > 0 && (
+              <div className="space-y-2">
+                <h5 className="text-[11px] font-medium text-text-secondary">Review History</h5>
+                {reviewComments.map((rc) => (
+                  <div key={rc.id} className="rounded-lg border border-border-strong bg-surface-100 px-3 py-2">
+                    <div className="mb-1 flex items-center gap-2">
+                      {rc.status === "processing" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-400">
+                          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+                          Processing
+                        </span>
+                      )}
+                      {rc.status === "addressed" && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-green-400"
+                          title={rc.addressed_at ? `Addressed at ${new Date(rc.addressed_at).toLocaleString()}` : "Addressed"}
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          Addressed
+                        </span>
+                      )}
+                      {rc.status === "pending" && (
+                        <span className="text-[10px] font-medium text-text-muted">Pending</span>
+                      )}
+                      {rc.file_path && (
+                        <span className="text-[10px] text-brand">
+                          {rc.file_path}:{rc.line_start === rc.line_end ? rc.line_start : `${rc.line_start}-${rc.line_end}`}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-text-muted">{formatDate(rc.created_at)}</span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary">{rc.comment}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
