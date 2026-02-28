@@ -1,5 +1,6 @@
 mod agents;
 mod autostart;
+pub mod investigations;
 mod maintenance;
 mod plan_jobs;
 mod plans;
@@ -312,6 +313,42 @@ CREATE TABLE IF NOT EXISTS provider_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_provider_items_resource ON provider_items(provider_resource_id, status);
+"#,
+        )?;
+
+        // ── CloudWatch investigation tables ──
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS cw_investigations (
+    id TEXT PRIMARY KEY,
+    repo_id TEXT NOT NULL REFERENCES repos(id),
+    provider_account_id TEXT NOT NULL,
+    log_group TEXT NOT NULL,
+    question TEXT NOT NULL,
+    time_range_minutes INTEGER NOT NULL,
+    query_phase1 TEXT,
+    query_phase2 TEXT,
+    result_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'running',
+    linked_task_id TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS cw_saved_queries (
+    id TEXT PRIMARY KEY,
+    repo_id TEXT NOT NULL REFERENCES repos(id),
+    log_group TEXT NOT NULL,
+    label TEXT NOT NULL,
+    question TEXT NOT NULL,
+    query_template TEXT NOT NULL,
+    keywords TEXT NOT NULL,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cw_saved_repo ON cw_saved_queries(repo_id);
 "#,
         )?;
 

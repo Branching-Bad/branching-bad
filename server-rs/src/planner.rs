@@ -645,7 +645,7 @@ fn extract_fenced_json(text: &str) -> Option<String> {
     }
 }
 
-fn invoke_agent_cli(
+pub fn invoke_agent_cli(
     agent_command: &str,
     prompt: &str,
     working_dir: &str,
@@ -1122,13 +1122,13 @@ fn resolve_agent_timeout_secs() -> u64 {
     cmp::min(cmp::max(parsed, 60), 7200)
 }
 
-struct RepoContext {
-    top_level_dirs: Vec<String>,
-    top_level_files: Vec<String>,
-    candidate_files: Vec<String>,
+pub struct RepoContext {
+    pub top_level_dirs: Vec<String>,
+    pub top_level_files: Vec<String>,
+    pub candidate_files: Vec<String>,
 }
 
-fn collect_repo_context(repo_path: &str, task: &TaskWithPayload) -> RepoContext {
+pub fn collect_repo_context(repo_path: &str, task: &TaskWithPayload) -> RepoContext {
     let mut top_level_dirs = Vec::new();
     let mut top_level_files = Vec::new();
     if let Ok(entries) = std::fs::read_dir(repo_path) {

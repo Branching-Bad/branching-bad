@@ -1,3 +1,4 @@
+import { registerCloudWatchUI } from "./cloudwatch";
 import { registerJiraUI } from "./jira";
 import { registerPostgresUI } from "./postgres";
 import { registerSentryUI } from "./sentry";
@@ -9,4 +10,5 @@ export function initProviders() {
   registerJiraUI();
   registerSentryUI();
   registerPostgresUI();
+  registerCloudWatchUI();
 }
