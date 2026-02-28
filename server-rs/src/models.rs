@@ -11,35 +11,6 @@ pub struct Repo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JiraAccount {
-    pub id: String,
-    pub base_url: String,
-    pub email: String,
-    pub api_token: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JiraBoard {
-    pub id: String,
-    pub jira_account_id: String,
-    pub board_id: String,
-    pub name: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoBinding {
-    pub repo_id: String,
-    pub jira_account_id: String,
-    pub jira_board_id: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskWithPayload {
     pub id: String,
     pub repo_id: String,
@@ -238,57 +209,6 @@ pub struct JiraMe {
     pub email_address: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SentryAccount {
-    pub id: String,
-    pub base_url: String,
-    pub org_slug: String,
-    pub auth_token: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SentryProject {
-    pub id: String,
-    pub sentry_account_id: String,
-    pub project_slug: String,
-    pub name: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoSentryBinding {
-    pub repo_id: String,
-    pub sentry_account_id: String,
-    pub sentry_project_id: String,
-    pub environments: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SentryIssueRecord {
-    pub id: String,
-    pub sentry_account_id: String,
-    pub sentry_project_id: String,
-    pub sentry_issue_id: String,
-    pub title: String,
-    pub culprit: Option<String>,
-    pub level: Option<String>,
-    pub first_seen: Option<String>,
-    pub last_seen: Option<String>,
-    pub occurrence_count: i64,
-    pub environments: String,
-    pub status: String,
-    pub linked_task_id: Option<String>,
-    pub latest_event_json: Option<String>,
-    pub metadata_json: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
 pub struct SentryOrg {
     pub slug: String,
     pub name: String,
@@ -314,4 +234,54 @@ pub struct JiraIssueForTask {
     pub status: String,
     pub priority: Option<String>,
     pub payload: Value,
+}
+
+// ── Generic Provider Row Structs ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderAccountRow {
+    pub id: String,
+    pub provider_id: String,
+    pub config_json: String,
+    pub display_name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderResourceRow {
+    pub id: String,
+    pub provider_account_id: String,
+    pub provider_id: String,
+    pub external_id: String,
+    pub name: String,
+    pub extra_json: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderBindingRow {
+    pub repo_id: String,
+    pub provider_account_id: String,
+    pub provider_resource_id: String,
+    pub provider_id: String,
+    pub config_json: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderItemRow {
+    pub id: String,
+    pub provider_account_id: String,
+    pub provider_resource_id: String,
+    pub provider_id: String,
+    pub external_id: String,
+    pub title: String,
+    pub status: String,
+    pub linked_task_id: Option<String>,
+    pub data_json: String,
+    pub created_at: String,
+    pub updated_at: String,
 }

@@ -3,8 +3,6 @@ import type { FormEvent } from "react";
 
 /* ─── Types ─── */
 type Repo = { id: string; name: string; path: string };
-type JiraAccount = { id: string; base_url: string; email: string };
-type JiraBoard = { id: string; board_id: string; name: string };
 type AgentProfile = {
   id: string; provider: string; agent_name: string;
   model: string; command: string; source: string; discovery_kind: string;
@@ -83,15 +81,42 @@ type ReviewComment = {
   addressed_at: string | null;
   created_at: string;
 };
-type SentryAccount = { id: string; base_url: string; org_slug: string };
-type SentryProject = { id: string; sentry_account_id: string; project_slug: string; name: string };
-type SentryIssue = {
-  id: string; sentry_issue_id: string; title: string; culprit: string | null;
-  level: string | null; first_seen: string | null; last_seen: string | null;
-  occurrence_count: number; environments: string; status: string;
-  linked_task_id: string | null;
+type ProviderItem = {
+  id: string; provider_id: string; external_id: string; title: string;
+  status: string; linked_task_id: string | null;
+  data_json: string;
+};
+type ProviderResource = {
+  id: string; provider_account_id: string; provider_id: string;
+  external_id: string; name: string; extra_json: string;
 };
 type LaneKey = "todo" | "inprogress" | "inreview" | "done" | "archived";
+
+/* ─── Provider Types ─── */
+type ConnectField = {
+  key: string;
+  label: string;
+  field_type: "text" | "password";
+  required: boolean;
+  placeholder: string;
+};
+type ProviderMeta = {
+  id: string;
+  display_name: string;
+  connect_fields: ConnectField[];
+  resource_label: string;
+  has_items_panel: boolean;
+};
+type ProviderAccount = {
+  id: string;
+  providerId: string;
+  displayName: string;
+  config: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+};
+// Additional provider types (ProviderResource, ProviderBinding, ProviderItem) will be
+// added as the provider-driven UI is built out in follow-up work.
 
 const EMPTY_TASK_RUN_STATE: TaskRunState = {
   activeRun: null,
@@ -466,111 +491,141 @@ function LogEntry({ type, data }: { type: string; data: string }) {
   return <div className="text-gray-500 font-mono">{data}</div>;
 }
 
+/* ─── Provider Settings Tab ─── */
+function ProviderTab({
+  meta, accounts, resources, selectedAccountId, setSelectedAccountId,
+  selectedResourceId, setSelectedResourceId, selectedRepoId,
+  busy, onConnect, onFetchResources, onBind,
+}: {
+  meta: ProviderMeta;
+  accounts: ProviderAccount[];
+  resources: ProviderResource[];
+  selectedAccountId: string; setSelectedAccountId: (v: string) => void;
+  selectedResourceId: string; setSelectedResourceId: (v: string) => void;
+  selectedRepoId: string;
+  busy: boolean;
+  onConnect: (e: FormEvent) => void;
+  onFetchResources: () => void;
+  onBind: () => void;
+}) {
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border-default bg-surface-200 p-4">
+        <h3 className="mb-3 text-sm font-medium text-text-secondary">Connect {meta.display_name}</h3>
+        <form onSubmit={(e) => { e.preventDefault(); onConnect(e); }} className="space-y-3">
+          {meta.connect_fields.map((field) => (
+            <input
+              key={field.key}
+              className={inputClass}
+              placeholder={field.placeholder}
+              type={field.field_type === "password" ? "password" : "text"}
+              value={formValues[field.key] ?? ""}
+              onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+              data-field-key={field.key}
+            />
+          ))}
+          <button type="submit" disabled={busy} className={btnPrimary}>Connect</button>
+        </form>
+      </div>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Account</label>
+        <select className={selectClass} value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)}>
+          <option value="">Select account</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.displayName}</option>
+          ))}
+        </select>
+      </div>
+      <button onClick={onFetchResources} disabled={busy || !selectedAccountId} className={btnSecondary}>
+        Fetch {meta.resource_label}s
+      </button>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">{meta.resource_label}</label>
+        <select className={selectClass} value={selectedResourceId} onChange={(e) => setSelectedResourceId(e.target.value)}>
+          <option value="">Select {meta.resource_label.toLowerCase()}</option>
+          {resources.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </select>
+      </div>
+      <button onClick={onBind} disabled={busy || !selectedRepoId || !selectedAccountId || !selectedResourceId} className={btnPrimary}>
+        Bind Repo to {meta.resource_label}
+      </button>
+    </div>
+  );
+}
+
 /* ─── Settings Modal ─── */
 function SettingsModal({
-  open, onClose, repos, accounts, boards, agentProfiles,
-  selectedRepoId, setSelectedRepoId, selectedAccountId, setSelectedAccountId,
-  selectedBoardId, setSelectedBoardId, selectedProfileId, setSelectedProfileId,
+  open, onClose, repos, agentProfiles, providerMetas, providerAccounts,
+  selectedRepoId, setSelectedRepoId, selectedProfileId, setSelectedProfileId,
   selectedProfile, busy, error: extError, info: extInfo,
-  onRepoSubmit, onConnectJira, bindBoard, discoverAgents, saveAgentSelection,
+  onRepoSubmit, discoverAgents, saveAgentSelection,
   repoPath, setRepoPath, repoName, setRepoName,
-  jiraBaseUrl, setJiraBaseUrl, jiraEmail, setJiraEmail, jiraToken, setJiraToken,
-  sentryAccounts, sentryProjects,
-  sentryBaseUrl, setSentryBaseUrl, sentryOrgSlug, setSentryOrgSlug,
-  sentryAuthToken, setSentryAuthToken,
-  selectedSentryAccountId, setSelectedSentryAccountId,
-  selectedSentryProjectId, setSelectedSentryProjectId,
-  onConnectSentry, fetchSentryProjects, bindSentryProject,
+  onProviderConnect, onFetchResources, onProviderBind,
+  providerResources, selectedProviderAccountIds, setSelectedProviderAccountId,
+  selectedProviderResourceIds, setSelectedProviderResourceId,
 }: {
   open: boolean; onClose: () => void;
-  repos: Repo[]; accounts: JiraAccount[]; boards: JiraBoard[]; agentProfiles: AgentProfile[];
+  repos: Repo[]; agentProfiles: AgentProfile[];
+  providerMetas: ProviderMeta[];
+  providerAccounts: Record<string, ProviderAccount[]>;
   selectedRepoId: string; setSelectedRepoId: (v: string) => void;
-  selectedAccountId: string; setSelectedAccountId: (v: string) => void;
-  selectedBoardId: string; setSelectedBoardId: (v: string) => void;
   selectedProfileId: string; setSelectedProfileId: (v: string) => void;
   selectedProfile: AgentProfile | null;
   busy: boolean; error: string; info: string;
   onRepoSubmit: (e: FormEvent) => void;
-  onConnectJira: (e: FormEvent) => void;
-  bindBoard: () => void;
   discoverAgents: () => void;
   saveAgentSelection: () => void;
   repoPath: string; setRepoPath: (v: string) => void;
   repoName: string; setRepoName: (v: string) => void;
-  jiraBaseUrl: string; setJiraBaseUrl: (v: string) => void;
-  jiraEmail: string; setJiraEmail: (v: string) => void;
-  jiraToken: string; setJiraToken: (v: string) => void;
-  sentryAccounts: SentryAccount[]; sentryProjects: SentryProject[];
-  sentryBaseUrl: string; setSentryBaseUrl: (v: string) => void;
-  sentryOrgSlug: string; setSentryOrgSlug: (v: string) => void;
-  sentryAuthToken: string; setSentryAuthToken: (v: string) => void;
-  selectedSentryAccountId: string; setSelectedSentryAccountId: (v: string) => void;
-  selectedSentryProjectId: string; setSelectedSentryProjectId: (v: string) => void;
-  onConnectSentry: (e: FormEvent) => void;
-  fetchSentryProjects: () => void;
-  bindSentryProject: () => void;
+  onProviderConnect: (providerId: string, formData: Record<string, string>) => void;
+  onFetchResources: (providerId: string, accountId: string) => void;
+  onProviderBind: (providerId: string, accountId: string, resourceId: string) => void;
+  providerResources: Record<string, ProviderResource[]>;
+  selectedProviderAccountIds: Record<string, string>;
+  setSelectedProviderAccountId: (providerId: string, accountId: string) => void;
+  selectedProviderResourceIds: Record<string, string>;
+  setSelectedProviderResourceId: (providerId: string, resourceId: string) => void;
 }) {
-  const [tab, setTab] = useState<"repo" | "jira" | "sentry" | "agent">("repo");
+  const [tab, setTab] = useState("repo");
 
   if (!open) return null;
 
-  const tabs = [
-    { key: "repo" as const, label: "Repository" },
-    { key: "jira" as const, label: "Jira" },
-    { key: "sentry" as const, label: "Sentry" },
-    { key: "agent" as const, label: "AI Agent" },
+  const tabs: { key: string; label: string }[] = [
+    { key: "repo", label: "Repository" },
+    ...providerMetas.map((m) => ({ key: m.id, label: m.display_name })),
+    { key: "agent", label: "AI Agent" },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal */}
       <div className="relative w-full max-w-[560px] rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border-default px-6 py-4">
           <h2 className="text-base font-medium text-text-primary">Settings</h2>
           <button onClick={onClose} className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
             <IconX className="h-5 w-5" />
           </button>
         </div>
-
-        {/* Tabs */}
         <div className="flex border-b border-border-default px-6">
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`relative px-4 py-3 text-sm font-medium transition ${
-                tab === t.key
-                  ? "text-brand"
-                  : "text-text-muted hover:text-text-secondary"
-              }`}
+              className={`relative px-4 py-3 text-sm font-medium transition ${tab === t.key ? "text-brand" : "text-text-muted hover:text-text-secondary"}`}
             >
               {t.label}
-              {tab === t.key && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />
-              )}
+              {tab === t.key && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
             </button>
           ))}
         </div>
-
-        {/* Alerts */}
         <div className="px-6 pt-4">
-          {extError && (
-            <div className="mb-3 rounded-lg border border-error-border bg-error-bg px-3 py-2 text-sm text-error-text">
-              {extError}
-            </div>
-          )}
-          {extInfo && (
-            <div className="mb-3 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-sm text-info-text">
-              {extInfo}
-            </div>
-          )}
+          {extError && <div className="mb-3 rounded-lg border border-error-border bg-error-bg px-3 py-2 text-sm text-error-text">{extError}</div>}
+          {extInfo && <div className="mb-3 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-sm text-info-text">{extInfo}</div>}
         </div>
-
-        {/* Content */}
         <div className="max-h-[420px] overflow-y-auto px-6 pb-6">
           {tab === "repo" && (
             <div className="space-y-4">
@@ -578,9 +633,7 @@ function SettingsModal({
                 <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Active Repository</label>
                 <select className={selectClass} value={selectedRepoId} onChange={(e) => setSelectedRepoId(e.target.value)}>
                   <option value="">Select repo</option>
-                  {repos.map((repo) => (
-                    <option key={repo.id} value={repo.id}>{repo.name}</option>
-                  ))}
+                  {repos.map((repo) => <option key={repo.id} value={repo.id}>{repo.name}</option>)}
                 </select>
               </div>
               <div className="rounded-xl border border-border-default bg-surface-200 p-4">
@@ -597,77 +650,33 @@ function SettingsModal({
             </div>
           )}
 
-          {tab === "jira" && (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border-default bg-surface-200 p-4">
-                <h3 className="mb-3 text-sm font-medium text-text-secondary">Connect Jira Account</h3>
-                <form onSubmit={onConnectJira} className="space-y-3">
-                  <input className={inputClass} placeholder="https://company.atlassian.net" value={jiraBaseUrl} onChange={(e) => setJiraBaseUrl(e.target.value)} />
-                  <input className={inputClass} placeholder="email@company.com" value={jiraEmail} onChange={(e) => setJiraEmail(e.target.value)} />
-                  <input className={inputClass} placeholder="API token" type="password" value={jiraToken} onChange={(e) => setJiraToken(e.target.value)} />
-                  <button type="submit" disabled={busy} className={btnPrimary}>Connect</button>
-                </form>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Account</label>
-                <select className={selectClass} value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)}>
-                  <option value="">Select account</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.email}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Board</label>
-                <select className={selectClass} value={selectedBoardId} onChange={(e) => setSelectedBoardId(e.target.value)}>
-                  <option value="">Select board</option>
-                  {boards.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-              <button onClick={bindBoard} disabled={busy} className={btnPrimary}>
-                Bind Repo to Board
-              </button>
-            </div>
-          )}
-
-          {tab === "sentry" && (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border-default bg-surface-200 p-4">
-                <h3 className="mb-3 text-sm font-medium text-text-secondary">Connect Sentry</h3>
-                <form onSubmit={onConnectSentry} className="space-y-3">
-                  <input className={inputClass} placeholder="https://sentry.io" value={sentryBaseUrl} onChange={(e) => setSentryBaseUrl(e.target.value)} />
-                  <input className={inputClass} placeholder="Organization slug" value={sentryOrgSlug} onChange={(e) => setSentryOrgSlug(e.target.value)} />
-                  <input className={inputClass} placeholder="Auth token (Internal Integration)" type="password" value={sentryAuthToken} onChange={(e) => setSentryAuthToken(e.target.value)} />
-                  <button type="submit" disabled={busy} className={btnPrimary}>Connect</button>
-                </form>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Account</label>
-                <select className={selectClass} value={selectedSentryAccountId} onChange={(e) => { setSelectedSentryAccountId(e.target.value); }}>
-                  <option value="">Select Sentry account</option>
-                  {sentryAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.org_slug} ({a.base_url})</option>
-                  ))}
-                </select>
-              </div>
-              <button onClick={fetchSentryProjects} disabled={busy || !selectedSentryAccountId} className={btnSecondary}>
-                Fetch Projects
-              </button>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Project</label>
-                <select className={selectClass} value={selectedSentryProjectId} onChange={(e) => setSelectedSentryProjectId(e.target.value)}>
-                  <option value="">Select project</option>
-                  {sentryProjects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.project_slug})</option>
-                  ))}
-                </select>
-              </div>
-              <button onClick={bindSentryProject} disabled={busy} className={btnPrimary}>
-                Bind Repo to Sentry Project
-              </button>
-            </div>
+          {providerMetas.map((meta) =>
+            tab === meta.id ? (
+              <ProviderTab
+                key={meta.id}
+                meta={meta}
+                accounts={providerAccounts[meta.id] ?? []}
+                resources={providerResources[meta.id] ?? []}
+                selectedAccountId={selectedProviderAccountIds[meta.id] ?? ""}
+                setSelectedAccountId={(v) => setSelectedProviderAccountId(meta.id, v)}
+                selectedResourceId={selectedProviderResourceIds[meta.id] ?? ""}
+                setSelectedResourceId={(v) => setSelectedProviderResourceId(meta.id, v)}
+                selectedRepoId={selectedRepoId}
+                busy={busy}
+                onConnect={(e) => {
+                  e.preventDefault();
+                  const form = (e.target as HTMLFormElement);
+                  const formData: Record<string, string> = {};
+                  meta.connect_fields.forEach((f) => {
+                    const input = form.querySelector(`[data-field-key="${f.key}"]`) as HTMLInputElement | null;
+                    if (input) formData[f.key] = input.value;
+                  });
+                  onProviderConnect(meta.id, formData);
+                }}
+                onFetchResources={() => onFetchResources(meta.id, selectedProviderAccountIds[meta.id] ?? "")}
+                onBind={() => onProviderBind(meta.id, selectedProviderAccountIds[meta.id] ?? "", selectedProviderResourceIds[meta.id] ?? "")}
+              />
+            ) : null
           )}
 
           {tab === "agent" && (
@@ -960,23 +969,16 @@ function EditTaskModal({
    ═══════════════════════════════════════════════ */
 export default function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
-  const [accounts, setAccounts] = useState<JiraAccount[]>([]);
-  const [boards, setBoards] = useState<JiraBoard[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
 
   const [selectedRepoId, setSelectedRepoId] = useState("");
-  const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [selectedBoardId, setSelectedBoardId] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState("");
 
   const [repoPath, setRepoPath] = useState("");
   const [repoName, setRepoName] = useState("");
-  const [jiraBaseUrl, setJiraBaseUrl] = useState("");
-  const [jiraEmail, setJiraEmail] = useState("");
-  const [jiraToken, setJiraToken] = useState("");
   const [planComment, setPlanComment] = useState("");
 
   const [error, setError] = useState("");
@@ -1016,17 +1018,15 @@ export default function App() {
   const [manualTasklistJsonText, setManualTasklistJsonText] = useState("");
   const [tasklistValidationError, setTasklistValidationError] = useState("");
 
-  // Sentry state
-  const [sentryAccounts, setSentryAccounts] = useState<SentryAccount[]>([]);
-  const [sentryProjects, setSentryProjects] = useState<SentryProject[]>([]);
-  const [sentryIssues, setSentryIssues] = useState<SentryIssue[]>([]);
-  const [sentryBaseUrl, setSentryBaseUrl] = useState("https://sentry.io");
-  const [sentryOrgSlug, setSentryOrgSlug] = useState("");
-  const [sentryAuthToken, setSentryAuthToken] = useState("");
-  const [selectedSentryAccountId, setSelectedSentryAccountId] = useState("");
-  const [selectedSentryProjectId, setSelectedSentryProjectId] = useState("");
-  const [sentryIssuesCount, setSentryIssuesCount] = useState(0);
-  const [showSentryPanel, setShowSentryPanel] = useState(false);
+  // Provider state
+  const [providerMetas, setProviderMetas] = useState<ProviderMeta[]>([]);
+  const [providerAccounts, setProviderAccounts] = useState<Record<string, ProviderAccount[]>>({});
+  const [providerItemCounts, setProviderItemCounts] = useState<Record<string, number>>({});
+  const [providerResources, setProviderResources] = useState<Record<string, ProviderResource[]>>({});
+  const [providerItems, setProviderItems] = useState<ProviderItem[]>([]);
+  const [selectedProviderAccountIds, setSelectedProviderAccountIds] = useState<Record<string, string>>({});
+  const [selectedProviderResourceIds, setSelectedProviderResourceIds] = useState<Record<string, string>>({});
+  const [showItemsPanel, setShowItemsPanel] = useState(false);
 
   const selectedTask = useMemo(() => tasks.find((t) => t.id === selectedTaskId) ?? null, [tasks, selectedTaskId]);
   const latestPlan = plans[0] ?? null;
@@ -1103,14 +1103,19 @@ export default function App() {
 
   const bootstrap = useCallback(async () => {
     try {
-      const payload = await api<{ repos: Repo[]; jiraAccounts: JiraAccount[]; agentProfiles: AgentProfile[]; sentryAccounts?: SentryAccount[]; sentryIssuesCount?: number }>("/api/bootstrap");
+      const payload = await api<{
+        repos: Repo[];
+        agentProfiles: AgentProfile[];
+        providers?: ProviderMeta[];
+        providerAccounts?: Record<string, ProviderAccount[]>;
+        providerItemCounts?: Record<string, number>;
+      }>("/api/bootstrap");
       setRepos(payload.repos);
-      setAccounts(payload.jiraAccounts);
       setAgentProfiles(payload.agentProfiles ?? []);
-      setSentryAccounts(payload.sentryAccounts ?? []);
-      setSentryIssuesCount(payload.sentryIssuesCount ?? 0);
+      if (payload.providers) setProviderMetas(payload.providers);
+      if (payload.providerAccounts) setProviderAccounts(payload.providerAccounts);
+      if (payload.providerItemCounts) setProviderItemCounts(payload.providerItemCounts);
       if (!selectedRepoId && payload.repos.length > 0) setSelectedRepoId(payload.repos[0].id);
-      if (!selectedAccountId && payload.jiraAccounts.length > 0) setSelectedAccountId(payload.jiraAccounts[0].id);
     } catch (e) { setError((e as Error).message); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1125,31 +1130,16 @@ export default function App() {
     if (!selectedRepoId) { setTasks([]); setSelectedTaskId(""); setSelectedProfileId(""); return; }
     void (async () => {
       try {
-        const [taskPayload, bindingPayload, selectionPayload] = await Promise.all([
+        const [taskPayload, selectionPayload] = await Promise.all([
           api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`),
-          api<{ binding: { jira_account_id: string; jira_board_id: string } | null }>(`/api/jira/binding?repoId=${encodeURIComponent(selectedRepoId)}`),
           api<{ selection: { agent_profile_id: string } | null }>(`/api/agents/selection?repoId=${encodeURIComponent(selectedRepoId)}`),
         ]);
         setTasks(taskPayload.tasks);
         setSelectedTaskId(taskPayload.tasks[0]?.id ?? "");
-        if (bindingPayload.binding) {
-          setSelectedAccountId(bindingPayload.binding.jira_account_id);
-          setSelectedBoardId(bindingPayload.binding.jira_board_id);
-        } else { setSelectedBoardId(""); }
         setSelectedProfileId(selectionPayload.selection?.agent_profile_id ?? "");
       } catch (e) { setError((e as Error).message); }
     })();
   }, [selectedRepoId, closeAllRunStreams, closeAllPlanStreams]);
-
-  useEffect(() => {
-    if (!selectedAccountId) { setBoards([]); return; }
-    void (async () => {
-      try {
-        const payload = await api<{ boards: JiraBoard[] }>(`/api/jira/boards?accountId=${encodeURIComponent(selectedAccountId)}`);
-        setBoards(payload.boards);
-      } catch (e) { setError((e as Error).message); }
-    })();
-  }, [selectedAccountId]);
 
   useEffect(() => {
     if (!selectedTaskId) {
@@ -1210,23 +1200,39 @@ export default function App() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  async function onConnectJira(event: FormEvent) {
-    event.preventDefault(); setError(""); setInfo(""); setBusy(true);
+  async function onProviderConnect(providerId: string, formData: Record<string, string>) {
+    setError(""); setInfo(""); setBusy(true);
     try {
-      await api("/api/jira/connect", { method: "POST", body: JSON.stringify({ baseUrl: jiraBaseUrl, email: jiraEmail, apiToken: jiraToken }) });
-      setJiraToken("");
-      setInfo("Jira connected. Token stored locally in plaintext.");
+      await api(`/api/providers/${providerId}/connect`, { method: "POST", body: JSON.stringify(formData) });
+      setInfo(`${providerId} connected.`);
       await bootstrap();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  async function bindBoard() {
-    if (!selectedRepoId || !selectedAccountId || !selectedBoardId) { setError("Repo, account, and board selection required."); return; }
+  async function onFetchResources(providerId: string, accountId: string) {
+    if (!accountId) return;
+    setError(""); setBusy(true);
+    try {
+      const payload = await api<{ resources: ProviderResource[] }>(`/api/providers/${providerId}/accounts/${accountId}/resources`);
+      setProviderResources((prev) => ({ ...prev, [providerId]: payload.resources }));
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function onProviderBind(providerId: string, accountId: string, resourceId: string) {
+    if (!selectedRepoId || !accountId || !resourceId) { setError("Repo, account, and resource selection required."); return; }
     setError(""); setInfo(""); setBusy(true);
     try {
-      await api("/api/jira/bind", { method: "POST", body: JSON.stringify({ repoId: selectedRepoId, accountId: selectedAccountId, boardId: selectedBoardId }) });
-      setInfo("Repo-board binding saved.");
+      await api(`/api/providers/${providerId}/bind`, { method: "POST", body: JSON.stringify({ repoId: selectedRepoId, accountId, resourceId }) });
+      setInfo("Binding saved.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  function setSelectedProviderAccountId(providerId: string, accountId: string) {
+    setSelectedProviderAccountIds((prev) => ({ ...prev, [providerId]: accountId }));
+  }
+
+  function setSelectedProviderResourceId(providerId: string, resourceId: string) {
+    setSelectedProviderResourceIds((prev) => ({ ...prev, [providerId]: resourceId }));
   }
 
   async function discoverAgents() {
@@ -1247,78 +1253,52 @@ export default function App() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  // ── Sentry Actions ──
+  // ── Provider Items (Sentry issues, etc.) ──
 
-  async function connectSentry(e: FormEvent) {
-    e.preventDefault();
-    if (!sentryOrgSlug || !sentryAuthToken) { setError("Org slug and auth token required."); return; }
-    setError(""); setInfo(""); setBusy(true);
-    try {
-      await api("/api/sentry/connect", { method: "POST", body: JSON.stringify({ baseUrl: sentryBaseUrl, orgSlug: sentryOrgSlug, authToken: sentryAuthToken }) });
-      setSentryAuthToken("");
-      const payload = await api<{ accounts: SentryAccount[] }>("/api/sentry/accounts");
-      setSentryAccounts(payload.accounts);
-      setInfo("Sentry account connected.");
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
-
-  async function fetchSentryProjects() {
-    if (!selectedSentryAccountId) return;
-    setError(""); setBusy(true);
-    try {
-      const payload = await api<{ projects: SentryProject[] }>(`/api/sentry/accounts/${selectedSentryAccountId}/projects`);
-      setSentryProjects(payload.projects);
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
-
-  async function bindSentryProject() {
-    if (!selectedRepoId || !selectedSentryAccountId || !selectedSentryProjectId) {
-      setError("Repo, Sentry account and project required."); return;
+  async function fetchProviderItems() {
+    if (!selectedRepoId) return;
+    // Fetch items for all providers that have items panel
+    const itemProviders = providerMetas.filter((m) => m.has_items_panel);
+    const allItems: ProviderItem[] = [];
+    for (const meta of itemProviders) {
+      try {
+        const payload = await api<{ items: ProviderItem[] }>(`/api/providers/${meta.id}/items/${selectedRepoId}`);
+        allItems.push(...payload.items);
+      } catch { /* silent */ }
     }
-    setError(""); setInfo(""); setBusy(true);
-    try {
-      await api("/api/sentry/bind", { method: "POST", body: JSON.stringify({ repoId: selectedRepoId, sentryAccountId: selectedSentryAccountId, sentryProjectId: selectedSentryProjectId }) });
-      setInfo("Sentry project bound to repo.");
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    setProviderItems(allItems);
   }
 
-  async function fetchSentryIssues() {
-    if (!selectedRepoId) return;
-    try {
-      const payload = await api<{ issues: SentryIssue[] }>(`/api/sentry/issues/${selectedRepoId}`);
-      setSentryIssues(payload.issues);
-    } catch { /* silent */ }
-  }
-
-  async function sentrySyncNow() {
+  async function providerSyncNow(providerId: string) {
     if (!selectedRepoId) return;
     setError(""); setBusy(true);
     try {
-      const payload = await api<{ synced: number; issues: SentryIssue[] }>(`/api/sentry/sync/${selectedRepoId}`, { method: "POST" });
-      setSentryIssues(payload.issues);
-      setInfo(`Synced ${payload.synced} Sentry issues.`);
+      await api(`/api/providers/${providerId}/sync/${selectedRepoId}`, { method: "POST" });
+      await fetchProviderItems();
+      setInfo("Sync complete.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  async function sentryIgnoreIssue(issueId: string) {
+  async function providerIgnoreItem(providerId: string, itemId: string) {
     try {
-      await api(`/api/sentry/issues/${issueId}/action`, { method: "POST", body: JSON.stringify({ action: "ignore" }) });
-      setSentryIssues((prev) => prev.filter((i) => i.id !== issueId));
+      await api(`/api/providers/${providerId}/items/${itemId}/action`, { method: "POST", body: JSON.stringify({ action: "ignore" }) });
+      setProviderItems((prev) => prev.filter((i) => i.id !== itemId));
     } catch (e) { setError((e as Error).message); }
   }
 
-  async function sentryCreateTask(issueId: string) {
+  async function providerCreateTask(providerId: string, itemId: string) {
     setError(""); setBusy(true);
     try {
-      await api(`/api/sentry/issues/${issueId}/create-task`, { method: "POST" });
-      setSentryIssues((prev) => prev.map((i) => i.id === issueId ? { ...i, status: "accepted" } : i));
+      await api(`/api/providers/${providerId}/items/${itemId}/create-task`, { method: "POST" });
+      setProviderItems((prev) => prev.map((i) => i.id === itemId ? { ...i, status: "accepted" } : i));
       await syncTasks();
-      setInfo("Task created from Sentry issue. Plan generation started.");
+      setInfo("Task created from provider item. Plan generation started.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  // Auto-fetch sentry issues when repo changes
-  useEffect(() => { if (selectedRepoId) fetchSentryIssues(); }, [selectedRepoId]);
+  // Auto-fetch provider items when repo changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (selectedRepoId) fetchProviderItems(); }, [selectedRepoId, providerMetas]);
 
   async function syncTasks() {
     if (!selectedRepoId) { setError("Select a repo first."); return; }
@@ -2180,72 +2160,78 @@ export default function App() {
       {/* ─── Main Content ─── */}
       <main className="mx-auto max-w-7xl px-5 py-6">
 
-        {/* Sentry Issues Toggle */}
-        {sentryAccounts.length > 0 && (
+        {/* Provider Items Toggle */}
+        {Object.values(providerItemCounts).some((c) => c > 0) && (
           <div className="mb-4">
             <button
-              onClick={() => { setShowSentryPanel(!showSentryPanel); if (!showSentryPanel) fetchSentryIssues(); }}
+              onClick={() => { setShowItemsPanel(!showItemsPanel); if (!showItemsPanel) fetchProviderItems(); }}
               className="flex items-center gap-2 rounded-lg border border-border-default bg-surface-100 px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-surface-200"
             >
-              Sentry Hatalari
-              {sentryIssuesCount > 0 && (
+              Provider Items
+              {Object.values(providerItemCounts).reduce((a, b) => a + b, 0) > 0 && (
                 <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
-                  {sentryIssuesCount}
+                  {Object.values(providerItemCounts).reduce((a, b) => a + b, 0)}
                 </span>
               )}
             </button>
           </div>
         )}
 
-        {/* Sentry Issues Panel */}
-        {showSentryPanel && (
+        {/* Provider Items Panel */}
+        {showItemsPanel && (
           <section className="mb-6 rounded-2xl border border-border-default bg-surface-100 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-medium text-text-primary">Sentry Issues</h2>
-              <button onClick={sentrySyncNow} disabled={busy} className="rounded-md border border-border-default bg-surface-200 px-3 py-1 text-xs font-medium text-text-secondary transition hover:bg-surface-300">
-                Sync Now
-              </button>
+              <h2 className="text-base font-medium text-text-primary">Provider Items</h2>
+              <div className="flex gap-2">
+                {providerMetas.filter((m) => m.has_items_panel).map((meta) => (
+                  <button key={meta.id} onClick={() => providerSyncNow(meta.id)} disabled={busy} className="rounded-md border border-border-default bg-surface-200 px-3 py-1 text-xs font-medium text-text-secondary transition hover:bg-surface-300">
+                    Sync {meta.display_name}
+                  </button>
+                ))}
+              </div>
             </div>
-            {sentryIssues.filter((i) => i.status === "pending" || i.status === "regression").length === 0 ? (
-              <p className="text-sm text-text-muted">No pending Sentry issues.</p>
+            {providerItems.filter((i) => i.status === "pending" || i.status === "regression").length === 0 ? (
+              <p className="text-sm text-text-muted">No pending items.</p>
             ) : (
               <div className="space-y-2">
-                {sentryIssues
+                {providerItems
                   .filter((i) => i.status === "pending" || i.status === "regression")
-                  .map((issue) => (
-                    <div key={issue.id} className="flex items-start justify-between gap-3 rounded-xl border border-border-default bg-surface-200 p-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-block h-2 w-2 rounded-full ${issue.level === "fatal" ? "bg-red-600" : issue.level === "error" ? "bg-red-400" : "bg-yellow-400"}`} />
-                          <span className="truncate text-sm font-medium text-text-primary">{issue.title}</span>
-                          {issue.status === "regression" && (
-                            <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400 uppercase">Regression</span>
-                          )}
+                  .map((item) => {
+                    const data = (() => { try { return JSON.parse(item.data_json); } catch { return {}; } })();
+                    return (
+                      <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-border-default bg-surface-200 p-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block h-2 w-2 rounded-full ${data.level === "fatal" ? "bg-red-600" : data.level === "error" ? "bg-red-400" : "bg-yellow-400"}`} />
+                            <span className="truncate text-sm font-medium text-text-primary">{item.title}</span>
+                            {item.status === "regression" && (
+                              <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400 uppercase">Regression</span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-text-muted">
+                            {data.culprit && <span>Culprit: {data.culprit}</span>}
+                            {data.level && <span>Level: {data.level}</span>}
+                            {data.occurrence_count && <span>Count: {data.occurrence_count}</span>}
+                          </div>
                         </div>
-                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-text-muted">
-                          {issue.culprit && <span>Culprit: {issue.culprit}</span>}
-                          <span>Level: {issue.level ?? "error"}</span>
-                          <span>Count: {issue.occurrence_count}</span>
-                          {issue.last_seen && <span>Last: {formatDate(issue.last_seen)}</span>}
+                        <div className="flex shrink-0 gap-1.5">
+                          <button
+                            onClick={() => providerCreateTask(item.provider_id, item.id)}
+                            disabled={busy}
+                            className="rounded-md bg-brand px-3 py-1 text-xs font-medium text-white transition hover:bg-brand-hover"
+                          >
+                            Fix
+                          </button>
+                          <button
+                            onClick={() => providerIgnoreItem(item.provider_id, item.id)}
+                            className="rounded-md border border-border-default px-3 py-1 text-xs font-medium text-text-muted transition hover:bg-surface-300"
+                          >
+                            Ignore
+                          </button>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-1.5">
-                        <button
-                          onClick={() => sentryCreateTask(issue.id)}
-                          disabled={busy}
-                          className="rounded-md bg-brand px-3 py-1 text-xs font-medium text-white transition hover:bg-brand-hover"
-                        >
-                          Fix
-                        </button>
-                        <button
-                          onClick={() => sentryIgnoreIssue(issue.id)}
-                          className="rounded-md border border-border-default px-3 py-1 text-xs font-medium text-text-muted transition hover:bg-surface-300"
-                        >
-                          Ignore
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </section>
@@ -2432,7 +2418,7 @@ export default function App() {
                           try {
                             await api(`/api/tasks/${selectedTask.id}`, { method: "DELETE" });
                             setDetailsOpen(false);
-                            setSelectedTaskId(null);
+                            setSelectedTaskId("");
                             setTasks((prev) => prev.filter((t) => t.id !== selectedTask.id));
                           } catch (err) {
                             setError((err as Error).message);
@@ -3002,27 +2988,24 @@ export default function App() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        repos={repos} accounts={accounts} boards={boards} agentProfiles={agentProfiles}
+        repos={repos} agentProfiles={agentProfiles}
+        providerMetas={providerMetas} providerAccounts={providerAccounts}
         selectedRepoId={selectedRepoId} setSelectedRepoId={setSelectedRepoId}
-        selectedAccountId={selectedAccountId} setSelectedAccountId={setSelectedAccountId}
-        selectedBoardId={selectedBoardId} setSelectedBoardId={setSelectedBoardId}
         selectedProfileId={selectedProfileId} setSelectedProfileId={setSelectedProfileId}
         selectedProfile={selectedProfile}
         busy={busy} error={error} info={info}
-        onRepoSubmit={onRepoSubmit} onConnectJira={onConnectJira}
-        bindBoard={bindBoard} discoverAgents={discoverAgents} saveAgentSelection={saveAgentSelection}
+        onRepoSubmit={onRepoSubmit}
+        discoverAgents={discoverAgents} saveAgentSelection={saveAgentSelection}
         repoPath={repoPath} setRepoPath={setRepoPath}
         repoName={repoName} setRepoName={setRepoName}
-        jiraBaseUrl={jiraBaseUrl} setJiraBaseUrl={setJiraBaseUrl}
-        jiraEmail={jiraEmail} setJiraEmail={setJiraEmail}
-        jiraToken={jiraToken} setJiraToken={setJiraToken}
-        sentryAccounts={sentryAccounts} sentryProjects={sentryProjects}
-        sentryBaseUrl={sentryBaseUrl} setSentryBaseUrl={setSentryBaseUrl}
-        sentryOrgSlug={sentryOrgSlug} setSentryOrgSlug={setSentryOrgSlug}
-        sentryAuthToken={sentryAuthToken} setSentryAuthToken={setSentryAuthToken}
-        selectedSentryAccountId={selectedSentryAccountId} setSelectedSentryAccountId={setSelectedSentryAccountId}
-        selectedSentryProjectId={selectedSentryProjectId} setSelectedSentryProjectId={setSelectedSentryProjectId}
-        onConnectSentry={connectSentry} fetchSentryProjects={fetchSentryProjects} bindSentryProject={bindSentryProject}
+        onProviderConnect={onProviderConnect}
+        onFetchResources={onFetchResources}
+        onProviderBind={onProviderBind}
+        providerResources={providerResources}
+        selectedProviderAccountIds={selectedProviderAccountIds}
+        setSelectedProviderAccountId={setSelectedProviderAccountId}
+        selectedProviderResourceIds={selectedProviderResourceIds}
+        setSelectedProviderResourceId={setSelectedProviderResourceId}
       />
 
       <CreateTaskModal

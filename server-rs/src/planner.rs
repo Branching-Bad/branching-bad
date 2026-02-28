@@ -180,6 +180,8 @@ pub fn generate_plan_with_agent_strict(
         .map(|c| format!("\nRevision request from user:\n{c}\n"))
         .unwrap_or_default();
 
+    // Legacy hardcoded Sentry section — kept for backward compatibility
+    // New code should pass provider_prompt_section to the caller
     let sentry_section = if task.source == "sentry" {
         build_sentry_prompt_section(task)
     } else {

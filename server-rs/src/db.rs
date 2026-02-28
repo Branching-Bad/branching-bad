@@ -8,9 +8,9 @@ use uuid::Uuid;
 
 use crate::models::{
     AgentProfile, AgentProfileWithMetadata, AutostartJob, ClearPipelineResult, CreateTaskPayload,
-    DiscoveredProfile, JiraAccount, JiraBoard, Plan, PlanJob, PlanWithParsed, Repo,
-    RepoAgentPreference, RepoBinding, RepoSentryBinding, ReviewComment, Run, RunEvent,
-    SentryAccount, SentryIssueRecord, SentryProject, TaskWithPayload,
+    DiscoveredProfile, Plan, PlanJob, PlanWithParsed, Repo,
+    RepoAgentPreference, ReviewComment, Run, RunEvent, TaskWithPayload,
+    ProviderAccountRow, ProviderResourceRow, ProviderBindingRow, ProviderItemRow,
 };
 
 pub struct Db {
@@ -347,6 +347,63 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
 "#,
         )?;
 
+        // ── Generic provider tables ──
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS provider_accounts (
+    id TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS provider_resources (
+    id TEXT PRIMARY KEY,
+    provider_account_id TEXT NOT NULL REFERENCES provider_accounts(id) ON DELETE CASCADE,
+    provider_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    extra_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(provider_account_id, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS provider_bindings (
+    repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+    provider_account_id TEXT NOT NULL REFERENCES provider_accounts(id) ON DELETE CASCADE,
+    provider_resource_id TEXT NOT NULL REFERENCES provider_resources(id) ON DELETE CASCADE,
+    provider_id TEXT NOT NULL,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(repo_id, provider_account_id, provider_resource_id)
+);
+
+CREATE TABLE IF NOT EXISTS provider_items (
+    id TEXT PRIMARY KEY,
+    provider_account_id TEXT NOT NULL,
+    provider_resource_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    linked_task_id TEXT,
+    data_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(provider_account_id, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_items_resource ON provider_items(provider_resource_id, status);
+"#,
+        )?;
+
+        // ── Migrate old tables → generic provider tables ──
+        self.migrate_to_provider_tables(&conn)?;
+
         self.migrate_tasks_nullable_jira(&conn)?;
         Ok(())
     }
@@ -529,210 +586,6 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
         .map_err(anyhow::Error::from)
     }
 
-    pub fn create_or_update_jira_account(
-        &self,
-        base_url: &str,
-        email: &str,
-        api_token: &str,
-    ) -> Result<JiraAccount> {
-        let conn = self.connect()?;
-        let existing: Option<JiraAccount> = conn
-            .query_row(
-                "SELECT id, base_url, email, api_token, created_at, updated_at FROM jira_accounts WHERE base_url = ?1 AND email = ?2",
-                params![base_url, email],
-                |row| {
-                    Ok(JiraAccount {
-                        id: row.get(0)?,
-                        base_url: row.get(1)?,
-                        email: row.get(2)?,
-                        api_token: row.get(3)?,
-                        created_at: row.get(4)?,
-                        updated_at: row.get(5)?,
-                    })
-                },
-            )
-            .optional()?;
-        let ts = now_iso();
-
-        if let Some(account) = existing {
-            conn.execute(
-                "UPDATE jira_accounts SET api_token = ?1, updated_at = ?2 WHERE id = ?3",
-                params![api_token, ts, account.id],
-            )?;
-            return self
-                .get_jira_account_by_id(&account.id)?
-                .context("account not found after update");
-        }
-
-        let account = JiraAccount {
-            id: Uuid::new_v4().to_string(),
-            base_url: base_url.to_string(),
-            email: email.to_string(),
-            api_token: api_token.to_string(),
-            created_at: ts.clone(),
-            updated_at: ts,
-        };
-        conn.execute(
-            "INSERT INTO jira_accounts (id, base_url, email, api_token, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                account.id,
-                account.base_url,
-                account.email,
-                account.api_token,
-                account.created_at,
-                account.updated_at
-            ],
-        )?;
-        Ok(account)
-    }
-
-    pub fn list_jira_accounts(&self) -> Result<Vec<JiraAccount>> {
-        let conn = self.connect()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, base_url, email, api_token, created_at, updated_at FROM jira_accounts ORDER BY updated_at DESC",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(JiraAccount {
-                id: row.get(0)?,
-                base_url: row.get(1)?,
-                email: row.get(2)?,
-                api_token: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-            })
-        })?;
-        rows.collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(anyhow::Error::from)
-    }
-
-    pub fn get_jira_account_by_id(&self, account_id: &str) -> Result<Option<JiraAccount>> {
-        let conn = self.connect()?;
-        conn.query_row(
-            "SELECT id, base_url, email, api_token, created_at, updated_at FROM jira_accounts WHERE id = ?1",
-            [account_id],
-            |row| {
-                Ok(JiraAccount {
-                    id: row.get(0)?,
-                    base_url: row.get(1)?,
-                    email: row.get(2)?,
-                    api_token: row.get(3)?,
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(anyhow::Error::from)
-    }
-
-    pub fn upsert_jira_boards(
-        &self,
-        account_id: &str,
-        boards: &[(String, String)],
-    ) -> Result<()> {
-        let mut conn = self.connect()?;
-        let tx = conn.transaction()?;
-        let ts = now_iso();
-
-        for (board_id, name) in boards {
-            let existing_id: Option<String> = tx
-                .query_row(
-                    "SELECT id FROM jira_boards WHERE jira_account_id = ?1 AND board_id = ?2",
-                    params![account_id, board_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            let id = existing_id.unwrap_or_else(|| Uuid::new_v4().to_string());
-            tx.execute(
-                r#"INSERT INTO jira_boards (id, jira_account_id, board_id, name, created_at, updated_at)
-                   VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                   ON CONFLICT(jira_account_id, board_id)
-                   DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at"#,
-                params![id, account_id, board_id, name, ts, ts],
-            )?;
-        }
-        tx.commit()?;
-        Ok(())
-    }
-
-    pub fn list_boards_by_account(&self, account_id: &str) -> Result<Vec<JiraBoard>> {
-        let conn = self.connect()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, jira_account_id, board_id, name, created_at, updated_at FROM jira_boards WHERE jira_account_id = ?1 ORDER BY name ASC",
-        )?;
-        let rows = stmt.query_map([account_id], |row| {
-            Ok(JiraBoard {
-                id: row.get(0)?,
-                jira_account_id: row.get(1)?,
-                board_id: row.get(2)?,
-                name: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-            })
-        })?;
-        rows.collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(anyhow::Error::from)
-    }
-
-    pub fn get_board_by_id(&self, board_id: &str) -> Result<Option<JiraBoard>> {
-        let conn = self.connect()?;
-        conn.query_row(
-            "SELECT id, jira_account_id, board_id, name, created_at, updated_at FROM jira_boards WHERE id = ?1",
-            [board_id],
-            |row| {
-                Ok(JiraBoard {
-                    id: row.get(0)?,
-                    jira_account_id: row.get(1)?,
-                    board_id: row.get(2)?,
-                    name: row.get(3)?,
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(anyhow::Error::from)
-    }
-
-    pub fn upsert_repo_binding(
-        &self,
-        repo_id: &str,
-        account_id: &str,
-        board_id: &str,
-    ) -> Result<RepoBinding> {
-        let conn = self.connect()?;
-        let ts = now_iso();
-        conn.execute(
-            r#"INSERT INTO repo_jira_bindings (repo_id, jira_account_id, jira_board_id, created_at, updated_at)
-               VALUES (?1, ?2, ?3, ?4, ?5)
-               ON CONFLICT(repo_id)
-               DO UPDATE SET jira_account_id = excluded.jira_account_id,
-                             jira_board_id = excluded.jira_board_id,
-                             updated_at = excluded.updated_at"#,
-            params![repo_id, account_id, board_id, ts, ts],
-        )?;
-        self.get_repo_binding(repo_id)?
-            .context("binding missing after upsert")
-    }
-
-    pub fn get_repo_binding(&self, repo_id: &str) -> Result<Option<RepoBinding>> {
-        let conn = self.connect()?;
-        conn.query_row(
-            "SELECT repo_id, jira_account_id, jira_board_id, created_at, updated_at FROM repo_jira_bindings WHERE repo_id = ?1",
-            [repo_id],
-            |row| {
-                Ok(RepoBinding {
-                    repo_id: row.get(0)?,
-                    jira_account_id: row.get(1)?,
-                    jira_board_id: row.get(2)?,
-                    created_at: row.get(3)?,
-                    updated_at: row.get(4)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(anyhow::Error::from)
-    }
 
     pub fn upsert_tasks(
         &self,
@@ -1942,60 +1795,145 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
         )?;
         Ok(())
     }
-    // ── Sentry CRUD ──
 
-    pub fn create_or_update_sentry_account(
+    // ══════════════════════════════════════════════════════════════════
+    //  Generic Provider CRUD
+    // ══════════════════════════════════════════════════════════════════
+
+    fn migrate_to_provider_tables(&self, conn: &Connection) -> Result<()> {
+        // Only run migration if old tables exist and new tables are empty
+        let provider_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM provider_accounts", [], |row| row.get(0))
+            .unwrap_or(0);
+        if provider_count > 0 {
+            return Ok(());
+        }
+
+        // Migrate jira_accounts → provider_accounts
+        let has_jira: bool = conn
+            .query_row("SELECT COUNT(*) > 0 FROM jira_accounts", [], |row| row.get(0))
+            .unwrap_or(false);
+        if has_jira {
+            conn.execute_batch(
+                r#"
+INSERT OR IGNORE INTO provider_accounts (id, provider_id, config_json, display_name, created_at, updated_at)
+SELECT id, 'jira', json_object('base_url', base_url, 'email', email, 'api_token', api_token),
+       email, created_at, updated_at
+FROM jira_accounts;
+
+INSERT OR IGNORE INTO provider_resources (id, provider_account_id, provider_id, external_id, name, extra_json, created_at, updated_at)
+SELECT id, jira_account_id, 'jira', board_id, name, '{}', created_at, updated_at
+FROM jira_boards;
+
+INSERT OR IGNORE INTO provider_bindings (repo_id, provider_account_id, provider_resource_id, provider_id, config_json, created_at, updated_at)
+SELECT repo_id, jira_account_id, jira_board_id, 'jira', '{}', created_at, updated_at
+FROM repo_jira_bindings;
+"#,
+            )?;
+        }
+
+        // Migrate sentry_accounts → provider_accounts
+        let has_sentry: bool = conn
+            .query_row("SELECT COUNT(*) > 0 FROM sentry_accounts", [], |row| row.get(0))
+            .unwrap_or(false);
+        if has_sentry {
+            conn.execute_batch(
+                r#"
+INSERT OR IGNORE INTO provider_accounts (id, provider_id, config_json, display_name, created_at, updated_at)
+SELECT id, 'sentry', json_object('base_url', base_url, 'org_slug', org_slug, 'auth_token', auth_token),
+       org_slug, created_at, updated_at
+FROM sentry_accounts;
+
+INSERT OR IGNORE INTO provider_resources (id, provider_account_id, provider_id, external_id, name, extra_json, created_at, updated_at)
+SELECT id, sentry_account_id, 'sentry', project_slug, name, '{}', created_at, updated_at
+FROM sentry_projects;
+
+INSERT OR IGNORE INTO provider_bindings (repo_id, provider_account_id, provider_resource_id, provider_id, config_json, created_at, updated_at)
+SELECT repo_id, sentry_account_id, sentry_project_id, 'sentry', json_object('environments', environments),
+       created_at, updated_at
+FROM repo_sentry_bindings;
+
+INSERT OR IGNORE INTO provider_items (id, provider_account_id, provider_resource_id, provider_id, external_id, title, status, linked_task_id, data_json, created_at, updated_at)
+SELECT id, sentry_account_id, sentry_project_id, 'sentry', sentry_issue_id, title, status, linked_task_id,
+       json_object('culprit', culprit, 'level', level, 'first_seen', first_seen, 'last_seen', last_seen,
+                   'occurrence_count', occurrence_count, 'environments', environments,
+                   'latest_event_json', latest_event_json, 'metadata_json', metadata_json),
+       created_at, updated_at
+FROM sentry_issues;
+"#,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn create_provider_account(
         &self,
-        base_url: &str,
-        org_slug: &str,
-        auth_token: &str,
-    ) -> Result<SentryAccount> {
+        provider_id: &str,
+        config_json: &str,
+        display_name: &str,
+    ) -> Result<ProviderAccountRow> {
         let conn = self.connect()?;
-        let existing: Option<String> = conn
+        let ts = now_iso();
+        let id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO provider_accounts (id, provider_id, config_json, display_name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, provider_id, config_json, display_name, ts, ts],
+        )?;
+        self.get_provider_account(&id)?
+            .context("provider account missing after insert")
+    }
+
+    pub fn upsert_provider_account(
+        &self,
+        provider_id: &str,
+        config: &Value,
+        display_name: &str,
+    ) -> Result<ProviderAccountRow> {
+        let config_json = config.to_string();
+        let conn = self.connect()?;
+        let ts = now_iso();
+
+        // Check for existing account by provider_id + some unique identifier from config
+        // For generic approach, try to find by display_name + provider_id
+        let existing_id: Option<String> = conn
             .query_row(
-                "SELECT id FROM sentry_accounts WHERE base_url = ?1 AND org_slug = ?2",
-                params![base_url, org_slug],
+                "SELECT id FROM provider_accounts WHERE provider_id = ?1 AND display_name = ?2",
+                params![provider_id, display_name],
                 |row| row.get(0),
             )
             .optional()?;
-        let ts = now_iso();
 
-        if let Some(id) = existing {
+        if let Some(id) = existing_id {
             conn.execute(
-                "UPDATE sentry_accounts SET auth_token = ?1, updated_at = ?2 WHERE id = ?3",
-                params![auth_token, ts, id],
+                "UPDATE provider_accounts SET config_json = ?1, updated_at = ?2 WHERE id = ?3",
+                params![config_json, ts, id],
             )?;
             return self
-                .get_sentry_account_by_id(&id)?
-                .context("sentry account not found after update");
+                .get_provider_account(&id)?
+                .context("provider account not found after update");
         }
 
-        let account = SentryAccount {
-            id: Uuid::new_v4().to_string(),
-            base_url: base_url.to_string(),
-            org_slug: org_slug.to_string(),
-            auth_token: auth_token.to_string(),
-            created_at: ts.clone(),
-            updated_at: ts,
-        };
+        let id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO sentry_accounts (id, base_url, org_slug, auth_token, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![account.id, account.base_url, account.org_slug, account.auth_token, account.created_at, account.updated_at],
+            "INSERT INTO provider_accounts (id, provider_id, config_json, display_name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, provider_id, config_json, display_name, ts, ts],
         )?;
-        Ok(account)
+        self.get_provider_account(&id)?
+            .context("provider account missing after insert")
     }
 
-    pub fn list_sentry_accounts(&self) -> Result<Vec<SentryAccount>> {
+    pub fn list_provider_accounts(&self, provider_id: &str) -> Result<Vec<ProviderAccountRow>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
-            "SELECT id, base_url, org_slug, auth_token, created_at, updated_at FROM sentry_accounts ORDER BY updated_at DESC",
+            "SELECT id, provider_id, config_json, display_name, created_at, updated_at FROM provider_accounts WHERE provider_id = ?1 ORDER BY updated_at DESC",
         )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(SentryAccount {
+        let rows = stmt.query_map([provider_id], |row| {
+            Ok(ProviderAccountRow {
                 id: row.get(0)?,
-                base_url: row.get(1)?,
-                org_slug: row.get(2)?,
-                auth_token: row.get(3)?,
+                provider_id: row.get(1)?,
+                config_json: row.get(2)?,
+                display_name: row.get(3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
             })
@@ -2004,17 +1942,36 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
             .map_err(anyhow::Error::from)
     }
 
-    pub fn get_sentry_account_by_id(&self, id: &str) -> Result<Option<SentryAccount>> {
+    pub fn list_all_provider_accounts(&self) -> Result<Vec<ProviderAccountRow>> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, provider_id, config_json, display_name, created_at, updated_at FROM provider_accounts ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ProviderAccountRow {
+                id: row.get(0)?,
+                provider_id: row.get(1)?,
+                config_json: row.get(2)?,
+                display_name: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::from)
+    }
+
+    pub fn get_provider_account(&self, id: &str) -> Result<Option<ProviderAccountRow>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, base_url, org_slug, auth_token, created_at, updated_at FROM sentry_accounts WHERE id = ?1",
+            "SELECT id, provider_id, config_json, display_name, created_at, updated_at FROM provider_accounts WHERE id = ?1",
             [id],
             |row| {
-                Ok(SentryAccount {
+                Ok(ProviderAccountRow {
                     id: row.get(0)?,
-                    base_url: row.get(1)?,
-                    org_slug: row.get(2)?,
-                    auth_token: row.get(3)?,
+                    provider_id: row.get(1)?,
+                    config_json: row.get(2)?,
+                    display_name: row.get(3)?,
                     created_at: row.get(4)?,
                     updated_at: row.get(5)?,
                 })
@@ -2024,74 +1981,79 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
         .map_err(anyhow::Error::from)
     }
 
-    pub fn delete_sentry_account(&self, id: &str) -> Result<()> {
+    pub fn delete_provider_account(&self, id: &str) -> Result<()> {
         let conn = self.connect()?;
-        conn.execute("DELETE FROM sentry_accounts WHERE id = ?1", [id])?;
+        conn.execute("DELETE FROM provider_accounts WHERE id = ?1", [id])?;
         Ok(())
     }
 
-    pub fn upsert_sentry_projects(
+    pub fn upsert_provider_resources(
         &self,
-        account_id: &str,
-        projects: &[(String, String)], // (slug, name)
+        provider_account_id: &str,
+        provider_id: &str,
+        resources: &[(String, String, String)], // (external_id, name, extra_json)
     ) -> Result<()> {
         let mut conn = self.connect()?;
         let tx = conn.transaction()?;
         let ts = now_iso();
 
-        for (slug, name) in projects {
+        for (external_id, name, extra_json) in resources {
             let existing_id: Option<String> = tx
                 .query_row(
-                    "SELECT id FROM sentry_projects WHERE sentry_account_id = ?1 AND project_slug = ?2",
-                    params![account_id, slug],
+                    "SELECT id FROM provider_resources WHERE provider_account_id = ?1 AND external_id = ?2",
+                    params![provider_account_id, external_id],
                     |row| row.get(0),
                 )
                 .optional()?;
             let id = existing_id.unwrap_or_else(|| Uuid::new_v4().to_string());
             tx.execute(
-                r#"INSERT INTO sentry_projects (id, sentry_account_id, project_slug, name, created_at, updated_at)
-                   VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                   ON CONFLICT(sentry_account_id, project_slug)
-                   DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at"#,
-                params![id, account_id, slug, name, ts, ts],
+                r#"INSERT INTO provider_resources (id, provider_account_id, provider_id, external_id, name, extra_json, created_at, updated_at)
+                   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                   ON CONFLICT(provider_account_id, external_id)
+                   DO UPDATE SET name = excluded.name, extra_json = excluded.extra_json, updated_at = excluded.updated_at"#,
+                params![id, provider_account_id, provider_id, external_id, name, extra_json, ts, ts],
             )?;
         }
         tx.commit()?;
         Ok(())
     }
 
-    pub fn list_sentry_projects_by_account(&self, account_id: &str) -> Result<Vec<SentryProject>> {
+    pub fn list_provider_resources(&self, provider_account_id: &str) -> Result<Vec<ProviderResourceRow>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
-            "SELECT id, sentry_account_id, project_slug, name, created_at, updated_at FROM sentry_projects WHERE sentry_account_id = ?1 ORDER BY name ASC",
+            "SELECT id, provider_account_id, provider_id, external_id, name, extra_json, created_at, updated_at FROM provider_resources WHERE provider_account_id = ?1 ORDER BY name ASC",
         )?;
-        let rows = stmt.query_map([account_id], |row| {
-            Ok(SentryProject {
+        let rows = stmt.query_map([provider_account_id], |row| {
+            Ok(ProviderResourceRow {
                 id: row.get(0)?,
-                sentry_account_id: row.get(1)?,
-                project_slug: row.get(2)?,
-                name: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                provider_account_id: row.get(1)?,
+                provider_id: row.get(2)?,
+                external_id: row.get(3)?,
+                name: row.get(4)?,
+                extra_json: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(anyhow::Error::from)
     }
 
-    pub fn get_sentry_project_by_id(&self, id: &str) -> Result<Option<SentryProject>> {
+    pub fn get_provider_resource(&self, id: &str) -> Result<Option<ProviderResourceRow>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, sentry_account_id, project_slug, name, created_at, updated_at FROM sentry_projects WHERE id = ?1",
+            "SELECT id, provider_account_id, provider_id, external_id, name, extra_json, created_at, updated_at FROM provider_resources WHERE id = ?1",
             [id],
             |row| {
-                Ok(SentryProject {
+                Ok(ProviderResourceRow {
                     id: row.get(0)?,
-                    sentry_account_id: row.get(1)?,
-                    project_slug: row.get(2)?,
-                    name: row.get(3)?,
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
+                    provider_account_id: row.get(1)?,
+                    provider_id: row.get(2)?,
+                    external_id: row.get(3)?,
+                    name: row.get(4)?,
+                    extra_json: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
                 })
             },
         )
@@ -2099,96 +2061,98 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
         .map_err(anyhow::Error::from)
     }
 
-    pub fn create_repo_sentry_binding(
+    pub fn create_provider_binding(
         &self,
         repo_id: &str,
-        sentry_account_id: &str,
-        sentry_project_id: &str,
-        environments: &str,
-    ) -> Result<RepoSentryBinding> {
+        account_id: &str,
+        resource_id: &str,
+        provider_id: &str,
+        config_json: &str,
+    ) -> Result<ProviderBindingRow> {
         let conn = self.connect()?;
         let ts = now_iso();
         conn.execute(
-            r#"INSERT INTO repo_sentry_bindings (repo_id, sentry_account_id, sentry_project_id, environments, created_at, updated_at)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-               ON CONFLICT(repo_id, sentry_account_id, sentry_project_id)
-               DO UPDATE SET environments = excluded.environments, updated_at = excluded.updated_at"#,
-            params![repo_id, sentry_account_id, sentry_project_id, environments, ts, ts],
+            r#"INSERT INTO provider_bindings (repo_id, provider_account_id, provider_resource_id, provider_id, config_json, created_at, updated_at)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+               ON CONFLICT(repo_id, provider_account_id, provider_resource_id)
+               DO UPDATE SET config_json = excluded.config_json, updated_at = excluded.updated_at"#,
+            params![repo_id, account_id, resource_id, provider_id, config_json, ts, ts],
         )?;
-        Ok(RepoSentryBinding {
+        Ok(ProviderBindingRow {
             repo_id: repo_id.to_string(),
-            sentry_account_id: sentry_account_id.to_string(),
-            sentry_project_id: sentry_project_id.to_string(),
-            environments: environments.to_string(),
+            provider_account_id: account_id.to_string(),
+            provider_resource_id: resource_id.to_string(),
+            provider_id: provider_id.to_string(),
+            config_json: config_json.to_string(),
             created_at: ts.clone(),
             updated_at: ts,
         })
     }
 
-    pub fn list_repo_sentry_bindings(&self, repo_id: &str) -> Result<Vec<RepoSentryBinding>> {
+    pub fn list_provider_bindings(&self, provider_id: &str) -> Result<Vec<ProviderBindingRow>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
-            "SELECT repo_id, sentry_account_id, sentry_project_id, environments, created_at, updated_at FROM repo_sentry_bindings WHERE repo_id = ?1",
+            "SELECT repo_id, provider_account_id, provider_resource_id, provider_id, config_json, created_at, updated_at FROM provider_bindings WHERE provider_id = ?1",
+        )?;
+        let rows = stmt.query_map([provider_id], |row| {
+            Ok(ProviderBindingRow {
+                repo_id: row.get(0)?,
+                provider_account_id: row.get(1)?,
+                provider_resource_id: row.get(2)?,
+                provider_id: row.get(3)?,
+                config_json: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::from)
+    }
+
+    pub fn list_provider_bindings_for_repo(&self, repo_id: &str) -> Result<Vec<ProviderBindingRow>> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT repo_id, provider_account_id, provider_resource_id, provider_id, config_json, created_at, updated_at FROM provider_bindings WHERE repo_id = ?1",
         )?;
         let rows = stmt.query_map([repo_id], |row| {
-            Ok(RepoSentryBinding {
+            Ok(ProviderBindingRow {
                 repo_id: row.get(0)?,
-                sentry_account_id: row.get(1)?,
-                sentry_project_id: row.get(2)?,
-                environments: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                provider_account_id: row.get(1)?,
+                provider_resource_id: row.get(2)?,
+                provider_id: row.get(3)?,
+                config_json: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(anyhow::Error::from)
     }
 
-    pub fn list_all_repo_sentry_bindings(&self) -> Result<Vec<RepoSentryBinding>> {
-        let conn = self.connect()?;
-        let mut stmt = conn.prepare(
-            "SELECT repo_id, sentry_account_id, sentry_project_id, environments, created_at, updated_at FROM repo_sentry_bindings",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(RepoSentryBinding {
-                repo_id: row.get(0)?,
-                sentry_account_id: row.get(1)?,
-                sentry_project_id: row.get(2)?,
-                environments: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-            })
-        })?;
-        rows.collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(anyhow::Error::from)
-    }
-
-    /// Upsert sentry issues. New issue → insert with status='pending'.
-    /// Existing → update occurrence_count, last_seen. If linked task is DONE → status='regression'.
-    pub fn upsert_sentry_issues(
+    pub fn upsert_provider_items(
         &self,
-        sentry_account_id: &str,
-        sentry_project_id: &str,
-        issues: &[(String, String, Option<String>, Option<String>, Option<String>, Option<String>, i64, Option<String>, Option<String>)],
-        // (sentry_issue_id, title, culprit, level, first_seen, last_seen, count, latest_event_json, metadata_json)
+        provider_account_id: &str,
+        provider_resource_id: &str,
+        provider_id: &str,
+        items: &[(String, String, String)], // (external_id, title, data_json)
     ) -> Result<usize> {
         let mut conn = self.connect()?;
         let tx = conn.transaction()?;
         let ts = now_iso();
         let mut upserted = 0;
 
-        for (sentry_issue_id, title, culprit, level, first_seen, last_seen, count, latest_event_json, metadata_json) in issues {
+        for (external_id, title, data_json) in items {
             let existing: Option<(String, String, Option<String>)> = tx
                 .query_row(
-                    "SELECT id, status, linked_task_id FROM sentry_issues WHERE sentry_account_id = ?1 AND sentry_issue_id = ?2",
-                    params![sentry_account_id, sentry_issue_id],
+                    "SELECT id, status, linked_task_id FROM provider_items WHERE provider_account_id = ?1 AND external_id = ?2",
+                    params![provider_account_id, external_id],
                     |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
                 )
                 .optional()?;
 
             if let Some((existing_id, current_status, linked_task_id)) = existing {
                 // Check if linked task is DONE → regression
-                let mut new_status = current_status.clone();
+                let mut new_status = current_status;
                 if let Some(ref task_id) = linked_task_id {
                     let task_status: Option<String> = tx
                         .query_row(
@@ -2205,34 +2169,22 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
                 }
 
                 tx.execute(
-                    r#"UPDATE sentry_issues SET
-                        title = ?1, culprit = ?2, level = ?3,
-                        last_seen = ?4, occurrence_count = occurrence_count + ?5,
-                        latest_event_json = COALESCE(?6, latest_event_json),
-                        metadata_json = COALESCE(?7, metadata_json),
-                        status = ?8, updated_at = ?9
-                       WHERE id = ?10"#,
-                    params![
-                        title, culprit, level, last_seen, count,
-                        latest_event_json, metadata_json,
-                        new_status, ts, existing_id
-                    ],
+                    r#"UPDATE provider_items SET
+                        title = ?1, data_json = ?2, status = ?3, updated_at = ?4
+                       WHERE id = ?5"#,
+                    params![title, data_json, new_status, ts, existing_id],
                 )?;
             } else {
                 let id = Uuid::new_v4().to_string();
                 tx.execute(
-                    r#"INSERT INTO sentry_issues (
-                        id, sentry_account_id, sentry_project_id, sentry_issue_id,
-                        title, culprit, level, first_seen, last_seen,
-                        occurrence_count, environments, status,
-                        linked_task_id, latest_event_json, metadata_json,
+                    r#"INSERT INTO provider_items (
+                        id, provider_account_id, provider_resource_id, provider_id,
+                        external_id, title, status, linked_task_id, data_json,
                         created_at, updated_at
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, '[]', 'pending', NULL, ?11, ?12, ?13, ?14)"#,
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', NULL, ?7, ?8, ?9)"#,
                     params![
-                        id, sentry_account_id, sentry_project_id, sentry_issue_id,
-                        title, culprit, level, first_seen, last_seen,
-                        count, latest_event_json, metadata_json,
-                        ts, ts
+                        id, provider_account_id, provider_resource_id, provider_id,
+                        external_id, title, data_json, ts, ts
                     ],
                 )?;
             }
@@ -2242,96 +2194,79 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
         Ok(upserted)
     }
 
-    pub fn list_sentry_issues_by_repo(
+    pub fn list_provider_items(
         &self,
         repo_id: &str,
+        provider_id: &str,
         status_filter: Option<&str>,
-    ) -> Result<Vec<SentryIssueRecord>> {
+    ) -> Result<Vec<ProviderItemRow>> {
         let conn = self.connect()?;
         let sql = if let Some(status) = status_filter {
             format!(
-                r#"SELECT si.id, si.sentry_account_id, si.sentry_project_id, si.sentry_issue_id,
-                    si.title, si.culprit, si.level, si.first_seen, si.last_seen,
-                    si.occurrence_count, si.environments, si.status,
-                    si.linked_task_id, si.latest_event_json, si.metadata_json,
-                    si.created_at, si.updated_at
-                   FROM sentry_issues si
-                   INNER JOIN repo_sentry_bindings rsb
-                     ON si.sentry_account_id = rsb.sentry_account_id
-                     AND si.sentry_project_id = rsb.sentry_project_id
-                   WHERE rsb.repo_id = ?1 AND si.status = '{}'
-                   ORDER BY si.last_seen DESC"#,
+                r#"SELECT pi.id, pi.provider_account_id, pi.provider_resource_id, pi.provider_id,
+                    pi.external_id, pi.title, pi.status, pi.linked_task_id, pi.data_json,
+                    pi.created_at, pi.updated_at
+                   FROM provider_items pi
+                   INNER JOIN provider_bindings pb
+                     ON pi.provider_account_id = pb.provider_account_id
+                     AND pi.provider_resource_id = pb.provider_resource_id
+                   WHERE pb.repo_id = ?1 AND pi.provider_id = ?2 AND pi.status = '{}'
+                   ORDER BY pi.updated_at DESC"#,
                 status.replace('\'', "''")
             )
         } else {
-            r#"SELECT si.id, si.sentry_account_id, si.sentry_project_id, si.sentry_issue_id,
-                si.title, si.culprit, si.level, si.first_seen, si.last_seen,
-                si.occurrence_count, si.environments, si.status,
-                si.linked_task_id, si.latest_event_json, si.metadata_json,
-                si.created_at, si.updated_at
-               FROM sentry_issues si
-               INNER JOIN repo_sentry_bindings rsb
-                 ON si.sentry_account_id = rsb.sentry_account_id
-                 AND si.sentry_project_id = rsb.sentry_project_id
-               WHERE rsb.repo_id = ?1
-               ORDER BY si.last_seen DESC"#
+            r#"SELECT pi.id, pi.provider_account_id, pi.provider_resource_id, pi.provider_id,
+                pi.external_id, pi.title, pi.status, pi.linked_task_id, pi.data_json,
+                pi.created_at, pi.updated_at
+               FROM provider_items pi
+               INNER JOIN provider_bindings pb
+                 ON pi.provider_account_id = pb.provider_account_id
+                 AND pi.provider_resource_id = pb.provider_resource_id
+               WHERE pb.repo_id = ?1 AND pi.provider_id = ?2
+               ORDER BY pi.updated_at DESC"#
                 .to_string()
         };
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map([repo_id], |row| {
-            Ok(SentryIssueRecord {
+        let rows = stmt.query_map(params![repo_id, provider_id], |row| {
+            Ok(ProviderItemRow {
                 id: row.get(0)?,
-                sentry_account_id: row.get(1)?,
-                sentry_project_id: row.get(2)?,
-                sentry_issue_id: row.get(3)?,
-                title: row.get(4)?,
-                culprit: row.get(5)?,
-                level: row.get(6)?,
-                first_seen: row.get(7)?,
-                last_seen: row.get(8)?,
-                occurrence_count: row.get(9)?,
-                environments: row.get(10)?,
-                status: row.get(11)?,
-                linked_task_id: row.get(12)?,
-                latest_event_json: row.get(13)?,
-                metadata_json: row.get(14)?,
-                created_at: row.get(15)?,
-                updated_at: row.get(16)?,
+                provider_account_id: row.get(1)?,
+                provider_resource_id: row.get(2)?,
+                provider_id: row.get(3)?,
+                external_id: row.get(4)?,
+                title: row.get(5)?,
+                status: row.get(6)?,
+                linked_task_id: row.get(7)?,
+                data_json: row.get(8)?,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
             })
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(anyhow::Error::from)
     }
 
-    pub fn get_sentry_issue_by_id(&self, id: &str) -> Result<Option<SentryIssueRecord>> {
+    pub fn get_provider_item(&self, id: &str) -> Result<Option<ProviderItemRow>> {
         let conn = self.connect()?;
         conn.query_row(
-            r#"SELECT id, sentry_account_id, sentry_project_id, sentry_issue_id,
-                title, culprit, level, first_seen, last_seen,
-                occurrence_count, environments, status,
-                linked_task_id, latest_event_json, metadata_json,
+            r#"SELECT id, provider_account_id, provider_resource_id, provider_id,
+                external_id, title, status, linked_task_id, data_json,
                 created_at, updated_at
-               FROM sentry_issues WHERE id = ?1"#,
+               FROM provider_items WHERE id = ?1"#,
             [id],
             |row| {
-                Ok(SentryIssueRecord {
+                Ok(ProviderItemRow {
                     id: row.get(0)?,
-                    sentry_account_id: row.get(1)?,
-                    sentry_project_id: row.get(2)?,
-                    sentry_issue_id: row.get(3)?,
-                    title: row.get(4)?,
-                    culprit: row.get(5)?,
-                    level: row.get(6)?,
-                    first_seen: row.get(7)?,
-                    last_seen: row.get(8)?,
-                    occurrence_count: row.get(9)?,
-                    environments: row.get(10)?,
-                    status: row.get(11)?,
-                    linked_task_id: row.get(12)?,
-                    latest_event_json: row.get(13)?,
-                    metadata_json: row.get(14)?,
-                    created_at: row.get(15)?,
-                    updated_at: row.get(16)?,
+                    provider_account_id: row.get(1)?,
+                    provider_resource_id: row.get(2)?,
+                    provider_id: row.get(3)?,
+                    external_id: row.get(4)?,
+                    title: row.get(5)?,
+                    status: row.get(6)?,
+                    linked_task_id: row.get(7)?,
+                    data_json: row.get(8)?,
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
                 })
             },
         )
@@ -2339,35 +2274,66 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
         .map_err(anyhow::Error::from)
     }
 
-    pub fn update_sentry_issue_status(&self, id: &str, status: &str) -> Result<()> {
+    pub fn update_provider_item_status(&self, id: &str, status: &str) -> Result<()> {
         let conn = self.connect()?;
         let ts = now_iso();
         conn.execute(
-            "UPDATE sentry_issues SET status = ?1, updated_at = ?2 WHERE id = ?3",
+            "UPDATE provider_items SET status = ?1, updated_at = ?2 WHERE id = ?3",
             params![status, ts, id],
         )?;
         Ok(())
     }
 
-    pub fn link_sentry_issue_to_task(&self, issue_id: &str, task_id: &str) -> Result<()> {
+    pub fn link_provider_item_to_task(&self, item_id: &str, task_id: &str) -> Result<()> {
         let conn = self.connect()?;
         let ts = now_iso();
         conn.execute(
-            "UPDATE sentry_issues SET linked_task_id = ?1, status = 'accepted', updated_at = ?2 WHERE id = ?3",
-            params![task_id, ts, issue_id],
+            "UPDATE provider_items SET linked_task_id = ?1, status = 'accepted', updated_at = ?2 WHERE id = ?3",
+            params![task_id, ts, item_id],
         )?;
         Ok(())
     }
 
-    pub fn get_last_sentry_sync_time(
+    pub fn count_pending_provider_items(&self, repo_id: &str, provider_id: &str) -> Result<i64> {
+        let conn = self.connect()?;
+        conn.query_row(
+            r#"SELECT COUNT(*) FROM provider_items pi
+               INNER JOIN provider_bindings pb
+                 ON pi.provider_account_id = pb.provider_account_id
+                 AND pi.provider_resource_id = pb.provider_resource_id
+               WHERE pb.repo_id = ?1 AND pi.provider_id = ?2
+                 AND pi.status IN ('pending', 'regression')"#,
+            params![repo_id, provider_id],
+            |row| row.get(0),
+        )
+        .map_err(anyhow::Error::from)
+    }
+
+    pub fn count_all_pending_provider_items(&self) -> Result<std::collections::HashMap<String, i64>> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT provider_id, COUNT(*) FROM provider_items WHERE status IN ('pending', 'regression') GROUP BY provider_id",
+        )?;
+        let mut map = std::collections::HashMap::new();
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        for row in rows {
+            let (pid, count) = row?;
+            map.insert(pid, count);
+        }
+        Ok(map)
+    }
+
+    pub fn get_last_provider_sync_time(
         &self,
-        sentry_account_id: &str,
-        sentry_project_id: &str,
+        provider_account_id: &str,
+        provider_resource_id: &str,
     ) -> Result<Option<String>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT MAX(last_seen) FROM sentry_issues WHERE sentry_account_id = ?1 AND sentry_project_id = ?2",
-            params![sentry_account_id, sentry_project_id],
+            "SELECT MAX(updated_at) FROM provider_items WHERE provider_account_id = ?1 AND provider_resource_id = ?2",
+            params![provider_account_id, provider_resource_id],
             |row| row.get(0),
         )
         .optional()
@@ -2375,13 +2341,31 @@ CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_pro
         .map_err(anyhow::Error::from)
     }
 
-    pub fn count_pending_sentry_issues(&self) -> Result<i64> {
+    pub fn get_linked_provider_item(&self, task_id: &str) -> Result<Option<ProviderItemRow>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT COUNT(*) FROM sentry_issues WHERE status IN ('pending', 'regression')",
-            [],
-            |row| row.get(0),
+            r#"SELECT id, provider_account_id, provider_resource_id, provider_id,
+                external_id, title, status, linked_task_id, data_json,
+                created_at, updated_at
+               FROM provider_items WHERE linked_task_id = ?1 LIMIT 1"#,
+            [task_id],
+            |row| {
+                Ok(ProviderItemRow {
+                    id: row.get(0)?,
+                    provider_account_id: row.get(1)?,
+                    provider_resource_id: row.get(2)?,
+                    provider_id: row.get(3)?,
+                    external_id: row.get(4)?,
+                    title: row.get(5)?,
+                    status: row.get(6)?,
+                    linked_task_id: row.get(7)?,
+                    data_json: row.get(8)?,
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
+                })
+            },
         )
+        .optional()
         .map_err(anyhow::Error::from)
     }
 }

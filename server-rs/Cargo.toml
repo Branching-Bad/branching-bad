@@ -2,9 +2,11 @@
 name = "approval-agent-server"
 version = "0.1.0"
 edition = "2021"
+default-run = "approval-agent-server"
 
 [dependencies]
 anyhow = "1.0"
+async-trait = "0.1"
 axum = { version = "0.8", features = ["macros"] }
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
@@ -22,3 +24,11 @@ futures = "0.3"
 uuid = { version = "1.8", features = ["v4", "serde"] }
 walkdir = "2.5"
 which = "6.0"
+
+[[bin]]
+name = "approval-agent-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "migrate_providers"
+path = "src/bin/migrate_providers.rs"
