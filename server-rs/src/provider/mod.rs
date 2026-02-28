@@ -1,8 +1,10 @@
+pub mod jira;
+pub mod sentry;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::Serialize;
 use serde_json::Value;
-use std::time::Duration;
 
 /// Metadata that frontend uses to render provider UI
 #[derive(Debug, Clone, Serialize)]
@@ -54,7 +56,6 @@ pub struct ProviderItem {
 pub struct TaskFieldsFromItem {
     pub title: String,
     pub description: Option<String>,
-    pub source: String,
     pub require_plan: bool,
     pub auto_start: bool,
 }
@@ -80,14 +81,6 @@ pub trait Provider: Send + Sync {
 
     /// Convert a provider item into task creation fields.
     fn item_to_task_fields(&self, item: &ProviderItem) -> TaskFieldsFromItem;
-
-    /// Generate plan prompt section for tasks from this provider.
-    fn plan_prompt_section(&self, item_data: &Value) -> Option<String>;
-
-    /// How often to sync. Default 5 minutes.
-    fn sync_interval(&self) -> Duration {
-        Duration::from_secs(300)
-    }
 
     /// Mask sensitive fields for API responses
     fn mask_account(&self, config: Value) -> Value;

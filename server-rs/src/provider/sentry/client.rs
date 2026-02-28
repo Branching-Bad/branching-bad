@@ -2,31 +2,13 @@ use anyhow::{Context, Result, anyhow};
 use reqwest::{Client, header};
 use serde_json::Value;
 
-use crate::models::SentryOrg;
+use super::models::{SentryIssue, SentryOrg, SentryProjectInfo};
 
 pub struct SentryClient {
     client: Client,
     base_url: String,
     org_slug: String,
     auth_token: String,
-}
-
-#[allow(dead_code)]
-pub struct SentryProjectInfo {
-    pub slug: String,
-    pub name: String,
-    pub id: String,
-}
-
-pub struct SentryIssue {
-    pub id: String,
-    pub title: String,
-    pub culprit: Option<String>,
-    pub level: Option<String>,
-    pub first_seen: Option<String>,
-    pub last_seen: Option<String>,
-    pub count: i64,
-    pub metadata: Value,
 }
 
 impl SentryClient {
@@ -102,13 +84,9 @@ impl SentryClient {
                     all.push(SentryProjectInfo { slug, name, id });
                 }
             }
-            // Simple pagination: if we got results, try next page
-            // Sentry uses Link header for cursor pagination but for simplicity
-            // we stop if fewer than 100 results
             if items.len() < 100 {
                 break;
             }
-            // We'd need to parse Link header for proper cursor — skip for now
             break;
         }
         Ok(all)

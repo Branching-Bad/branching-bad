@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use crate::jira::JiraClient;
+use super::client::JiraClient;
 use crate::provider::{
     ConnectField, FieldType, Provider, ProviderItem, ProviderMeta, ProviderResource,
     TaskFieldsFromItem, ValidateResult,
@@ -92,14 +92,9 @@ impl Provider for JiraProvider {
         TaskFieldsFromItem {
             title: String::new(),
             description: None,
-            source: "jira".to_string(),
             require_plan: true,
             auto_start: false,
         }
-    }
-
-    fn plan_prompt_section(&self, _item_data: &Value) -> Option<String> {
-        None
     }
 
     fn mask_account(&self, mut config: Value) -> Value {

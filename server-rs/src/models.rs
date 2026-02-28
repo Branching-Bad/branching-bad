@@ -203,17 +203,6 @@ pub struct ReviewComment {
     pub created_at: String,
 }
 
-pub struct JiraMe {
-    pub account_id: String,
-    pub display_name: String,
-    pub email_address: Option<String>,
-}
-
-pub struct SentryOrg {
-    pub slug: String,
-    pub name: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredProfile {
     pub provider: String,
@@ -223,17 +212,6 @@ pub struct DiscoveredProfile {
     pub source: String,
     pub discovery_kind: String,
     pub metadata: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JiraIssueForTask {
-    pub jira_issue_key: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub assignee: Option<String>,
-    pub status: String,
-    pub priority: Option<String>,
-    pub payload: Value,
 }
 
 // ── Generic Provider Row Structs ──

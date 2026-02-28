@@ -1,0 +1,10 @@
+import { registerJiraUI } from "./jira";
+import { registerSentryUI } from "./sentry";
+
+// Call this once at app startup to register all provider UIs.
+// To add a new provider: create providers/<name>/ folder, implement the component,
+// add registerXxxUI() here. No changes needed in App.tsx or ProviderItemsPanel.
+export function initProviders() {
+  registerJiraUI();
+  registerSentryUI();
+}

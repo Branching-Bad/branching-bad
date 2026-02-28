@@ -56,38 +56,6 @@ CREATE TABLE IF NOT EXISTS repos (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS jira_accounts (
-  id TEXT PRIMARY KEY,
-  base_url TEXT NOT NULL,
-  email TEXT NOT NULL,
-  api_token TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(base_url, email)
-);
-
-CREATE TABLE IF NOT EXISTS jira_boards (
-  id TEXT PRIMARY KEY,
-  jira_account_id TEXT NOT NULL,
-  board_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(jira_account_id, board_id),
-  FOREIGN KEY (jira_account_id) REFERENCES jira_accounts(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS repo_jira_bindings (
-  repo_id TEXT PRIMARY KEY,
-  jira_account_id TEXT NOT NULL,
-  jira_board_id TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
-  FOREIGN KEY (jira_account_id) REFERENCES jira_accounts(id) ON DELETE CASCADE,
-  FOREIGN KEY (jira_board_id) REFERENCES jira_boards(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   repo_id TEXT NOT NULL,
@@ -109,9 +77,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(jira_account_id, jira_issue_key),
-  FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
-  FOREIGN KEY (jira_account_id) REFERENCES jira_accounts(id) ON DELETE CASCADE,
-  FOREIGN KEY (jira_board_id) REFERENCES jira_boards(id) ON DELETE CASCADE
+  FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_repo_updated ON tasks(repo_id, updated_at DESC);
@@ -291,62 +257,6 @@ CREATE INDEX IF NOT EXISTS idx_review_comments_task ON review_comments(task_id, 
 "#,
         )?;
 
-        conn.execute_batch(
-            r#"
-CREATE TABLE IF NOT EXISTS sentry_accounts (
-    id TEXT PRIMARY KEY,
-    base_url TEXT NOT NULL,
-    org_slug TEXT NOT NULL,
-    auth_token TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS sentry_projects (
-    id TEXT PRIMARY KEY,
-    sentry_account_id TEXT NOT NULL REFERENCES sentry_accounts(id) ON DELETE CASCADE,
-    project_slug TEXT NOT NULL,
-    name TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    UNIQUE(sentry_account_id, project_slug)
-);
-
-CREATE TABLE IF NOT EXISTS repo_sentry_bindings (
-    repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
-    sentry_account_id TEXT NOT NULL REFERENCES sentry_accounts(id) ON DELETE CASCADE,
-    sentry_project_id TEXT NOT NULL REFERENCES sentry_projects(id) ON DELETE CASCADE,
-    environments TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    PRIMARY KEY(repo_id, sentry_account_id, sentry_project_id)
-);
-
-CREATE TABLE IF NOT EXISTS sentry_issues (
-    id TEXT PRIMARY KEY,
-    sentry_account_id TEXT NOT NULL,
-    sentry_project_id TEXT NOT NULL,
-    sentry_issue_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    culprit TEXT,
-    level TEXT,
-    first_seen TEXT,
-    last_seen TEXT,
-    occurrence_count INTEGER NOT NULL DEFAULT 1,
-    environments TEXT NOT NULL DEFAULT '[]',
-    status TEXT NOT NULL DEFAULT 'pending',
-    linked_task_id TEXT,
-    latest_event_json TEXT,
-    metadata_json TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    UNIQUE(sentry_account_id, sentry_issue_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_sentry_issues_project ON sentry_issues(sentry_project_id, status);
-"#,
-        )?;
-
         // ── Generic provider tables ──
         conn.execute_batch(
             r#"
@@ -400,9 +310,6 @@ CREATE TABLE IF NOT EXISTS provider_items (
 CREATE INDEX IF NOT EXISTS idx_provider_items_resource ON provider_items(provider_resource_id, status);
 "#,
         )?;
-
-        // ── Migrate old tables → generic provider tables ──
-        self.migrate_to_provider_tables(&conn)?;
 
         self.migrate_tasks_nullable_jira(&conn)?;
         Ok(())
@@ -475,9 +382,7 @@ CREATE INDEX IF NOT EXISTS idx_provider_items_resource ON provider_items(provide
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
               UNIQUE(jira_account_id, jira_issue_key),
-              FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
-              FOREIGN KEY (jira_account_id) REFERENCES jira_accounts(id) ON DELETE CASCADE,
-              FOREIGN KEY (jira_board_id) REFERENCES jira_boards(id) ON DELETE CASCADE
+              FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
             );
 
             INSERT INTO tasks_new (id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at)
@@ -592,7 +497,7 @@ CREATE INDEX IF NOT EXISTS idx_provider_items_resource ON provider_items(provide
         repo_id: &str,
         jira_account_id: &str,
         jira_board_id: &str,
-        tasks: &[crate::models::JiraIssueForTask],
+        tasks: &[crate::provider::jira::JiraIssueForTask],
     ) -> Result<UpsertTasksResult> {
         if tasks.is_empty() {
             return Ok(UpsertTasksResult {
@@ -1800,90 +1705,6 @@ CREATE INDEX IF NOT EXISTS idx_provider_items_resource ON provider_items(provide
     //  Generic Provider CRUD
     // ══════════════════════════════════════════════════════════════════
 
-    fn migrate_to_provider_tables(&self, conn: &Connection) -> Result<()> {
-        // Only run migration if old tables exist and new tables are empty
-        let provider_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM provider_accounts", [], |row| row.get(0))
-            .unwrap_or(0);
-        if provider_count > 0 {
-            return Ok(());
-        }
-
-        // Migrate jira_accounts → provider_accounts
-        let has_jira: bool = conn
-            .query_row("SELECT COUNT(*) > 0 FROM jira_accounts", [], |row| row.get(0))
-            .unwrap_or(false);
-        if has_jira {
-            conn.execute_batch(
-                r#"
-INSERT OR IGNORE INTO provider_accounts (id, provider_id, config_json, display_name, created_at, updated_at)
-SELECT id, 'jira', json_object('base_url', base_url, 'email', email, 'api_token', api_token),
-       email, created_at, updated_at
-FROM jira_accounts;
-
-INSERT OR IGNORE INTO provider_resources (id, provider_account_id, provider_id, external_id, name, extra_json, created_at, updated_at)
-SELECT id, jira_account_id, 'jira', board_id, name, '{}', created_at, updated_at
-FROM jira_boards;
-
-INSERT OR IGNORE INTO provider_bindings (repo_id, provider_account_id, provider_resource_id, provider_id, config_json, created_at, updated_at)
-SELECT repo_id, jira_account_id, jira_board_id, 'jira', '{}', created_at, updated_at
-FROM repo_jira_bindings;
-"#,
-            )?;
-        }
-
-        // Migrate sentry_accounts → provider_accounts
-        let has_sentry: bool = conn
-            .query_row("SELECT COUNT(*) > 0 FROM sentry_accounts", [], |row| row.get(0))
-            .unwrap_or(false);
-        if has_sentry {
-            conn.execute_batch(
-                r#"
-INSERT OR IGNORE INTO provider_accounts (id, provider_id, config_json, display_name, created_at, updated_at)
-SELECT id, 'sentry', json_object('base_url', base_url, 'org_slug', org_slug, 'auth_token', auth_token),
-       org_slug, created_at, updated_at
-FROM sentry_accounts;
-
-INSERT OR IGNORE INTO provider_resources (id, provider_account_id, provider_id, external_id, name, extra_json, created_at, updated_at)
-SELECT id, sentry_account_id, 'sentry', project_slug, name, '{}', created_at, updated_at
-FROM sentry_projects;
-
-INSERT OR IGNORE INTO provider_bindings (repo_id, provider_account_id, provider_resource_id, provider_id, config_json, created_at, updated_at)
-SELECT repo_id, sentry_account_id, sentry_project_id, 'sentry', json_object('environments', environments),
-       created_at, updated_at
-FROM repo_sentry_bindings;
-
-INSERT OR IGNORE INTO provider_items (id, provider_account_id, provider_resource_id, provider_id, external_id, title, status, linked_task_id, data_json, created_at, updated_at)
-SELECT id, sentry_account_id, sentry_project_id, 'sentry', sentry_issue_id, title, status, linked_task_id,
-       json_object('culprit', culprit, 'level', level, 'first_seen', first_seen, 'last_seen', last_seen,
-                   'occurrence_count', occurrence_count, 'environments', environments,
-                   'latest_event_json', latest_event_json, 'metadata_json', metadata_json),
-       created_at, updated_at
-FROM sentry_issues;
-"#,
-            )?;
-        }
-
-        Ok(())
-    }
-
-    pub fn create_provider_account(
-        &self,
-        provider_id: &str,
-        config_json: &str,
-        display_name: &str,
-    ) -> Result<ProviderAccountRow> {
-        let conn = self.connect()?;
-        let ts = now_iso();
-        let id = Uuid::new_v4().to_string();
-        conn.execute(
-            "INSERT INTO provider_accounts (id, provider_id, config_json, display_name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![id, provider_id, config_json, display_name, ts, ts],
-        )?;
-        self.get_provider_account(&id)?
-            .context("provider account missing after insert")
-    }
-
     pub fn upsert_provider_account(
         &self,
         provider_id: &str,
@@ -1929,25 +1750,6 @@ FROM sentry_issues;
             "SELECT id, provider_id, config_json, display_name, created_at, updated_at FROM provider_accounts WHERE provider_id = ?1 ORDER BY updated_at DESC",
         )?;
         let rows = stmt.query_map([provider_id], |row| {
-            Ok(ProviderAccountRow {
-                id: row.get(0)?,
-                provider_id: row.get(1)?,
-                config_json: row.get(2)?,
-                display_name: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-            })
-        })?;
-        rows.collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(anyhow::Error::from)
-    }
-
-    pub fn list_all_provider_accounts(&self) -> Result<Vec<ProviderAccountRow>> {
-        let conn = self.connect()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, provider_id, config_json, display_name, created_at, updated_at FROM provider_accounts ORDER BY updated_at DESC",
-        )?;
-        let rows = stmt.query_map([], |row| {
             Ok(ProviderAccountRow {
                 id: row.get(0)?,
                 provider_id: row.get(1)?,
@@ -2294,21 +2096,6 @@ FROM sentry_issues;
         Ok(())
     }
 
-    pub fn count_pending_provider_items(&self, repo_id: &str, provider_id: &str) -> Result<i64> {
-        let conn = self.connect()?;
-        conn.query_row(
-            r#"SELECT COUNT(*) FROM provider_items pi
-               INNER JOIN provider_bindings pb
-                 ON pi.provider_account_id = pb.provider_account_id
-                 AND pi.provider_resource_id = pb.provider_resource_id
-               WHERE pb.repo_id = ?1 AND pi.provider_id = ?2
-                 AND pi.status IN ('pending', 'regression')"#,
-            params![repo_id, provider_id],
-            |row| row.get(0),
-        )
-        .map_err(anyhow::Error::from)
-    }
-
     pub fn count_all_pending_provider_items(&self) -> Result<std::collections::HashMap<String, i64>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
@@ -2341,33 +2128,6 @@ FROM sentry_issues;
         .map_err(anyhow::Error::from)
     }
 
-    pub fn get_linked_provider_item(&self, task_id: &str) -> Result<Option<ProviderItemRow>> {
-        let conn = self.connect()?;
-        conn.query_row(
-            r#"SELECT id, provider_account_id, provider_resource_id, provider_id,
-                external_id, title, status, linked_task_id, data_json,
-                created_at, updated_at
-               FROM provider_items WHERE linked_task_id = ?1 LIMIT 1"#,
-            [task_id],
-            |row| {
-                Ok(ProviderItemRow {
-                    id: row.get(0)?,
-                    provider_account_id: row.get(1)?,
-                    provider_resource_id: row.get(2)?,
-                    provider_id: row.get(3)?,
-                    external_id: row.get(4)?,
-                    title: row.get(5)?,
-                    status: row.get(6)?,
-                    linked_task_id: row.get(7)?,
-                    data_json: row.get(8)?,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(anyhow::Error::from)
-    }
 }
 
 fn now_iso() -> String {

@@ -3,7 +3,7 @@ use base64::{Engine as _, engine::general_purpose};
 use reqwest::{Client, header};
 use serde_json::Value;
 
-use crate::models::{JiraIssueForTask, JiraMe};
+use super::models::{JiraIssueForTask, JiraMe};
 
 pub struct JiraClient {
     client: Client,
@@ -217,4 +217,3 @@ fn map_description(raw: Option<&Value>) -> Option<String> {
     }
     Some(value.to_string())
 }
-

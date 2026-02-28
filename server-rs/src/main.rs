@@ -1,14 +1,11 @@
 mod db;
 mod discovery;
 mod executor;
-mod jira;
 mod models;
 mod msg_store;
 mod planner;
 mod process_manager;
 mod provider;
-mod providers;
-mod sentry;
 
 use std::{
     convert::Infallible,
@@ -45,7 +42,7 @@ use crate::{
         create_execution_branch, save_plan_artifact, spawn_agent,
         detect_base_branch, apply_branch_to_base_unstaged, ApplyError,
     },
-    jira::JiraClient,
+    provider::jira::JiraClient,
     models::{CreateTaskPayload, PlanJob, TaskWithPayload},
     msg_store::{LogMsg, MsgStore},
     planner::{
@@ -92,8 +89,8 @@ async fn main() -> anyhow::Result<()> {
     let process_manager = ProcessManager::new();
 
     let mut registry = ProviderRegistry::new();
-    registry.register(Box::new(providers::jira::JiraProvider));
-    registry.register(Box::new(providers::sentry::SentryProvider));
+    provider::jira::register(&mut registry);
+    provider::sentry::register(&mut registry);
 
     let state = AppState {
         db,

@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use crate::sentry::SentryClient;
+use super::client::SentryClient;
 use crate::provider::{
     ConnectField, FieldType, Provider, ProviderItem, ProviderMeta, ProviderResource,
     TaskFieldsFromItem, ValidateResult,
@@ -148,34 +148,9 @@ impl Provider for SentryProvider {
         TaskFieldsFromItem {
             title: format!("[SENTRY] {}", item.title),
             description: Some(description),
-            source: "sentry".to_string(),
             require_plan: true,
             auto_start: false,
         }
-    }
-
-    fn plan_prompt_section(&self, _item_data: &Value) -> Option<String> {
-        Some(
-            r#"
-## Bug Fix Instructions (Sentry Error)
-
-This task was created from a Sentry error report. The description above contains the full error details and stack trace.
-
-Instructions:
-- ONLY fix the bug. Do NOT change any behavior beyond fixing the error.
-- Include a "Root Cause" section in plan_markdown explaining why this error occurs.
-- Include an "Error Description" section with the full error details.
-- If the task title starts with "[SENTRY]" and the description mentions regression,
-  note whether a previous fix may not have been deployed to all environments.
-- Focus on minimal, targeted changes. No refactoring.
-- The plan_markdown MUST contain these sections:
-  1. Root Cause
-  2. Error Description
-  3. Fix Strategy
-  4. Files to Change
-"#
-            .to_string(),
-        )
     }
 
     fn mask_account(&self, mut config: Value) -> Value {
