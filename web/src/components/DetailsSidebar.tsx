@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, ActiveRun } from "../types";
-import { IconX, IconPlay } from "./icons";
+import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown } from "./icons";
 import { LogEntry } from "./LogEntry";
 import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
 
@@ -119,44 +119,73 @@ export function DetailsSidebar({
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-[11px]">
+            <div className="flex items-center gap-1.5 text-[11px]">
               <span className="rounded-full border border-border-strong bg-surface-300 px-2 py-0.5 text-text-secondary">
                 {selectedTask.status}
               </span>
               {selectedTask.priority && (
-                <span className="rounded-full border border-border-strong bg-surface-300 px-2 py-0.5 text-text-muted">
-                  {selectedTask.priority}
+                <span
+                  title={`Priority: ${selectedTask.priority}`}
+                  className={`inline-flex items-center rounded-full border p-1 ${
+                    selectedTask.priority === "highest" || selectedTask.priority === "high"
+                      ? "border-red-500/40 bg-red-500/10 text-red-400"
+                      : selectedTask.priority === "medium"
+                        ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                        : "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                  }`}
+                >
+                  {selectedTask.priority === "highest" || selectedTask.priority === "high"
+                    ? <IconArrowUp className="h-3 w-3" />
+                    : selectedTask.priority === "low" || selectedTask.priority === "lowest"
+                      ? <IconArrowDown className="h-3 w-3" />
+                      : <span className="h-3 w-3 flex items-center justify-center text-[9px] font-bold">=</span>
+                  }
                 </span>
               )}
-              <span className={`rounded-full border px-2 py-0.5 ${
-                selectedTask.require_plan
-                  ? "border-border-strong bg-surface-300 text-text-secondary"
-                  : "border-brand/40 bg-brand-tint text-brand"
-              }`}>
-                {selectedTask.require_plan ? "Require Plan" : "Direct Run"}
+              <span
+                title={selectedTask.require_plan ? "Require Plan" : "Direct Run"}
+                className={`inline-flex items-center rounded-full border p-1 ${
+                  selectedTask.require_plan
+                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    : "border-border-strong bg-surface-300 text-text-muted"
+                }`}
+              >
+                {selectedTask.require_plan
+                  ? <IconDocument className="h-3 w-3" />
+                  : <IconBolt className="h-3 w-3" />
+                }
               </span>
-              <span className={`rounded-full border px-2 py-0.5 ${
-                selectedTask.auto_approve_plan
-                  ? "border-brand/40 bg-brand-tint text-brand"
-                  : "border-border-strong bg-surface-300 text-text-muted"
-              }`}>
-                {selectedTask.auto_approve_plan ? "Auto Approve: On" : "Auto Approve: Off"}
+              <span
+                title={selectedTask.auto_approve_plan ? "Auto Approve: On" : "Auto Approve: Off"}
+                className={`inline-flex items-center rounded-full border p-1 ${
+                  selectedTask.auto_approve_plan
+                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    : "border-border-strong bg-surface-300 text-text-muted"
+                }`}
+              >
+                <IconRocket className="h-3 w-3" />
               </span>
-              <span className={`rounded-full border px-2 py-0.5 ${
-                selectedTask.auto_start
-                  ? "border-brand/40 bg-brand-tint text-brand"
-                  : "border-border-strong bg-surface-300 text-text-muted"
-              }`}>
-                {selectedTask.auto_start ? "Autostart: On" : "Autostart: Off"}
+              <span
+                title={selectedTask.auto_start ? "Autostart: On" : "Autostart: Off"}
+                className={`inline-flex items-center rounded-full border p-1 ${
+                  selectedTask.auto_start
+                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    : "border-border-strong bg-surface-300 text-text-muted"
+                }`}
+              >
+                <IconFastForward className="h-3 w-3" />
               </span>
-              <span className={`rounded-full border px-2 py-0.5 ${
-                selectedTask.use_worktree
-                  ? "border-border-strong bg-surface-300 text-text-secondary"
-                  : "border-brand/40 bg-brand-tint text-brand"
-              }`}>
-                {selectedTask.use_worktree ? "Worktree" : "Direct"}
+              <span
+                title={selectedTask.use_worktree ? "Worktree" : "Direct"}
+                className={`inline-flex items-center rounded-full border p-1 ${
+                  selectedTask.use_worktree
+                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    : "border-border-strong bg-surface-300 text-text-muted"
+                }`}
+              >
+                <IconGitBranch className="h-3 w-3" />
               </span>
-              <span className="text-text-muted">{formatDate(selectedTask.updated_at)}</span>
+              <span className="ml-1 text-text-muted">{formatDate(selectedTask.updated_at)}</span>
             </div>
             {selectedTask.description && (
               <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-text-secondary">{selectedTask.description}</p>
