@@ -2,41 +2,41 @@
 
 Local-first, approval-first coding agent with pluggable provider system. Connects to external services (Jira, Sentry, CloudWatch, PostgreSQL) via a unified provider interface, syncs tasks, generates implementation plans requiring human approval, then launches a git branch and executes.
 
-## Özellikler
+## Features
 
 ### Core
-- Local repo seçimi ve kayıt
-- AI agent discovery (Claude Code, Codex, Gemini, OpenCode, Cursor) ve repo bazlı profil seçimi
-- Plan üretimi, kullanıcı onayı (approve/reject/revise), onaylı planla run başlatma
-- Git worktree isolation ile paralel çalışma
-- SQLite persistence, backend Rust (Axum + rusqlite)
+- Local repo selection and registration
+- AI agent discovery (Claude Code, Codex, Gemini, OpenCode, Cursor) with per-repo profile selection
+- Plan generation, user approval (approve/reject/revise), run execution on approved plans
+- Git worktree isolation for parallel work
+- SQLite persistence, Rust backend (Axum + rusqlite)
 
 ### Providers (Pluggable)
-- **Jira** — Board sync, task import, assignee filtreleme
-- **Sentry** — Error/issue sync, stack trace görüntüleme, task oluşturma
+- **Jira** — Board sync, task import, assignee filtering
+- **Sentry** — Error/issue sync, stack trace viewing, task creation
 - **PostgreSQL** — Performance analyzer, slow query detection
-- **CloudWatch Logs** — Log investigation pipeline: AI agent codebase'i analiz edip CW Insights sorgusu üretir, logları çeker, root cause analizi yapar
+- **CloudWatch Logs** — Log investigation pipeline: AI agent analyzes codebase, generates CW Insights queries, fetches logs, performs root cause analysis
 
 ### CloudWatch Log Investigator
-3 aşamalı akış:
-1. **Sorgu Üretimi** — Agent codebase'i analiz eder, CloudWatch Insights sorgusu üretir, otomatik çalıştırır
-2. **Sonuç Gösterimi** — Error logları, request trace'ler, üretilen sorgu kullanıcıya gösterilir
-3. **Analiz** — Kullanıcı onayıyla agent logları analiz eder, root cause + fix suggestion üretir
+3-stage flow:
+1. **Query Generation** — Agent analyzes the codebase, generates a CloudWatch Insights query, runs it automatically
+2. **Results Review** — Error logs, request traces, and the generated query are shown to the user
+3. **Analysis** — On user approval, the agent analyzes logs and produces root cause + fix suggestions
 
-Ek özellikler: sorgu kaydetme, kayıtlı sorgu çalıştırma (agent atlanır), investigation'dan task oluşturma.
+Additional features: save queries, run saved queries (agent is skipped), create tasks from investigations.
 
 ### Settings
-Tüm provider'ların ayarları açıldığında mevcut credentials ve seçili resource (board/project/log group/DB) dolu gelir.
+All provider settings pre-fill with current credentials and selected resource (board/project/log group/DB) when opened.
 
-## Kurulum
+## Setup
 ```bash
-# Rust toolchain gerekli (cargo/rustc):
+# Rust toolchain required (cargo/rustc):
 # https://rustup.rs/
 npm install
 cd web && npm install && cd ..
 ```
 
-## Çalıştırma
+## Running
 ```bash
 npm run dev
 ```
@@ -44,14 +44,14 @@ npm run dev
 - Backend: `http://localhost:4310`
 - Frontend: `http://localhost:5173`
 
-## Build ve typecheck
+## Build & Typecheck
 ```bash
 npm run typecheck
 npm run build
 npm run check:server   # cargo check
 ```
 
-## Mimari
+## Architecture
 
 ```
 server-rs/           Rust backend (Axum + rusqlite)
@@ -77,19 +77,19 @@ web/                 React frontend (React 19, Vite 7, Tailwind CSS v4)
 │   └── components/      Shared UI (kanban, settings, icons)
 ```
 
-## Yeni Provider Ekleme
+## Adding a New Provider
 
 ### Backend
-1. `server-rs/src/provider/<name>/` oluştur, `Provider` trait'i implement et
-2. `provider/mod.rs`'de `pub mod <name>;` + `register_all()`'a ekle
+1. Create `server-rs/src/provider/<name>/`, implement the `Provider` trait
+2. Add `pub mod <name>;` and register in `register_all()` in `provider/mod.rs`
 
 ### Frontend
-1. `web/src/providers/<name>/` oluştur (DrawerSection + index.ts)
-2. `providers/init.ts`'de import + register
+1. Create `web/src/providers/<name>/` (DrawerSection + index.ts)
+2. Import and call register in `providers/init.ts`
 
-App.tsx, ExtensionsDrawer.tsx, ProviderSettingsModal.tsx değişiklik gerektirmez.
+No changes needed in App.tsx, ExtensionsDrawer.tsx, or ProviderSettingsModal.tsx.
 
-## Local DB konumu
+## Local DB Location
 - macOS: `~/Library/Application Support/jira-approval-local-agent/agent.db`
 - Linux: `~/.local/share/jira-approval-local-agent/agent.db`
 - Windows: `%APPDATA%\\jira-approval-local-agent\\agent.db`
