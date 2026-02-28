@@ -22,7 +22,7 @@ impl Provider for SentryProvider {
                     label: "Sentry URL",
                     field_type: FieldType::Text,
                     required: true,
-                    placeholder: "https://sentry.io",
+                    placeholder: "https://sentry.io (or https://your-org.sentry.io)",
                 },
                 ConnectField {
                     key: "org_slug",

@@ -24,9 +24,13 @@ export function SentryDrawerSection({ selectedRepoId, busy, onBusyChange, onTask
     if (!selectedRepoId) return;
     onError(""); onBusyChange(true);
     try {
-      await api(`/api/providers/${PROVIDER_ID}/sync/${selectedRepoId}`, { method: "POST" });
+      const result = await api<{ synced: number; errors?: string[] }>(`/api/providers/${PROVIDER_ID}/sync/${selectedRepoId}`, { method: "POST" });
       await fetchItems();
-      onInfo("Sentry sync complete.");
+      if (result.errors?.length) {
+        onError(`Sync issues: ${result.errors.join("; ")}`);
+      } else {
+        onInfo(`Sentry sync complete. ${result.synced} issue(s) synced.`);
+      }
     } catch (e) { onError((e as Error).message); } finally { onBusyChange(false); }
   }
 

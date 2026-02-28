@@ -15,7 +15,7 @@ impl SentryClient {
     pub fn new(base_url: &str, org_slug: &str, auth_token: &str) -> Self {
         Self {
             client: Client::new(),
-            base_url: base_url.trim_end_matches('/').to_string(),
+            base_url: normalize_sentry_url(base_url),
             org_slug: org_slug.to_string(),
             auth_token: auth_token.to_string(),
         }
@@ -46,21 +46,23 @@ impl SentryClient {
     /// GET /api/0/organizations/{org}/projects/ — list projects
     pub async fn list_projects(&self) -> Result<Vec<SentryProjectInfo>> {
         let mut all = Vec::new();
-        let cursor: Option<String> = None;
+        let mut cursor: Option<String> = None;
 
         loop {
             let mut query: Vec<(&str, String)> = vec![];
             if let Some(ref c) = cursor {
                 query.push(("cursor", c.clone()));
             }
-            let payload = self
-                .get_json(
+
+            let response = self
+                .get_with_headers(
                     &format!("/api/0/organizations/{}/projects/", self.org_slug),
                     &query,
                 )
                 .await?;
 
-            let items = payload.as_array().cloned().unwrap_or_default();
+            let next_cursor = parse_link_cursor(&response.headers);
+            let items = response.body.as_array().cloned().unwrap_or_default();
             if items.is_empty() {
                 break;
             }
@@ -84,10 +86,10 @@ impl SentryClient {
                     all.push(SentryProjectInfo { slug, name, id });
                 }
             }
-            if items.len() < 100 {
-                break;
+            match next_cursor {
+                Some(c) => cursor = Some(c),
+                None => break,
             }
-            break;
         }
         Ok(all)
     }
@@ -98,14 +100,19 @@ impl SentryClient {
         project_slug: &str,
         since: Option<&str>,
     ) -> Result<Vec<SentryIssue>> {
-        let mut query_str = "is:unresolved".to_string();
+        // Use project:<slug> in the search query instead of the numeric `project` param
+        let mut query_str = format!("is:unresolved project:{project_slug}");
         if let Some(since_ts) = since {
-            query_str.push_str(&format!(" lastSeen:>{since_ts}"));
+            // Sentry lastSeen filter expects ISO 8601 without timezone offset
+            // Our DB stores "2026-02-28T10:00:00+00:00", strip the +00:00 part
+            let cleaned = since_ts
+                .trim_end_matches("+00:00")
+                .trim_end_matches('Z');
+            query_str.push_str(&format!(" lastSeen:>{cleaned}"));
         }
 
         let query = vec![
             ("query", query_str),
-            ("project", project_slug.to_string()),
             ("sort", "date".to_string()),
             ("limit", "100".to_string()),
         ];
@@ -175,6 +182,15 @@ impl SentryClient {
     }
 
     async fn get_json(&self, endpoint: &str, query: &[(&str, String)]) -> Result<Value> {
+        let resp = self.get_with_headers(endpoint, query).await?;
+        Ok(resp.body)
+    }
+
+    async fn get_with_headers(
+        &self,
+        endpoint: &str,
+        query: &[(&str, String)],
+    ) -> Result<SentryResponse> {
         let mut request = self
             .client
             .get(format!("{}{}", self.base_url, endpoint))
@@ -199,9 +215,51 @@ impl SentryClient {
                 body.chars().take(300).collect::<String>()
             ));
         }
-        response
+        let headers = response.headers().clone();
+        let body = response
             .json::<Value>()
             .await
-            .context("sentry response decode failed")
+            .context("sentry response decode failed")?;
+        Ok(SentryResponse { headers, body })
     }
+}
+
+struct SentryResponse {
+    headers: header::HeaderMap,
+    body: Value,
+}
+
+/// Normalize Sentry URL: convert org subdomain URLs like
+/// `https://melih-12.sentry.io` to `https://sentry.io`.
+/// Self-hosted URLs (not *.sentry.io) are kept as-is.
+fn normalize_sentry_url(url: &str) -> String {
+    let trimmed = url.trim_end_matches('/');
+    // Match pattern: https://<something>.sentry.io
+    if let Some(host) = trimmed
+        .strip_prefix("https://")
+        .or_else(|| trimmed.strip_prefix("http://"))
+    {
+        if host.ends_with(".sentry.io") && host != "sentry.io" {
+            return "https://sentry.io".to_string();
+        }
+    }
+    trimmed.to_string()
+}
+
+/// Parse Sentry Link header for next page cursor.
+/// Format: `<url>; rel="next"; results="true"; cursor="..."`
+fn parse_link_cursor(headers: &header::HeaderMap) -> Option<String> {
+    let link = headers.get("link")?.to_str().ok()?;
+    for part in link.split(',') {
+        if part.contains(r#"rel="next""#) && part.contains(r#"results="true""#) {
+            // Extract cursor="..." value
+            for segment in part.split(';') {
+                let segment = segment.trim();
+                if let Some(val) = segment.strip_prefix("cursor=\"") {
+                    return Some(val.trim_end_matches('"').to_string());
+                }
+            }
+        }
+    }
+    None
 }

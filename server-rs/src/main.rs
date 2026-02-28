@@ -2962,14 +2962,29 @@ async fn provider_manual_sync(
     }
 
     let mut total_synced = 0usize;
+    let mut sync_errors = Vec::new();
     for binding in &bindings {
         let account = match state.db.get_provider_account(&binding.provider_account_id) {
             Ok(Some(a)) => a,
-            _ => continue,
+            Ok(None) => {
+                sync_errors.push(format!("Account {} not found", binding.provider_account_id));
+                continue;
+            }
+            Err(e) => {
+                sync_errors.push(format!("Account load error: {e}"));
+                continue;
+            }
         };
         let resource = match state.db.get_provider_resource(&binding.provider_resource_id) {
             Ok(Some(r)) => r,
-            _ => continue,
+            Ok(None) => {
+                sync_errors.push(format!("Resource {} not found", binding.provider_resource_id));
+                continue;
+            }
+            Err(e) => {
+                sync_errors.push(format!("Resource load error: {e}"));
+                continue;
+            }
         };
 
         let config: Value = serde_json::from_str(&account.config_json).unwrap_or(Value::Null);
@@ -2984,10 +2999,7 @@ async fn provider_manual_sync(
         {
             Ok(items) => items,
             Err(e) => {
-                eprintln!(
-                    "Provider {} sync error for {}: {e}",
-                    path.provider_id, resource.external_id
-                );
+                sync_errors.push(format!("Sync {} failed: {e}", resource.external_id));
                 continue;
             }
         };
@@ -2997,16 +3009,15 @@ async fn provider_manual_sync(
                 .iter()
                 .map(|i| (i.external_id.clone(), i.title.clone(), i.data.to_string()))
                 .collect();
-            let count = state
-                .db
-                .upsert_provider_items(
-                    &account.id,
-                    &resource.id,
-                    &path.provider_id,
-                    &tuples,
-                )
-                .unwrap_or(0);
-            total_synced += count;
+            match state.db.upsert_provider_items(
+                &account.id,
+                &resource.id,
+                &path.provider_id,
+                &tuples,
+            ) {
+                Ok(count) => total_synced += count,
+                Err(e) => sync_errors.push(format!("DB upsert error: {e}")),
+            }
         }
     }
 
@@ -3014,7 +3025,11 @@ async fn provider_manual_sync(
         .db
         .list_provider_items(&path.repo_id, &path.provider_id, None)
         .map_err(ApiError::internal)?;
-    Ok(Json(json!({ "synced": total_synced, "items": items })))
+    let mut resp = json!({ "synced": total_synced, "items": items });
+    if !sync_errors.is_empty() {
+        resp["errors"] = json!(sync_errors);
+    }
+    Ok(Json(resp))
 }
 
 // ── Generic Provider Sync Worker ──
