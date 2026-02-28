@@ -1,4 +1,5 @@
 import { registerJiraUI } from "./jira";
+import { registerPostgresUI } from "./postgres";
 import { registerSentryUI } from "./sentry";
 
 // Call this once at app startup to register all provider UIs.
@@ -7,4 +8,5 @@ import { registerSentryUI } from "./sentry";
 export function initProviders() {
   registerJiraUI();
   registerSentryUI();
+  registerPostgresUI();
 }
