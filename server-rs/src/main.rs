@@ -152,6 +152,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/providers/{provider_id}/bindings", get(provider_list_bindings))
         .route("/api/providers/{provider_id}/items/{repo_id}", get(provider_list_items))
         .route("/api/providers/{provider_id}/items/{id}/action", post(provider_item_action))
+        .route("/api/providers/{provider_id}/items/clear/{repo_id}", post(provider_clear_items))
+        .route("/api/providers/{provider_id}/items/{id}/event", get(provider_item_event))
         .route("/api/providers/{provider_id}/items/{id}/create-task", post(provider_create_task_from_item))
         .route("/api/providers/{provider_id}/sync/{repo_id}", post(provider_manual_sync))
         .route("/api/fs/list", get(fs_list))
@@ -2901,8 +2903,58 @@ async fn provider_item_action(
                 .map_err(ApiError::internal)?;
             Ok(Json(json!({ "status": "ignored" })))
         }
-        _ => Err(ApiError::bad_request("Unsupported action. Use 'ignore'.")),
+        "restore" => {
+            state
+                .db
+                .update_provider_item_status(&item.id, "pending")
+                .map_err(ApiError::internal)?;
+            Ok(Json(json!({ "status": "pending" })))
+        }
+        _ => Err(ApiError::bad_request("Unsupported action. Use 'ignore' or 'restore'.")),
     }
+}
+
+async fn provider_clear_items(
+    State(state): State<AppState>,
+    Path(path): Path<ProviderRepoPath>,
+) -> Result<Json<Value>, ApiError> {
+    let deleted = state
+        .db
+        .delete_provider_items_for_repo(&path.provider_id, &path.repo_id)
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "deleted": deleted })))
+}
+
+async fn provider_item_event(
+    State(state): State<AppState>,
+    Path(path): Path<ProviderItemPath>,
+) -> Result<Json<Value>, ApiError> {
+    let item = state
+        .db
+        .get_provider_item(&path.id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Item not found."))?;
+
+    // Find the account that owns this item so we can read credentials
+    let account = state
+        .db
+        .get_provider_account(&item.provider_account_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Provider account not found."))?;
+
+    let config: serde_json::Value =
+        serde_json::from_str(&account.config_json).unwrap_or_default();
+    let base_url = config["base_url"].as_str().unwrap_or_default();
+    let org_slug = config["org_slug"].as_str().unwrap_or_default();
+    let auth_token = config["auth_token"].as_str().unwrap_or_default();
+
+    let client = provider::sentry::client::SentryClient::new(base_url, org_slug, auth_token);
+    let event = client
+        .fetch_latest_event(&item.external_id)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(json!({ "event": event })))
 }
 
 async fn provider_create_task_from_item(

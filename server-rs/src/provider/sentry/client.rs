@@ -175,10 +175,16 @@ impl SentryClient {
         Ok(issues)
     }
 
-    /// GET /api/0/issues/{issue_id}/events/latest/ — latest event with stack trace
+    /// GET /api/0/organizations/{org}/issues/{issue_id}/events/latest/ — latest event with stack trace
     pub async fn fetch_latest_event(&self, issue_id: &str) -> Result<Value> {
-        self.get_json(&format!("/api/0/issues/{issue_id}/events/latest/"), &[])
-            .await
+        self.get_json(
+            &format!(
+                "/api/0/organizations/{}/issues/{issue_id}/events/latest/",
+                self.org_slug
+            ),
+            &[],
+        )
+        .await
     }
 
     async fn get_json(&self, endpoint: &str, query: &[(&str, String)]) -> Result<Value> {

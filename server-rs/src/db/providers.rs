@@ -387,6 +387,21 @@ impl Db {
         Ok(())
     }
 
+    pub fn delete_provider_items_for_repo(&self, provider_id: &str, repo_id: &str) -> Result<usize> {
+        let conn = self.connect()?;
+        let count = conn.execute(
+            r#"DELETE FROM provider_items
+               WHERE provider_id = ?1
+                 AND provider_resource_id IN (
+                   SELECT pr.id FROM provider_resources pr
+                   JOIN provider_bindings pb ON pb.provider_resource_id = pr.id
+                   WHERE pb.repo_id = ?2 AND pb.provider_id = ?1
+                 )"#,
+            params![provider_id, repo_id],
+        )?;
+        Ok(count)
+    }
+
     pub fn link_provider_item_to_task(&self, item_id: &str, task_id: &str) -> Result<()> {
         let conn = self.connect()?;
         let ts = now_iso();

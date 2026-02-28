@@ -91,7 +91,13 @@ impl Provider for SentryProvider {
         for issue in &issues {
             let event_json = match client.fetch_latest_event(&issue.id).await {
                 Ok(v) => v,
-                Err(_) => Value::Null,
+                Err(e) => {
+                    eprintln!(
+                        "Sentry: failed to fetch latest event for issue {}: {}",
+                        issue.id, e
+                    );
+                    Value::Null
+                }
             };
             items.push(ProviderItem {
                 external_id: issue.id.clone(),
@@ -162,32 +168,65 @@ impl Provider for SentryProvider {
 }
 
 pub fn extract_stack_trace(event: &Value) -> Option<String> {
-    let entries = event.get("entries").and_then(Value::as_array)?;
-    for entry in entries {
-        if entry.get("type").and_then(Value::as_str) == Some("exception") {
-            if let Some(values) = entry.pointer("/data/values").and_then(Value::as_array) {
-                let mut traces = Vec::new();
-                for exc in values {
-                    let exc_type = exc.get("type").and_then(Value::as_str).unwrap_or("Exception");
-                    let exc_value = exc.get("value").and_then(Value::as_str).unwrap_or("");
-                    traces.push(format!("{exc_type}: {exc_value}"));
-                    if let Some(frames) =
-                        exc.pointer("/stacktrace/frames").and_then(Value::as_array)
-                    {
-                        for frame in frames.iter().rev().take(15) {
-                            let filename =
-                                frame.get("filename").and_then(Value::as_str).unwrap_or("?");
-                            let lineno =
-                                frame.get("lineNo").and_then(Value::as_i64).unwrap_or(0);
-                            let function =
-                                frame.get("function").and_then(Value::as_str).unwrap_or("?");
-                            traces.push(format!("  at {function} ({filename}:{lineno})"));
-                        }
-                    }
+    // Try "entries" array first (Sentry event detail format)
+    if let Some(entries) = event.get("entries").and_then(Value::as_array) {
+        for entry in entries {
+            if entry.get("type").and_then(Value::as_str) == Some("exception") {
+                if let Some(result) =
+                    format_exception_values(entry.pointer("/data/values"))
+                {
+                    return Some(result);
                 }
-                return Some(traces.join("\n"));
             }
         }
     }
+
+    // Fallback: top-level "exception" object (some API responses)
+    if let Some(result) = format_exception_values(event.pointer("/exception/values")) {
+        return Some(result);
+    }
+
     None
+}
+
+fn format_exception_values(values: Option<&Value>) -> Option<String> {
+    let values = values.and_then(Value::as_array)?;
+    let mut traces = Vec::new();
+    for exc in values {
+        let exc_type = exc.get("type").and_then(Value::as_str).unwrap_or("Exception");
+        let exc_value = exc.get("value").and_then(Value::as_str).unwrap_or("");
+        traces.push(format!("{exc_type}: {exc_value}"));
+        if let Some(frames) = exc.pointer("/stacktrace/frames").and_then(Value::as_array) {
+            for frame in frames.iter().rev().take(15) {
+                let filename = frame
+                    .get("filename")
+                    .or_else(|| frame.get("absPath"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("?");
+                // Sentry API uses lowercase "lineno"
+                let lineno = frame
+                    .get("lineno")
+                    .or_else(|| frame.get("lineNo"))
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
+                let colno = frame
+                    .get("colNo")
+                    .or_else(|| frame.get("colno"))
+                    .and_then(Value::as_i64);
+                let function = frame
+                    .get("function")
+                    .and_then(Value::as_str)
+                    .unwrap_or("?");
+                let location = match colno {
+                    Some(c) if c > 0 => format!("{filename}:{lineno}:{c}"),
+                    _ => format!("{filename}:{lineno}"),
+                };
+                traces.push(format!("  at {function} ({location})"));
+            }
+        }
+    }
+    if traces.is_empty() {
+        return None;
+    }
+    Some(traces.join("\n"))
 }
