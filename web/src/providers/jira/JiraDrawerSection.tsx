@@ -1,10 +1,9 @@
 import { api } from "../../api";
 import type { Task } from "../../types";
 import { IconRefresh } from "../../components/icons";
-import { btnSecondary } from "../../components/shared";
-import type { NavActionProps } from "../types";
+import type { DrawerSectionProps } from "../types";
 
-export function JiraSyncButton({ selectedRepoId, busy, onBusyChange, onTasksUpdated, onError, onInfo }: NavActionProps) {
+export function JiraDrawerSection({ selectedRepoId, busy, onBusyChange, onTasksRefresh, onError, onInfo }: DrawerSectionProps) {
   async function syncTasks() {
     if (!selectedRepoId) { onError("Select a repo first."); return; }
     onError(""); onInfo(""); onBusyChange(true);
@@ -13,19 +12,21 @@ export function JiraSyncButton({ selectedRepoId, busy, onBusyChange, onTasksUpda
         method: "POST",
         body: JSON.stringify({ repoId: selectedRepoId }),
       });
-      onTasksUpdated();
+      onTasksRefresh();
       onInfo(`${payload.synced} tasks synced.`);
     } catch (e) { onError((e as Error).message); } finally { onBusyChange(false); }
   }
 
   return (
-    <button
-      onClick={() => void syncTasks()}
-      disabled={busy || !selectedRepoId}
-      className={`${btnSecondary} flex items-center gap-1.5 !px-3 !py-1.5 text-xs`}
-    >
-      <IconRefresh className="h-3.5 w-3.5" />
-      Sync
-    </button>
+    <div>
+      <button
+        onClick={() => void syncTasks()}
+        disabled={busy || !selectedRepoId}
+        className="flex items-center gap-2 rounded-lg border border-border-default bg-surface-200 px-3 py-2 text-xs font-medium text-text-secondary transition hover:bg-surface-300 w-full"
+      >
+        <IconRefresh className="h-3.5 w-3.5" />
+        Sync Tasks
+      </button>
+    </div>
   );
 }

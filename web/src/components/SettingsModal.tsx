@@ -1,51 +1,36 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import type { Repo, AgentProfile, ProviderMeta } from "../types";
+import type { Repo, AgentProfile } from "../types";
 import { IconX, IconRefresh } from "./icons";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
 import { FolderPicker } from "./FolderPicker";
-import { getAllProviderUIs } from "../providers/registry";
 
 export function SettingsModal({
-  open, onClose, repos, agentProfiles, providerMetas,
+  open, onClose, repos, agentProfiles,
   selectedRepoId, setSelectedRepoId, selectedProfileId, setSelectedProfileId,
-  selectedProfile, busy, setBusy, error: extError, info: extInfo,
-  setError, setInfo,
+  selectedProfile, busy, error: extError, info: extInfo,
   onRepoSubmit, discoverAgents, saveAgentSelection,
   repoPath, setRepoPath, repoName, setRepoName,
-  onBootstrapRefresh,
 }: {
   open: boolean; onClose: () => void;
   repos: Repo[]; agentProfiles: AgentProfile[];
-  providerMetas: ProviderMeta[];
   selectedRepoId: string; setSelectedRepoId: (v: string) => void;
   selectedProfileId: string; setSelectedProfileId: (v: string) => void;
   selectedProfile: AgentProfile | null;
-  busy: boolean; setBusy: (v: boolean) => void;
+  busy: boolean;
   error: string; info: string;
-  setError: (v: string) => void; setInfo: (v: string) => void;
   onRepoSubmit: (e: FormEvent) => void;
   discoverAgents: () => void;
   saveAgentSelection: () => void;
   repoPath: string; setRepoPath: (v: string) => void;
   repoName: string; setRepoName: (v: string) => void;
-  onBootstrapRefresh: () => void;
 }) {
   const [tab, setTab] = useState("repo");
 
   if (!open) return null;
 
-  // Build tabs: Repo + registered provider settings + Agent
-  const providerTabs = getAllProviderUIs()
-    .filter(([, ui]) => ui.settingsTab)
-    .map(([id, ui]) => {
-      const meta = providerMetas.find((m) => m.id === id);
-      return { key: id, label: meta?.display_name ?? id, Tab: ui.settingsTab! };
-    });
-
   const tabs: { key: string; label: string }[] = [
     { key: "repo", label: "Repository" },
-    ...providerTabs.map((p) => ({ key: p.key, label: p.label })),
     { key: "agent", label: "AI Agent" },
   ];
 
@@ -97,21 +82,6 @@ export function SettingsModal({
                 </form>
               </div>
             </div>
-          )}
-
-          {/* Provider settings tabs - rendered from registry */}
-          {providerTabs.map(({ key, Tab }) =>
-            tab === key ? (
-              <Tab
-                key={key}
-                selectedRepoId={selectedRepoId}
-                busy={busy}
-                onBusyChange={setBusy}
-                onError={setError}
-                onInfo={setInfo}
-                onBootstrapRefresh={onBootstrapRefresh}
-              />
-            ) : null
           )}
 
           {tab === "agent" && (

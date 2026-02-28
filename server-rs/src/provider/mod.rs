@@ -1,6 +1,11 @@
 pub mod jira;
 pub mod sentry;
 
+pub fn register_all(registry: &mut ProviderRegistry) {
+    jira::register(registry);
+    sentry::register(registry);
+}
+
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::Serialize;

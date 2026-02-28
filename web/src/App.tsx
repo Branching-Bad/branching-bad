@@ -8,19 +8,18 @@ import type {
 } from "./types";
 import { EMPTY_TASK_RUN_STATE, EMPTY_TASK_PLAN_STATE } from "./types";
 import { laneFromStatus, btnSecondary } from "./components/shared";
-import { IconSettings } from "./components/icons";
+import { IconSettings, IconExtensions } from "./components/icons";
 import { SettingsModal } from "./components/SettingsModal";
+import { ExtensionsDrawer } from "./components/ExtensionsDrawer";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { EditTaskModal } from "./components/EditTaskModal";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailsSidebar } from "./components/DetailsSidebar";
-import { ProviderItemsPanel } from "./providers/ProviderItemsPanel";
 import { initProviders } from "./providers/init";
-import { getAllProviderUIs } from "./providers/registry";
 import { useEventStream } from "./hooks/useEventStream";
 import { usePolling } from "./hooks/usePolling";
 
-// Register all provider UIs (Jira sync button, Sentry items panel, etc.)
+// Register all provider UIs (Jira, Sentry, etc.)
 initProviders();
 
 export default function App() {
@@ -44,6 +43,7 @@ export default function App() {
   const [taskRunStates, setTaskRunStates] = useState<Record<string, TaskRunState>>({});
   const [taskPlanStates, setTaskPlanStates] = useState<Record<string, TaskPlanState>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [extensionsOpen, setExtensionsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"plan" | "tasklist" | "run" | "review">("plan");
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
@@ -108,6 +108,7 @@ export default function App() {
     [agentProfiles, selectedProfileId],
   );
   const selectedRepo = useMemo(() => repos.find((r) => r.id === selectedRepoId) ?? null, [repos, selectedRepoId]);
+  const totalProviderItemCount = Object.values(providerItemCounts).reduce((a, b) => a + b, 0);
 
   const updateTaskRunState = useCallback(
     (taskId: string, updater: (current: TaskRunState) => TaskRunState) => {
@@ -672,25 +673,20 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Provider-registered nav actions (e.g. Jira Sync) */}
-            {getAllProviderUIs()
-              .filter(([, ui]) => ui.navBarAction)
-              .map(([id, ui]) => {
-                const Action = ui.navBarAction!;
-                return (
-                  <Action
-                    key={id}
-                    selectedRepoId={selectedRepoId}
-                    busy={busy}
-                    onBusyChange={setBusy}
-                    onTasksUpdated={refreshTasks}
-                    onError={setError}
-                    onInfo={setInfo}
-                  />
-                );
-              })}
-            <button onClick={() => void clearAllPipelines()} disabled={busy} className={`${btnSecondary} !px-3 !py-1.5 text-xs`} title="Tüm takılmış pipeline'ları temizle">
+            <button onClick={() => void clearAllPipelines()} disabled={busy} className={`${btnSecondary} !px-3 !py-1.5 text-xs`} title="Clear all stuck pipelines">
               Clear Queue
+            </button>
+            <button
+              onClick={() => setExtensionsOpen(true)}
+              className="relative flex h-8 w-8 items-center justify-center rounded-md border border-border-strong bg-surface-300 text-text-muted transition hover:text-text-primary hover:border-border-strong"
+              title="Extensions"
+            >
+              <IconExtensions />
+              {totalProviderItemCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {totalProviderItemCount}
+                </span>
+              )}
             </button>
             <button onClick={() => setSettingsOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-md border border-border-strong bg-surface-300 text-text-muted transition hover:text-text-primary hover:border-border-strong">
               <IconSettings />
@@ -711,17 +707,6 @@ export default function App() {
 
       {/* ─── Main Content ─── */}
       <main className="mx-auto max-w-7xl px-5 py-6">
-        <ProviderItemsPanel
-          selectedRepoId={selectedRepoId}
-          providerMetas={providerMetas}
-          providerItemCounts={providerItemCounts}
-          onTasksRefresh={refreshTasks}
-          onError={setError}
-          onInfo={setInfo}
-          busy={busy}
-          setBusy={setBusy}
-        />
-
         <KanbanBoard
           groupedTasks={groupedTasks}
           selectedTaskId={selectedTaskId}
@@ -785,20 +770,31 @@ export default function App() {
         />
       )}
 
+      <ExtensionsDrawer
+        open={extensionsOpen}
+        onClose={() => setExtensionsOpen(false)}
+        selectedRepoId={selectedRepoId}
+        providerMetas={providerMetas}
+        providerItemCounts={providerItemCounts}
+        busy={busy}
+        onBusyChange={setBusy}
+        onTasksRefresh={refreshTasks}
+        onError={setError}
+        onInfo={setInfo}
+        onBootstrapRefresh={bootstrap}
+      />
+
       <SettingsModal
         open={settingsOpen} onClose={() => setSettingsOpen(false)}
         repos={repos} agentProfiles={agentProfiles}
-        providerMetas={providerMetas}
         selectedRepoId={selectedRepoId} setSelectedRepoId={setSelectedRepoId}
         selectedProfileId={selectedProfileId} setSelectedProfileId={setSelectedProfileId}
         selectedProfile={selectedProfile}
-        busy={busy} setBusy={setBusy} error={error} info={info}
-        setError={setError} setInfo={setInfo}
+        busy={busy} error={error} info={info}
         onRepoSubmit={onRepoSubmit}
         discoverAgents={discoverAgents} saveAgentSelection={saveAgentSelection}
         repoPath={repoPath} setRepoPath={setRepoPath}
         repoName={repoName} setRepoName={setRepoName}
-        onBootstrapRefresh={bootstrap}
       />
 
       <CreateTaskModal

@@ -1,15 +1,6 @@
 import type { ComponentType } from "react";
 
-export type NavActionProps = {
-  selectedRepoId: string;
-  busy: boolean;
-  onBusyChange: (v: boolean) => void;
-  onTasksUpdated: () => void;
-  onError: (msg: string) => void;
-  onInfo: (msg: string) => void;
-};
-
-export type ItemsPanelProps = {
+export type DrawerSectionProps = {
   selectedRepoId: string;
   busy: boolean;
   onBusyChange: (v: boolean) => void;
@@ -28,7 +19,6 @@ export type SettingsTabProps = {
 };
 
 export type ProviderUI = {
-  navBarAction?: ComponentType<NavActionProps>;
-  itemsPanel?: ComponentType<ItemsPanelProps>;
-  settingsTab?: ComponentType<SettingsTabProps>;
+  drawerSection: ComponentType<DrawerSectionProps>;
+  settingsTab: ComponentType<SettingsTabProps>;
 };

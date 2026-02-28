@@ -89,8 +89,7 @@ async fn main() -> anyhow::Result<()> {
     let process_manager = ProcessManager::new();
 
     let mut registry = ProviderRegistry::new();
-    provider::jira::register(&mut registry);
-    provider::sentry::register(&mut registry);
+    provider::register_all(&mut registry);
 
     let state = AppState {
         db,

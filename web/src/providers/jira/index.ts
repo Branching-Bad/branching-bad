@@ -1,10 +1,10 @@
 import { registerProviderUI } from "../registry";
 import { createProviderSettingsTab } from "../ProviderTab";
-import { JiraSyncButton } from "./JiraSyncButton";
+import { JiraDrawerSection } from "./JiraDrawerSection";
 
 export function registerJiraUI() {
   registerProviderUI("jira", {
-    navBarAction: JiraSyncButton,
+    drawerSection: JiraDrawerSection,
     settingsTab: createProviderSettingsTab("jira"),
   });
 }
