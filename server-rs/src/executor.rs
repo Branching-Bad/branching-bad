@@ -28,28 +28,70 @@ pub fn assert_git_repo(repo_path: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn create_execution_branch(repo_path: &str, branch_name: &str) -> Result<()> {
+pub struct WorktreeInfo {
+    pub worktree_path: String,
+}
+
+/// Create a git worktree at `.local-agent/worktrees/<branch_name>/`
+pub fn create_worktree(repo_path: &str, branch_name: &str) -> Result<WorktreeInfo> {
     assert_git_repo(repo_path)?;
+    let worktree_dir = Path::new(repo_path)
+        .join(".local-agent")
+        .join("worktrees")
+        .join(branch_name);
+    let worktree_path = worktree_dir.to_string_lossy().to_string();
 
-    let existing = Command::new("git")
-        .args(["-C", repo_path, "branch", "--list", branch_name])
-        .output()
-        .context("failed to check existing git branch")?;
-    let has_existing = existing.status.success() && !String::from_utf8_lossy(&existing.stdout).trim().is_empty();
-
-    let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(repo_path).arg("checkout");
-    if has_existing {
-        cmd.arg(branch_name);
-    } else {
-        cmd.arg("-b").arg(branch_name);
+    // Create parent directories
+    if let Some(parent) = worktree_dir.parent() {
+        fs::create_dir_all(parent).context("failed to create worktree parent directory")?;
     }
-    let result = cmd.output().context("failed to run git checkout")?;
-    if !result.status.success() {
-        return Err(anyhow!(
-            "git checkout failed: {}",
-            String::from_utf8_lossy(&result.stderr).trim()
-        ));
+
+    let output = Command::new("git")
+        .args([
+            "-C", repo_path,
+            "worktree", "add",
+            &worktree_path,
+            "-b", branch_name,
+        ])
+        .output()
+        .context("failed to invoke git worktree add")?;
+
+    if !output.status.success() {
+        // Branch might already exist — try without -b
+        let output2 = Command::new("git")
+            .args([
+                "-C", repo_path,
+                "worktree", "add",
+                &worktree_path,
+                branch_name,
+            ])
+            .output()
+            .context("failed to invoke git worktree add (existing branch)")?;
+        if !output2.status.success() {
+            return Err(anyhow!(
+                "git worktree add failed: {}",
+                String::from_utf8_lossy(&output2.stderr).trim()
+            ));
+        }
+    }
+
+    Ok(WorktreeInfo {
+        worktree_path,
+    })
+}
+
+/// Remove a git worktree
+pub fn remove_worktree(repo_path: &str, worktree_path: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args(["-C", repo_path, "worktree", "remove", worktree_path, "--force"])
+        .output()
+        .context("failed to invoke git worktree remove")?;
+    if !output.status.success() {
+        // Try cleaning up manually if git command fails
+        let _ = fs::remove_dir_all(worktree_path);
+        let _ = Command::new("git")
+            .args(["-C", repo_path, "worktree", "prune"])
+            .output();
     }
     Ok(())
 }
@@ -657,4 +699,91 @@ pub fn apply_branch_to_base_unstaged(
 pub enum ApplyError {
     Internal(anyhow::Error),
     Conflict(MergeConflictError),
+}
+
+/// Apply worktree branch changes to the base branch as unstaged changes.
+/// The main repo is already on the base branch (worktree isolation), so no stash/checkout needed.
+/// After merge, removes the worktree.
+pub fn apply_worktree_to_base_unstaged(
+    repo_path: &str,
+    task_branch: &str,
+    base_branch: &str,
+    worktree_path: &str,
+) -> std::result::Result<ApplyResult, ApplyError> {
+    // Verify we're on the base branch
+    let current = Command::new("git")
+        .args(["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    let current_branch = String::from_utf8_lossy(&current.stdout).trim().to_string();
+    if current_branch != base_branch {
+        // Checkout base branch (should be no-op in worktree mode but safety check)
+        let checkout = Command::new("git")
+            .args(["-C", repo_path, "checkout", base_branch])
+            .output()
+            .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+        if !checkout.status.success() {
+            return Err(ApplyError::Internal(anyhow!(
+                "failed to checkout {}: {}",
+                base_branch,
+                String::from_utf8_lossy(&checkout.stderr).trim()
+            )));
+        }
+    }
+
+    // Attempt merge --squash --no-commit
+    let merge = Command::new("git")
+        .args(["-C", repo_path, "merge", "--squash", "--no-commit", task_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+
+    if !merge.status.success() {
+        // Conflict — collect conflicted files
+        let diff = Command::new("git")
+            .args(["-C", repo_path, "diff", "--name-only", "--diff-filter=U"])
+            .output()
+            .ok();
+        let conflicted_files: Vec<String> = diff
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .filter(|l| !l.is_empty())
+                    .map(|l| l.to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Abort merge
+        let _ = Command::new("git")
+            .args(["-C", repo_path, "merge", "--abort"])
+            .output();
+
+        return Err(ApplyError::Conflict(MergeConflictError { conflicted_files }));
+    }
+
+    // Unstage everything
+    let _ = Command::new("git")
+        .args(["-C", repo_path, "reset", "HEAD"])
+        .output();
+
+    // Count changed files
+    let status = Command::new("git")
+        .args(["-C", repo_path, "status", "--porcelain"])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    let files_changed = String::from_utf8_lossy(&status.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
+
+    // Clean up worktree and branch
+    let _ = remove_worktree(repo_path, worktree_path);
+    let _ = Command::new("git")
+        .args(["-C", repo_path, "branch", "-D", task_branch])
+        .output();
+
+    Ok(ApplyResult {
+        files_changed,
+        base_branch: base_branch.to_string(),
+    })
 }

@@ -10,6 +10,7 @@ export type Task = {
   require_plan: boolean;
   auto_start: boolean;
   auto_approve_plan: boolean;
+  use_worktree: boolean;
   last_pipeline_error?: string | null;
   last_pipeline_at?: string | null;
   source?: string; updated_at: string;

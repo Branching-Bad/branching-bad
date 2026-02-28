@@ -39,8 +39,9 @@ use tower_http::cors::{Any, CorsLayer};
 use crate::{
     discovery::discover_agent_profiles,
     executor::{
-        create_execution_branch, save_plan_artifact, spawn_agent,
-        detect_base_branch, apply_branch_to_base_unstaged, ApplyError,
+        save_plan_artifact, spawn_agent,
+        detect_base_branch, apply_branch_to_base_unstaged, apply_worktree_to_base_unstaged,
+        create_worktree, ApplyError,
     },
     provider::jira::JiraClient,
     models::{CreateTaskPayload, PlanJob, TaskWithPayload},
@@ -426,6 +427,7 @@ async fn update_task(
     let require_plan = payload.require_plan.unwrap_or(task.require_plan);
     let auto_approve_plan = payload.auto_approve_plan.unwrap_or(task.auto_approve_plan);
     let auto_start = payload.auto_start.unwrap_or(task.auto_start);
+    let use_worktree = payload.use_worktree.unwrap_or(task.use_worktree);
 
     state
         .db
@@ -437,6 +439,7 @@ async fn update_task(
             require_plan,
             auto_start,
             auto_approve_plan,
+            use_worktree,
         )
         .map_err(ApiError::internal)?;
 
@@ -1516,20 +1519,16 @@ async fn start_run(
 
     let agent_segment = sanitize_branch_segment(&profile.provider);
     let task_segment = sanitize_branch_segment(&task.jira_issue_key);
-    let branch_name = format!(
-        "agent/{}-{}-{}",
-        if agent_segment.is_empty() {
-            "agent".to_string()
-        } else {
-            agent_segment
-        },
-        if task_segment.is_empty() {
-            "task".to_string()
-        } else {
-            task_segment
-        },
-        chrono::Utc::now().timestamp()
-    );
+    let branch_name = if task.use_worktree {
+        format!(
+            "agent/{}-{}-{}",
+            if agent_segment.is_empty() { "agent".to_string() } else { agent_segment },
+            if task_segment.is_empty() { "task".to_string() } else { task_segment },
+            chrono::Utc::now().timestamp()
+        )
+    } else {
+        String::new() // No branch for direct mode
+    };
 
     let run = state
         .db
@@ -1539,6 +1538,7 @@ async fn start_run(
             "running",
             &branch_name,
             Some(&profile.id),
+            None, // worktree_path set later in background task
         )
         .map_err(ApiError::internal)?;
     state
@@ -1591,50 +1591,80 @@ async fn start_run(
     let plan_markdown = execution_plan_markdown;
     let plan_version = execution_plan_version;
     let plan_tasklist_json = execution_tasklist_json;
+    let use_worktree = task.use_worktree;
     let db = state.db.clone();
     let pm = state.process_manager.clone();
     let store = MsgStore::new();
     pm.register_store(&run_id, store.clone()).await;
 
     tokio::spawn(async move {
-        store
-            .push(LogMsg::AgentText(
-                "Preparing execution branch and plan artifact...".to_string(),
-            ))
-            .await;
+        // Determine the working directory for the agent
+        let agent_working_dir: String;
 
-        // Step 1: Create branch + save artifact (blocking git ops)
-        let branch_result = {
-            let rp = repo_path.clone();
-            let bn = branch_name.clone();
-            tokio::task::spawn_blocking(move || create_execution_branch(&rp, &bn)).await
-        };
-
-        if let Err(e) = branch_result
-            .as_ref()
-            .map_err(|e| anyhow::anyhow!("{}", e))
-            .and_then(|r| r.as_ref().map_err(|e| anyhow::anyhow!("{}", e)))
-        {
+        if use_worktree {
             store
-                .push_stderr(format!("Run failed while creating branch: {}", e))
+                .push(LogMsg::AgentText(
+                    "Creating worktree for isolated execution...".to_string(),
+                ))
                 .await;
-            store.push_finished(None, "failed").await;
-            let _ = db.add_run_event(&run_id, "run_failed", &json!({ "error": e.to_string() }));
-            let _ = db.update_run_status(&run_id, "failed", true);
-            let _ = db.update_task_status(&task_id, "FAILED");
-            return;
+
+            // Step 1a: Create worktree (blocking git ops)
+            let wt_result = {
+                let rp = repo_path.clone();
+                let bn = branch_name.clone();
+                tokio::task::spawn_blocking(move || create_worktree(&rp, &bn)).await
+            };
+
+            match wt_result {
+                Ok(Ok(wt_info)) => {
+                    agent_working_dir = wt_info.worktree_path.clone();
+                    // Update run with worktree_path
+                    let _ = db.update_run_worktree_path(&run_id, &wt_info.worktree_path);
+                    store
+                        .push(LogMsg::AgentText(format!(
+                            "Worktree ready at: {}",
+                            wt_info.worktree_path
+                        )))
+                        .await;
+                }
+                Ok(Err(e)) => {
+                    store
+                        .push_stderr(format!("Run failed while creating worktree: {}", e))
+                        .await;
+                    store.push_finished(None, "failed").await;
+                    let _ = db.add_run_event(&run_id, "run_failed", &json!({ "error": e.to_string() }));
+                    let _ = db.update_run_status(&run_id, "failed", true);
+                    let _ = db.update_task_status(&task_id, "FAILED");
+                    return;
+                }
+                Err(e) => {
+                    store
+                        .push_stderr(format!("Run failed while creating worktree: {}", e))
+                        .await;
+                    store.push_finished(None, "failed").await;
+                    let _ = db.add_run_event(&run_id, "run_failed", &json!({ "error": e.to_string() }));
+                    let _ = db.update_run_status(&run_id, "failed", true);
+                    let _ = db.update_task_status(&task_id, "FAILED");
+                    return;
+                }
+            }
+        } else {
+            // Direct mode: agent works directly on the main repo, no branch
+            store
+                .push(LogMsg::AgentText(
+                    "Direct mode: agent will work on current branch.".to_string(),
+                ))
+                .await;
+            agent_working_dir = repo_path.clone();
         }
 
-        store
-            .push(LogMsg::AgentText("Execution branch ready.".to_string()))
-            .await;
-
+        // Save plan artifact in the agent's working directory
         let artifact_result = {
-            let rp = repo_path.clone();
+            let wd = agent_working_dir.clone();
             let ik = issue_key.clone();
             let pm_text = plan_markdown.clone();
             let pv = plan_version;
-            tokio::task::spawn_blocking(move || save_plan_artifact(&rp, &ik, pv, &pm_text)).await
+            tokio::task::spawn_blocking(move || save_plan_artifact(&wd, &ik, pv, &pm_text)).await
         };
 
         match artifact_result {
@@ -1671,20 +1701,24 @@ async fn start_run(
             tasklist_pretty
         );
 
-        // Step 3: Spawn agent
+        // Step 3: Spawn agent in the appropriate working directory
         store
             .push(LogMsg::AgentText("Starting agent process...".to_string()))
             .await;
-        match spawn_agent(&agent_command, &prompt, &repo_path, store.clone()).await {
+        match spawn_agent(&agent_command, &prompt, &agent_working_dir, store.clone()).await {
             Ok(child) => {
                 // Record PID
                 if let Some(pid) = child.id() {
                     let _ = db.update_run_pid(&run_id, pid as i64);
                 }
-                let _ = db.add_run_event(&run_id, "agent_spawned", &json!({ "command": agent_command }));
+                let _ = db.add_run_event(&run_id, "agent_spawned", &json!({
+                    "command": agent_command,
+                    "useWorktree": use_worktree,
+                    "workingDir": &agent_working_dir
+                }));
 
                 pm.attach_child(&run_id, child).await;
-                pm.spawn_exit_monitor(run_id, task_id, repo_path, db).await;
+                pm.spawn_exit_monitor(run_id, task_id, repo_path, agent_working_dir, db).await;
             }
             Err(e) => {
                 store.push_stderr(format!("Failed to spawn agent: {}", e)).await;
@@ -1915,6 +1949,7 @@ async fn submit_review(
             "running",
             &latest_run.branch_name,
             Some(&profile.id),
+            latest_run.worktree_path.as_deref(),
         )
         .map_err(ApiError::internal)?;
     state
@@ -1935,6 +1970,7 @@ async fn submit_review(
     let run_id = run.id.clone();
     let task_id = task.id.clone();
     let repo_path = repo.path.clone();
+    let agent_working_dir = latest_run.worktree_path.clone().unwrap_or_else(|| repo.path.clone());
     let session_id = latest_run.agent_session_id.clone();
     let db = state.db.clone();
     let pm = state.process_manager.clone();
@@ -1967,7 +2003,7 @@ async fn submit_review(
             let (bin, extra_args) = parts.split_first().unwrap();
             let mut cmd = tokio::process::Command::new(bin);
             cmd.args(extra_args.iter().copied());
-            cmd.current_dir(&repo_path);
+            cmd.current_dir(&agent_working_dir);
             cmd.stdout(std::process::Stdio::piped());
             cmd.stderr(std::process::Stdio::piped());
             cmd.stdin(std::process::Stdio::piped());
@@ -2023,7 +2059,7 @@ async fn submit_review(
                 Err(e) => Err(anyhow::anyhow!("{}", e)),
             }
         } else {
-            spawn_agent(&agent_command, &prompt, &repo_path, store.clone()).await
+            spawn_agent(&agent_command, &prompt, &agent_working_dir, store.clone()).await
         };
 
         match spawn_result {
@@ -2033,7 +2069,7 @@ async fn submit_review(
                 }
                 let _ = db.add_run_event(&run_id, "agent_spawned", &json!({ "command": agent_command, "isReviewRun": true }));
                 pm.attach_child(&run_id, child).await;
-                pm.spawn_exit_monitor(run_id, task_id, repo_path, db).await;
+                pm.spawn_exit_monitor(run_id, task_id, repo_path, agent_working_dir, db).await;
             }
             Err(e) => {
                 store.push_stderr(format!("Failed to spawn agent: {}", e)).await;
@@ -2096,6 +2132,20 @@ async fn apply_to_main(
         ));
     }
 
+    // If worktree is off, changes are already on main — nothing to apply
+    if !task.use_worktree {
+        return Ok((
+            StatusCode::OK,
+            Json(json!({
+                "applied": true,
+                "filesChanged": 0,
+                "baseBranch": "current",
+                "directMode": true,
+            })),
+        )
+            .into_response());
+    }
+
     let run = state
         .db
         .get_latest_run_by_task(&path.task_id)
@@ -2111,7 +2161,15 @@ async fn apply_to_main(
     let base_branch =
         detect_base_branch(&repo.path).map_err(|e| ApiError::bad_request(&e.to_string()))?;
 
-    match apply_branch_to_base_unstaged(&repo.path, &run.branch_name, &base_branch) {
+    let apply_result = if let Some(ref wt_path) = run.worktree_path {
+        // Worktree mode: simplified merge (main repo is already on base branch)
+        apply_worktree_to_base_unstaged(&repo.path, &run.branch_name, &base_branch, wt_path)
+    } else {
+        // Legacy fallback: old-style branch checkout merge
+        apply_branch_to_base_unstaged(&repo.path, &run.branch_name, &base_branch)
+    };
+
+    match apply_result {
         Ok(result) => Ok((
             StatusCode::OK,
             Json(json!({
@@ -2897,6 +2955,7 @@ async fn provider_create_task_from_item(
         require_plan: Some(fields.require_plan),
         auto_start: Some(fields.auto_start),
         auto_approve_plan: Some(false),
+        use_worktree: Some(true),
     };
 
     let task = state
@@ -3279,5 +3338,7 @@ struct UpdateTaskPayload {
     auto_start: Option<bool>,
     #[serde(rename = "autoApprovePlan")]
     auto_approve_plan: Option<bool>,
+    #[serde(rename = "useWorktree")]
+    use_worktree: Option<bool>,
 }
 

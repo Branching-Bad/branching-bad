@@ -149,6 +149,13 @@ export function DetailsSidebar({
               }`}>
                 {selectedTask.auto_start ? "Autostart: On" : "Autostart: Off"}
               </span>
+              <span className={`rounded-full border px-2 py-0.5 ${
+                selectedTask.use_worktree
+                  ? "border-border-strong bg-surface-300 text-text-secondary"
+                  : "border-brand/40 bg-brand-tint text-brand"
+              }`}>
+                {selectedTask.use_worktree ? "Worktree" : "Direct"}
+              </span>
               <span className="text-text-muted">{formatDate(selectedTask.updated_at)}</span>
             </div>
             {selectedTask.description && (
@@ -557,13 +564,15 @@ export function DetailsSidebar({
                   <div className="mb-3 flex items-center justify-between">
                     <h4 className="text-xs font-medium text-text-secondary">Review Feedback</h4>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={onApplyToMain}
-                        disabled={busy}
-                        className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
-                      >
-                        Apply to Main
-                      </button>
+                      {selectedTask?.use_worktree !== false && (
+                        <button
+                          onClick={onApplyToMain}
+                          disabled={busy}
+                          className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
+                        >
+                          Apply to Main
+                        </button>
+                      )}
                       {selectedTask?.status !== "DONE" && (
                         <button
                           onClick={onMarkTaskDone}

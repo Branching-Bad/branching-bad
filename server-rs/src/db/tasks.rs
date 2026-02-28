@@ -93,10 +93,10 @@ impl Db {
     pub fn list_tasks_by_repo(&self, repo_id: &str) -> Result<Vec<TaskWithPayload>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
-            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at FROM tasks WHERE repo_id = ?1 ORDER BY updated_at DESC",
+            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at FROM tasks WHERE repo_id = ?1 ORDER BY updated_at DESC",
         )?;
         let rows = stmt.query_map([repo_id], |row| {
-            let payload_raw: String = row.get(16)?;
+            let payload_raw: String = row.get(17)?;
             Ok(TaskWithPayload {
                 id: row.get(0)?,
                 repo_id: row.get(1)?,
@@ -112,11 +112,12 @@ impl Db {
                 require_plan: row.get::<_, i64>(11)? != 0,
                 auto_start: row.get::<_, i64>(12)? != 0,
                 auto_approve_plan: row.get::<_, i64>(13)? != 0,
-                last_pipeline_error: row.get(14)?,
-                last_pipeline_at: row.get(15)?,
+                use_worktree: row.get::<_, i64>(14)? != 0,
+                last_pipeline_error: row.get(15)?,
+                last_pipeline_at: row.get(16)?,
                 payload: serde_json::from_str(&payload_raw).unwrap_or(Value::Null),
-                created_at: row.get(17)?,
-                updated_at: row.get(18)?,
+                created_at: row.get(18)?,
+                updated_at: row.get(19)?,
             })
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
@@ -126,10 +127,10 @@ impl Db {
     pub fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskWithPayload>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at FROM tasks WHERE id = ?1",
+            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at FROM tasks WHERE id = ?1",
             [task_id],
             |row| {
-                let payload_raw: String = row.get(16)?;
+                let payload_raw: String = row.get(17)?;
                 Ok(TaskWithPayload {
                     id: row.get(0)?,
                     repo_id: row.get(1)?,
@@ -145,11 +146,12 @@ impl Db {
                     require_plan: row.get::<_, i64>(11)? != 0,
                     auto_start: row.get::<_, i64>(12)? != 0,
                     auto_approve_plan: row.get::<_, i64>(13)? != 0,
-                    last_pipeline_error: row.get(14)?,
-                    last_pipeline_at: row.get(15)?,
+                    use_worktree: row.get::<_, i64>(14)? != 0,
+                    last_pipeline_error: row.get(15)?,
+                    last_pipeline_at: row.get(16)?,
                     payload: serde_json::from_str(&payload_raw).unwrap_or(Value::Null),
-                    created_at: row.get(17)?,
-                    updated_at: row.get(18)?,
+                    created_at: row.get(18)?,
+                    updated_at: row.get(19)?,
                 })
             },
         )
@@ -174,6 +176,7 @@ impl Db {
         let require_plan = payload.require_plan.unwrap_or(true);
         let auto_start = payload.auto_start.unwrap_or(false);
         let auto_approve_plan = payload.auto_approve_plan.unwrap_or(false);
+        let use_worktree = payload.use_worktree.unwrap_or(true);
 
         // Generate LOCAL-N key
         let max_local: Option<String> = conn
@@ -193,8 +196,8 @@ impl Db {
             r#"INSERT INTO tasks (
                  id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title,
                  description, assignee, status, priority, source, require_plan, auto_start,
-                 auto_approve_plan, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at
-               ) VALUES (?1, ?2, NULL, NULL, ?3, ?4, ?5, NULL, ?6, ?7, 'manual', ?8, ?9, ?10, NULL, NULL, '{}', ?11, ?12)"#,
+                 auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at
+               ) VALUES (?1, ?2, NULL, NULL, ?3, ?4, ?5, NULL, ?6, ?7, 'manual', ?8, ?9, ?10, ?11, NULL, NULL, '{}', ?12, ?13)"#,
             params![
                 id,
                 payload.repo_id,
@@ -206,6 +209,7 @@ impl Db {
                 require_plan,
                 auto_start,
                 auto_approve_plan,
+                use_worktree,
                 ts,
                 ts,
             ],
@@ -245,10 +249,11 @@ impl Db {
         require_plan: bool,
         auto_start: bool,
         auto_approve_plan: bool,
+        use_worktree: bool,
     ) -> Result<()> {
         let conn = self.connect()?;
         conn.execute(
-            "UPDATE tasks SET title = ?1, description = ?2, priority = ?3, require_plan = ?4, auto_start = ?5, auto_approve_plan = ?6, updated_at = ?7 WHERE id = ?8",
+            "UPDATE tasks SET title = ?1, description = ?2, priority = ?3, require_plan = ?4, auto_start = ?5, auto_approve_plan = ?6, use_worktree = ?7, updated_at = ?8 WHERE id = ?9",
             params![
                 title,
                 description,
@@ -256,6 +261,7 @@ impl Db {
                 require_plan,
                 auto_start,
                 auto_approve_plan,
+                use_worktree,
                 now_iso(),
                 task_id
             ],

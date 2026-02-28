@@ -95,7 +95,8 @@ impl ProcessManager {
         self: &Arc<Self>,
         run_id: String,
         task_id: String,
-        repo_path: String,
+        _repo_path: String,
+        working_dir: String,
         db: Arc<Db>,
     ) {
         let pm = self.clone();
@@ -125,8 +126,8 @@ impl ProcessManager {
 
             let exit_code = exit_status.and_then(|s| s.code());
 
-            // Capture diff
-            let diff = capture_diff(&repo_path).unwrap_or_default();
+            // Capture diff from the agent's working directory
+            let diff = capture_diff(&working_dir).unwrap_or_default();
             let _ = db.add_run_event(
                 &run_id,
                 "working_tree_diff",

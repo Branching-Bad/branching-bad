@@ -16,6 +16,7 @@ impl Db {
         status: &str,
         branch_name: &str,
         agent_profile_id: Option<&str>,
+        worktree_path: Option<&str>,
     ) -> Result<Run> {
         let conn = self.connect()?;
         let id = Uuid::new_v4().to_string();
@@ -26,8 +27,8 @@ impl Db {
             None
         };
         conn.execute(
-            "INSERT INTO runs (id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, started_at, completed_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL, ?7, NULL, ?8, ?9)",
-            params![id, task_id, plan_id, status, branch_name, agent_profile_id, started_at, ts, ts],
+            "INSERT INTO runs (id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, worktree_path, started_at, completed_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL, ?7, ?8, NULL, ?9, ?10)",
+            params![id, task_id, plan_id, status, branch_name, agent_profile_id, worktree_path, started_at, ts, ts],
         )?;
         self.get_run_by_id(&id)?.context("run missing after create")
     }
@@ -45,7 +46,7 @@ impl Db {
     pub fn get_run_by_id(&self, run_id: &str) -> Result<Option<Run>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, started_at, completed_at, created_at, updated_at FROM runs WHERE id = ?1",
+            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, worktree_path, started_at, completed_at, created_at, updated_at FROM runs WHERE id = ?1",
             [run_id],
             |row| {
                 Ok(Run {
@@ -59,10 +60,11 @@ impl Db {
                     exit_code: row.get(7)?,
                     agent_session_id: row.get(8)?,
                     review_comment_id: row.get(9)?,
-                    started_at: row.get(10)?,
-                    completed_at: row.get(11)?,
-                    created_at: row.get(12)?,
-                    updated_at: row.get(13)?,
+                    worktree_path: row.get(10)?,
+                    started_at: row.get(11)?,
+                    completed_at: row.get(12)?,
+                    created_at: row.get(13)?,
+                    updated_at: row.get(14)?,
                 })
             },
         )
@@ -125,7 +127,7 @@ impl Db {
     pub fn get_latest_run_by_task(&self, task_id: &str) -> Result<Option<Run>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, started_at, completed_at, created_at, updated_at FROM runs WHERE task_id = ?1 ORDER BY created_at DESC LIMIT 1",
+            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, worktree_path, started_at, completed_at, created_at, updated_at FROM runs WHERE task_id = ?1 ORDER BY created_at DESC LIMIT 1",
             [task_id],
             |row| {
                 Ok(Run {
@@ -139,10 +141,11 @@ impl Db {
                     exit_code: row.get(7)?,
                     agent_session_id: row.get(8)?,
                     review_comment_id: row.get(9)?,
-                    started_at: row.get(10)?,
-                    completed_at: row.get(11)?,
-                    created_at: row.get(12)?,
-                    updated_at: row.get(13)?,
+                    worktree_path: row.get(10)?,
+                    started_at: row.get(11)?,
+                    completed_at: row.get(12)?,
+                    created_at: row.get(13)?,
+                    updated_at: row.get(14)?,
                 })
             },
         )
@@ -155,6 +158,15 @@ impl Db {
         conn.execute(
             "UPDATE runs SET agent_session_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![session_id, now_iso(), run_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_run_worktree_path(&self, run_id: &str, worktree_path: &str) -> Result<()> {
+        let conn = self.connect()?;
+        conn.execute(
+            "UPDATE runs SET worktree_path = ?1, updated_at = ?2 WHERE id = ?3",
+            params![worktree_path, now_iso(), run_id],
         )?;
         Ok(())
     }

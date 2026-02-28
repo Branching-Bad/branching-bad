@@ -90,15 +90,20 @@ Tasklari uc yolla olusturabilirsiniz:
 
 ### Task Ayarlari
 
-Task olustururken veya duzenlerken uc onemli secenek vardir:
+Task olustururken veya duzenlerken dort onemli secenek vardir:
 
 | Secenek | Varsayilan | Aciklama |
 |---|---|---|
 | **Require Plan** | Acik | Kod yazmadan once plan olusturulur ve onayiniz beklenir |
 | **Auto Approve Plan** | Kapali | Plan otomatik onaylanir, siz kontrol etmezsiniz |
 | **Auto Start** | Kapali | Plan onaylandiktan sonra agent otomatik baslatilir |
+| **Use Worktree** | Acik | Agent izole bir git worktree'de calisir, ana repo etkilenmez |
 
 > Hizli calismak icin Auto Approve + Auto Start acabilirsiniz. Kontrol istiyorsaniz sadece Require Plan acik kalsin.
+>
+> **Worktree modu** (varsayilan) buyuk ozellikler icindir — agent ayri bir dizinde calisir, ana reponuz main branch'te kalir. Bitince "Apply to Main" ile degisiklikleri ana branch'e unstaged olarak alirsiniz.
+>
+> **Direct modu** (Use Worktree kapali) kucuk duzeltmeler icindir — agent direkt mevcut branch uzerinde calisir, branch acilmaz, Apply adimina gerek kalmaz.
 
 ---
 
@@ -125,7 +130,9 @@ Task olustururken veya duzenlerken uc onemli secenek vardir:
 4. Canli loglar terminal kutusunda akar
 5. Bitince task otomatik olarak **In Review** durumuna gecer
 
-> Agent her run icin yeni bir git branch olusturur (ornek: `codex/PROJ-42-1706123456`).
+> **Worktree modu:** Agent izole bir worktree dizininde calisir (ornek: `.local-agent/worktrees/agent/claude-PROJ-42-1706123456/`). Ana reponuz main branch'te kalir — ayni anda editorde calismaya devam edebilirsiniz.
+>
+> **Direct modu:** Agent direkt mevcut branch uzerinde calisir. Branch acilmaz, degisiklikler aninda gorunur.
 
 ---
 
@@ -148,8 +155,10 @@ Bu donguyu istediginiz kadar tekrarlayabilirsiniz. Her geri bildirim yeni bir ca
 
 ### Bitirme
 
-- **Apply to Main** — Agent'in branch'indeki degisiklikleri ana branch'inize uygular (merge conflict varsa uyari gosterir)
+- **Apply to Main** (sadece Worktree modunda gorunur) — Worktree'deki degisiklikleri ana branch'inize squash merge ile unstaged olarak uygular. Merge conflict varsa uyari gosterir. Worktree otomatik temizlenir.
 - **Mark as Done** — Task'i tamamlanmis olarak isaretler, Done sutununa tasir
+
+> Direct modda "Apply to Main" butonu gorunmez cunku degisiklikler zaten ana branch'tedir.
 
 ---
 
@@ -172,13 +181,27 @@ Pano dort sutundan olusur:
 
 ## Tipik Calisma Akisi
 
+### Worktree Modu (buyuk ozellikler)
+
 ```
-Jira/Sentry sync → Task gorunur (To Do)
+Task olustur (Use Worktree: acik)
   → Plan uret → Incele → Onayla
-    → Agent calisir (In Progress)
+    → Agent worktree'de calisir, ana repo main'de kalir (In Progress)
       → Review et (In Review)
-        → Geri bildirim gonder → Agent duzeltir → Tekrar review
-        → Memnun olunca "Apply to Main" + "Mark as Done"
+        → Geri bildirim gonder → Agent ayni worktree'de duzeltir → Tekrar review
+        → "Apply to Main" → Degisiklikler main'e unstaged gelir → Worktree temizlenir
+        → "Mark as Done"
+```
+
+### Direct Modu (hizli duzeltmeler)
+
+```
+Task olustur (Use Worktree: kapali)
+  → Plan uret → Incele → Onayla
+    → Agent direkt main'de calisir, branch yok (In Progress)
+      → Review et (In Review)
+        → Geri bildirim gonder → Agent yine main'de duzeltir → Tekrar review
+        → "Mark as Done" (Apply gereksiz, degisiklikler zaten main'de)
 ```
 
 ---
@@ -198,4 +221,7 @@ Evet. Task olustururken "Require Plan" secenegini kapatin. Boylece direkt "Start
 Extensions drawer'da Sentry kartinin disli ikonundan baglanti bilgilerinizi kontrol edin. Proje bind edilmis olmali. Sync sonrasi hata mesaji gorunurse detayi orada okuyabilirsiniz.
 
 **Merge conflict olursa?**
-"Apply to Main" tikladiginizda conflict varsa, etkilenen dosyalar listelenir. Task branch'inda conflictleri cozdukten sonra tekrar deneyin.
+"Apply to Main" tikladiginizda conflict varsa, etkilenen dosyalar listelenir. Worktree'deki branch'ta conflictleri cozdukten sonra tekrar deneyin.
+
+**Worktree ve Direct modu arasindaki fark nedir?**
+Worktree modunda agent izole bir dizinde calisir, ana reponuz etkilenmez — ayni anda editorde calismaya devam edebilirsiniz. Direct modda agent direkt ana branch uzerinde calisir, degisiklikler aninda gorunur — kucuk duzeltmeler icin daha hizlidir.

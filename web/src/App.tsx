@@ -54,12 +54,14 @@ export default function App() {
   const [newTaskRequirePlan, setNewTaskRequirePlan] = useState(true);
   const [newTaskAutoApprovePlan, setNewTaskAutoApprovePlan] = useState(false);
   const [newTaskAutoStart, setNewTaskAutoStart] = useState(false);
+  const [newTaskUseWorktree, setNewTaskUseWorktree] = useState(true);
   const [editTaskTitle, setEditTaskTitle] = useState("");
   const [editTaskDesc, setEditTaskDesc] = useState("");
   const [editTaskPriority, setEditTaskPriority] = useState("");
   const [editTaskRequirePlan, setEditTaskRequirePlan] = useState(true);
   const [editTaskAutoApprovePlan, setEditTaskAutoApprovePlan] = useState(false);
   const [editTaskAutoStart, setEditTaskAutoStart] = useState(false);
+  const [editTaskUseWorktree, setEditTaskUseWorktree] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [reviewComments, setReviewComments] = useState<ReviewComment[]>([]);
   const [reviewText, setReviewText] = useState("");
@@ -613,12 +615,13 @@ export default function App() {
           description: newTaskDesc.trim() || undefined, status: "To Do",
           priority: newTaskPriority || undefined, requirePlan: newTaskRequirePlan,
           autoApprovePlan: newTaskAutoApprovePlan, autoStart: newTaskAutoStart,
+          useWorktree: newTaskUseWorktree,
         }),
       });
       const payload = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
       setTasks(payload.tasks);
       setNewTaskTitle(""); setNewTaskDesc(""); setNewTaskPriority("");
-      setNewTaskRequirePlan(true); setNewTaskAutoApprovePlan(false); setNewTaskAutoStart(false);
+      setNewTaskRequirePlan(true); setNewTaskAutoApprovePlan(false); setNewTaskAutoStart(false); setNewTaskUseWorktree(true);
       setCreateTaskModalOpen(false);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -631,6 +634,7 @@ export default function App() {
     setEditTaskRequirePlan(selectedTask.require_plan);
     setEditTaskAutoApprovePlan(selectedTask.auto_approve_plan);
     setEditTaskAutoStart(selectedTask.auto_start);
+    setEditTaskUseWorktree(selectedTask.use_worktree);
     setEditTaskModalOpen(true);
   }
 
@@ -644,6 +648,7 @@ export default function App() {
           title: editTaskTitle.trim(), description: editTaskDesc.trim() || null,
           priority: editTaskPriority || null, requirePlan: editTaskRequirePlan,
           autoApprovePlan: editTaskAutoApprovePlan, autoStart: editTaskAutoStart,
+          useWorktree: editTaskUseWorktree,
         }),
       });
       setTasks((prev) => prev.map((t) => t.id === payload.task.id ? payload.task : t));
@@ -805,6 +810,7 @@ export default function App() {
         requirePlan={newTaskRequirePlan} setRequirePlan={setNewTaskRequirePlan}
         autoApprovePlan={newTaskAutoApprovePlan} setAutoApprovePlan={setNewTaskAutoApprovePlan}
         autoStart={newTaskAutoStart} setAutoStart={setNewTaskAutoStart}
+        useWorktree={newTaskUseWorktree} setUseWorktree={setNewTaskUseWorktree}
         onCreate={createManualTask} repoName={selectedRepo?.name ?? "selected repo"}
       />
 
@@ -816,6 +822,7 @@ export default function App() {
         requirePlan={editTaskRequirePlan} setRequirePlan={setEditTaskRequirePlan}
         autoApprovePlan={editTaskAutoApprovePlan} setAutoApprovePlan={setEditTaskAutoApprovePlan}
         autoStart={editTaskAutoStart} setAutoStart={setEditTaskAutoStart}
+        useWorktree={editTaskUseWorktree} setUseWorktree={setEditTaskUseWorktree}
         onSave={saveTaskEdits}
       />
     </div>

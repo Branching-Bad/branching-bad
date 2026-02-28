@@ -28,6 +28,8 @@ pub struct TaskWithPayload {
     pub auto_start: bool,
     #[serde(default)]
     pub auto_approve_plan: bool,
+    #[serde(default = "default_true")]
+    pub use_worktree: bool,
     pub last_pipeline_error: Option<String>,
     pub last_pipeline_at: Option<String>,
     pub source: String,
@@ -50,6 +52,8 @@ pub struct CreateTaskPayload {
     pub auto_start: Option<bool>,
     #[serde(rename = "autoApprovePlan")]
     pub auto_approve_plan: Option<bool>,
+    #[serde(rename = "useWorktree")]
+    pub use_worktree: Option<bool>,
 }
 
 fn default_true() -> bool {
@@ -140,6 +144,7 @@ pub struct Run {
     pub exit_code: Option<i64>,
     pub agent_session_id: Option<String>,
     pub review_comment_id: Option<String>,
+    pub worktree_path: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
     pub created_at: String,

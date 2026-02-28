@@ -7,6 +7,7 @@ export function EditTaskModal({
   title, setTitle, description, setDescription,
   priority, setPriority, requirePlan, setRequirePlan,
   autoApprovePlan, setAutoApprovePlan, autoStart, setAutoStart,
+  useWorktree, setUseWorktree,
   onSave,
 }: {
   open: boolean; onClose: () => void; busy: boolean;
@@ -16,6 +17,7 @@ export function EditTaskModal({
   requirePlan: boolean; setRequirePlan: (v: boolean) => void;
   autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
   autoStart: boolean; setAutoStart: (v: boolean) => void;
+  useWorktree: boolean; setUseWorktree: (v: boolean) => void;
   onSave: () => void;
 }) {
   if (!open) return null;
@@ -42,6 +44,7 @@ export function EditTaskModal({
             requirePlan={requirePlan} setRequirePlan={setRequirePlan}
             autoApprovePlan={autoApprovePlan} setAutoApprovePlan={setAutoApprovePlan}
             autoStart={autoStart} setAutoStart={setAutoStart}
+            useWorktree={useWorktree} setUseWorktree={setUseWorktree}
             autoFocus
           />
           <div className="flex gap-2 pt-1">

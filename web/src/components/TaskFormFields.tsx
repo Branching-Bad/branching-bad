@@ -7,6 +7,7 @@ export function TaskFormFields({
   requirePlan, setRequirePlan,
   autoApprovePlan, setAutoApprovePlan,
   autoStart, setAutoStart,
+  useWorktree, setUseWorktree,
   autoFocus,
 }: {
   title: string; setTitle: (v: string) => void;
@@ -15,6 +16,7 @@ export function TaskFormFields({
   requirePlan: boolean; setRequirePlan: (v: boolean) => void;
   autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
   autoStart: boolean; setAutoStart: (v: boolean) => void;
+  useWorktree: boolean; setUseWorktree: (v: boolean) => void;
   autoFocus?: boolean;
 }) {
   return (
@@ -75,6 +77,17 @@ export function TaskFormFields({
               ? "Autostart (auto approve + run)"
               : "Autostart (generate plan+tasklist, wait for approval)")
           : "Autostart (direct run)"}
+      </label>
+      <label className="flex items-center gap-2 rounded-md border border-border-default bg-surface-200 px-3 py-2 text-xs text-text-secondary">
+        <input
+          type="checkbox"
+          checked={useWorktree}
+          onChange={(e) => setUseWorktree(e.target.checked)}
+          className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+        />
+        {useWorktree
+          ? "Worktree isolation (agent works in separate worktree)"
+          : "Direct mode (agent works on current branch)"}
       </label>
     </>
   );

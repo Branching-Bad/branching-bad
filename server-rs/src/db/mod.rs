@@ -240,6 +240,8 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
         self.ensure_column_exists(&conn, "plan_jobs", "agent_session_id", "TEXT")?;
         self.ensure_column_exists(&conn, "runs", "agent_session_id", "TEXT")?;
         self.ensure_column_exists(&conn, "runs", "review_comment_id", "TEXT")?;
+        self.ensure_column_exists(&conn, "tasks", "use_worktree", "INTEGER NOT NULL DEFAULT 1")?;
+        self.ensure_column_exists(&conn, "runs", "worktree_path", "TEXT")?;
 
         conn.execute_batch(
             r#"

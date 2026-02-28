@@ -7,6 +7,7 @@ export function CreateTaskModal({
   title, setTitle, description, setDescription,
   priority, setPriority, requirePlan, setRequirePlan,
   autoApprovePlan, setAutoApprovePlan, autoStart, setAutoStart,
+  useWorktree, setUseWorktree,
   onCreate, repoName,
 }: {
   open: boolean; onClose: () => void; busy: boolean;
@@ -16,6 +17,7 @@ export function CreateTaskModal({
   requirePlan: boolean; setRequirePlan: (v: boolean) => void;
   autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
   autoStart: boolean; setAutoStart: (v: boolean) => void;
+  useWorktree: boolean; setUseWorktree: (v: boolean) => void;
   onCreate: () => void;
   repoName: string;
 }) {
@@ -46,6 +48,7 @@ export function CreateTaskModal({
             requirePlan={requirePlan} setRequirePlan={setRequirePlan}
             autoApprovePlan={autoApprovePlan} setAutoApprovePlan={setAutoApprovePlan}
             autoStart={autoStart} setAutoStart={setAutoStart}
+            useWorktree={useWorktree} setUseWorktree={setUseWorktree}
             autoFocus
           />
           <div className="flex gap-2 pt-1">
