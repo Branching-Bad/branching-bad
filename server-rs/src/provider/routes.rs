@@ -462,25 +462,27 @@ async fn provider_create_task_from_item(
         .link_provider_item_to_task(&item.id, &task.id)
         .map_err(ApiError::internal)?;
 
-    if let Some(agent_command) = resolve_agent_command(&state, &binding.repo_id) {
-        if let Ok(Some(repo)) = state.db.get_repo_by_id(&binding.repo_id) {
-            let mode = format!("auto_{}", path.provider_id);
-            if let Ok(job) = state.db.create_plan_job(&task.id, &mode, None) {
-                let store = MsgStore::new();
-                state
-                    .process_manager
-                    .register_store(&plan_store_key(&job.id), store.clone())
-                    .await;
-                spawn_plan_generation_job(
-                    state.clone(),
-                    job,
-                    task.clone(),
-                    repo.path.clone(),
-                    agent_command,
-                    &mode,
-                    store,
-                    None,
-                );
+    if fields.require_plan {
+        if let Some(agent_command) = resolve_agent_command(&state, &binding.repo_id) {
+            if let Ok(Some(repo)) = state.db.get_repo_by_id(&binding.repo_id) {
+                let mode = format!("auto_{}", path.provider_id);
+                if let Ok(job) = state.db.create_plan_job(&task.id, &mode, None) {
+                    let store = MsgStore::new();
+                    state
+                        .process_manager
+                        .register_store(&plan_store_key(&job.id), store.clone())
+                        .await;
+                    spawn_plan_generation_job(
+                        state.clone(),
+                        job,
+                        task.clone(),
+                        repo.path.clone(),
+                        agent_command,
+                        &mode,
+                        store,
+                        None,
+                    );
+                }
             }
         }
     }
