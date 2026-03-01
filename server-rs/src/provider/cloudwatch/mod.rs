@@ -1,6 +1,7 @@
 pub mod aws_client;
 pub mod investigator;
 mod provider;
+pub mod routes;
 
 pub use provider::CloudWatchProvider;
 

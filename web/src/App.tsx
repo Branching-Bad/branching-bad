@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { api } from "./api";
 import type {
   Repo, AgentProfile, Task, Plan, PlanJob, ReviewComment, LineComment,
-  ProviderMeta, LaneKey,
+  ProviderMeta, LaneKey, ChatMessage,
   TaskRunState, TaskPlanState, ActiveRun, RunEvent, RunAgent,
 } from "./types";
 import { EMPTY_TASK_RUN_STATE, EMPTY_TASK_PLAN_STATE } from "./types";
@@ -75,6 +75,7 @@ export default function App() {
   const [batchLineComments, setBatchLineComments] = useState<LineComment[]>([]);
   const [lineSelection, setLineSelection] = useState<{filePath:string; lineStart:number; lineEnd:number; hunk:string; anchorKey:string} | null>(null);
   const [draftText, setDraftText] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [manualPlanMarkdown, setManualPlanMarkdown] = useState("");
   const [manualPlanJsonText, setManualPlanJsonText] = useState("");
   const [manualTasklistJsonText, setManualTasklistJsonText] = useState("");
@@ -85,6 +86,7 @@ export default function App() {
   const [providerItemCounts, setProviderItemCounts] = useState<Record<string, number>>({});
 
   const selectedTask = useMemo(() => tasks.find((t) => t.id === selectedTaskId) ?? null, [tasks, selectedTaskId]);
+  const chatQueuedCount = useMemo(() => chatMessages.filter((m) => m.status === "queued").length, [chatMessages]);
   const latestPlan = plans[0] ?? null;
   const selectedPlan = useMemo(
     () => plans.find((plan) => plan.id === selectedPlanId) ?? latestPlan,
@@ -154,6 +156,7 @@ export default function App() {
     setTasks,
     setPlans,
     setReviewComments,
+    setChatMessages,
     setInfo,
     selectedTaskIdRef,
   });
@@ -203,13 +206,15 @@ export default function App() {
       setManualPlanJsonText(""); setManualTasklistJsonText("");
       setTasklistValidationError(""); setReviewComments([]);
       setRunDiff(""); setBatchLineComments([]); setLineSelection(null); setDraftText("");
+      setChatMessages([]);
       return;
     }
     void (async () => {
       try {
-        const [planPayload, reviewPayload] = await Promise.all([
+        const [planPayload, reviewPayload, chatPayload] = await Promise.all([
           api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(selectedTaskId)}`),
           api<{ reviewComments: ReviewComment[] }>(`/api/tasks/${encodeURIComponent(selectedTaskId)}/reviews`),
+          api<{ messages: ChatMessage[] }>(`/api/tasks/${encodeURIComponent(selectedTaskId)}/chat`).catch(() => ({ messages: [] as ChatMessage[] })),
         ]);
         setPlans(planPayload.plans);
         const latest = planPayload.plans[0] ?? null;
@@ -219,6 +224,7 @@ export default function App() {
         setManualTasklistJsonText(latest ? JSON.stringify(latest.tasklist ?? {}, null, 2) : "{}");
         setTasklistValidationError("");
         setReviewComments(reviewPayload.reviewComments);
+        setChatMessages(chatPayload.messages);
       } catch (e) { setError((e as Error).message); }
     })();
   }, [selectedTaskId]);
@@ -514,6 +520,34 @@ export default function App() {
         setTasks(t.tasks);
       }
       setInfo("Run cancelled.");
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function sendChatMessage(content: string) {
+    if (!selectedTaskId) return;
+    try {
+      const res = await api<{ chatMessage: ChatMessage; run: ActiveRun | null }>(
+        `/api/tasks/${encodeURIComponent(selectedTaskId)}/chat`,
+        { method: "POST", body: JSON.stringify({ content }) },
+      );
+      setChatMessages((prev) => [...prev, res.chatMessage]);
+      if (res.run) {
+        updateTaskRunState(selectedTaskId, (prev) => ({
+          ...prev,
+          activeRun: res.run!,
+          runLogs: [],
+          runFinished: false,
+        }));
+        attachRunLogStream(res.run.id, selectedTaskId, selectedRepoId);
+      }
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function cancelQueuedChat() {
+    if (!selectedTaskId) return;
+    try {
+      await api(`/api/tasks/${encodeURIComponent(selectedTaskId)}/chat/queued`, { method: "DELETE" });
+      setChatMessages((prev) => prev.filter((m) => m.status !== "queued"));
     } catch (e) { setError((e as Error).message); }
   }
 
@@ -921,6 +955,8 @@ export default function App() {
           onLineSelect={handleLineSelect}
           onLineSave={handleLineSave}
           onLineCancel={handleLineCancel}
+          chatMessages={chatMessages} chatQueuedCount={chatQueuedCount}
+          onSendChat={sendChatMessage} onCancelQueuedChat={cancelQueuedChat}
           onRequeueAutostart={() => void requeueAutostart()}
           onClearTaskPipeline={() => void clearTaskPipeline()}
           onExpandReview={() => setReviewModalOpen(true)}

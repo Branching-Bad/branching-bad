@@ -1,6 +1,7 @@
-import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun } from "../types";
+import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage } from "../types";
 import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown } from "./icons";
 import { LogViewer } from "./LogViewer";
+import { ChatPanel } from "./ChatPanel";
 import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
 import { DiffReviewPanel } from "./DiffReviewPanel";
 
@@ -33,6 +34,8 @@ export function DetailsSidebar({
   onSubmitReview, onSubmitBatchReview, onApplyToMain, onMarkTaskDone,
   onLineSelect, onLineSave, onLineCancel,
   onRequeueAutostart, onClearTaskPipeline,
+  chatMessages, chatQueuedCount,
+  onSendChat, onCancelQueuedChat,
   onExpandReview,
 }: {
   selectedTask: Task;
@@ -74,6 +77,9 @@ export function DetailsSidebar({
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
   onLineCancel: () => void;
+  chatMessages: ChatMessage[]; chatQueuedCount: number;
+  onSendChat: (content: string) => Promise<void>;
+  onCancelQueuedChat: () => Promise<void>;
   onRequeueAutostart: () => void;
   onClearTaskPipeline: () => void;
   onExpandReview?: () => void;
@@ -574,6 +580,16 @@ export function DetailsSidebar({
                     className="h-[360px]"
                   />
                 </div>
+
+                {activeRun && (
+                  <ChatPanel
+                    isRunning={!!activeRun && !runFinished}
+                    onSend={onSendChat}
+                    onCancelQueued={onCancelQueuedChat}
+                    messages={chatMessages}
+                    queuedCount={chatQueuedCount}
+                  />
+                )}
 
                 <div className="rounded-xl border border-border-default bg-surface-200 p-3">
                   <h4 className="mb-2 text-xs font-medium text-text-secondary">Run Events</h4>

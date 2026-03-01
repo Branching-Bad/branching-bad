@@ -102,6 +102,15 @@ export type ProviderResource = {
   id: string; provider_account_id: string; provider_id: string;
   external_id: string; name: string; extra_json: string;
 };
+export type ChatMessage = {
+  id: string;
+  task_id: string;
+  role: "user" | "assistant";
+  content: string;
+  result_run_id: string | null;
+  status: "sent" | "queued" | "dispatched";
+  created_at: string;
+};
 export type LaneKey = "todo" | "inprogress" | "inreview" | "done" | "archived";
 
 /* ─── Provider Types ─── */

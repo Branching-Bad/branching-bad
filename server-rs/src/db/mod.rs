@@ -1,5 +1,6 @@
 mod agents;
 mod autostart;
+pub mod chat;
 pub mod investigations;
 mod maintenance;
 mod plan_jobs;
@@ -250,6 +251,7 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
         self.ensure_column_exists(&conn, "review_comments", "review_mode", "TEXT NOT NULL DEFAULT 'instant'")?;
         self.ensure_column_exists(&conn, "review_comments", "batch_id", "TEXT")?;
         self.ensure_column_exists(&conn, "tasks", "agent_profile_id", "TEXT")?;
+        self.ensure_column_exists(&conn, "runs", "chat_message_id", "TEXT")?;
 
         conn.execute_batch(
             r#"
@@ -273,6 +275,18 @@ CREATE TABLE IF NOT EXISTS run_diffs (
     created_at TEXT NOT NULL,
     FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    result_run_id TEXT,
+    status TEXT NOT NULL DEFAULT 'sent',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_task ON chat_messages(task_id, created_at ASC);
 "#,
         )?;
 

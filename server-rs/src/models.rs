@@ -147,6 +147,7 @@ pub struct Run {
     pub exit_code: Option<i64>,
     pub agent_session_id: Option<String>,
     pub review_comment_id: Option<String>,
+    pub chat_message_id: Option<String>,
     pub worktree_path: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
@@ -226,6 +227,17 @@ pub struct DiscoveredProfile {
     pub source: String,
     pub discovery_kind: String,
     pub metadata: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub id: String,
+    pub task_id: String,
+    pub role: String,
+    pub content: String,
+    pub result_run_id: Option<String>,
+    pub status: String,
+    pub created_at: String,
 }
 
 // ── Generic Provider Row Structs ──

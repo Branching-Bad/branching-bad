@@ -12,6 +12,10 @@ pub struct PostgresProvider;
 
 #[async_trait]
 impl Provider for PostgresProvider {
+    fn auto_sync(&self) -> bool {
+        false
+    }
+
     fn meta(&self) -> ProviderMeta {
         ProviderMeta {
             id: "postgres",

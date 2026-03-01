@@ -1,7 +1,7 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { api } from "../api";
 import { useWebSocketStream } from "./useWebSocketStream";
-import type { Task, Plan, PlanJob, ActiveRun, RunEvent, TaskRunState, TaskPlanState, ReviewComment, RunResponse } from "../types";
+import type { Task, Plan, PlanJob, ActiveRun, RunEvent, TaskRunState, TaskPlanState, ReviewComment, ChatMessage, RunResponse } from "../types";
 
 export function useEventStream({
   updateTaskRunState,
@@ -9,6 +9,7 @@ export function useEventStream({
   setTasks,
   setPlans,
   setReviewComments,
+  setChatMessages,
   setInfo,
   selectedTaskIdRef,
 }: {
@@ -17,6 +18,7 @@ export function useEventStream({
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   setPlans: React.Dispatch<React.SetStateAction<Plan[]>>;
   setReviewComments: React.Dispatch<React.SetStateAction<ReviewComment[]>>;
+  setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   setInfo: (msg: string) => void;
   selectedTaskIdRef: React.RefObject<string>;
 }) {
@@ -122,8 +124,36 @@ export function useEventStream({
       .then((payload) => setReviewComments(payload.reviewComments))
       .catch(() => {});
 
+    // Refresh chat messages, then dispatch next queued if any
+    api<{ messages: ChatMessage[] }>(`/api/tasks/${encodeURIComponent(taskId)}/chat`)
+      .then((payload) => {
+        setChatMessages(payload.messages);
+        const hasQueued = payload.messages.some((m) => m.status === "queued");
+        if (!hasQueued) return;
+        // Auto-dispatch next queued chat message
+        api<{ dispatched: boolean; run?: ActiveRun }>(
+          `/api/tasks/${encodeURIComponent(taskId)}/chat/dispatch-next`,
+          { method: "POST" },
+        ).then((dp) => {
+          if (dp.dispatched && dp.run) {
+            updateTaskRunState(taskId, (prev) => ({
+              ...prev,
+              activeRun: dp.run!,
+              runLogs: [],
+              runFinished: false,
+            }));
+            attachRunLogStream(dp.run.id, taskId, repoId);
+            // Single refresh to update dispatched status
+            api<{ messages: ChatMessage[] }>(`/api/tasks/${encodeURIComponent(taskId)}/chat`)
+              .then((p) => setChatMessages(p.messages))
+              .catch(() => {});
+          }
+        }).catch(() => {});
+      })
+      .catch(() => {});
+
     setInfo("Run finished.");
-  }, [runWs.isFinished, runWs.logs, updateTaskRunState, setTasks, setReviewComments, setInfo]);
+  }, [runWs.isFinished, runWs.logs, updateTaskRunState, setTasks, setReviewComments, setChatMessages, attachRunLogStream, setInfo]);
 
   // --- Plan log forwarding ---
   useEffect(() => {

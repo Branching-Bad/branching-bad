@@ -46,7 +46,7 @@ impl Db {
     pub fn get_run_by_id(&self, run_id: &str) -> Result<Option<Run>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, worktree_path, started_at, completed_at, created_at, updated_at FROM runs WHERE id = ?1",
+            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, chat_message_id, worktree_path, started_at, completed_at, created_at, updated_at FROM runs WHERE id = ?1",
             [run_id],
             |row| {
                 Ok(Run {
@@ -60,11 +60,12 @@ impl Db {
                     exit_code: row.get(7)?,
                     agent_session_id: row.get(8)?,
                     review_comment_id: row.get(9)?,
-                    worktree_path: row.get(10)?,
-                    started_at: row.get(11)?,
-                    completed_at: row.get(12)?,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
+                    chat_message_id: row.get(10)?,
+                    worktree_path: row.get(11)?,
+                    started_at: row.get(12)?,
+                    completed_at: row.get(13)?,
+                    created_at: row.get(14)?,
+                    updated_at: row.get(15)?,
                 })
             },
         )
@@ -127,7 +128,7 @@ impl Db {
     pub fn get_latest_run_by_task(&self, task_id: &str) -> Result<Option<Run>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, worktree_path, started_at, completed_at, created_at, updated_at FROM runs WHERE task_id = ?1 ORDER BY created_at DESC LIMIT 1",
+            "SELECT id, task_id, plan_id, status, branch_name, agent_profile_id, pid, exit_code, agent_session_id, review_comment_id, chat_message_id, worktree_path, started_at, completed_at, created_at, updated_at FROM runs WHERE task_id = ?1 ORDER BY created_at DESC LIMIT 1",
             [task_id],
             |row| {
                 Ok(Run {
@@ -141,11 +142,12 @@ impl Db {
                     exit_code: row.get(7)?,
                     agent_session_id: row.get(8)?,
                     review_comment_id: row.get(9)?,
-                    worktree_path: row.get(10)?,
-                    started_at: row.get(11)?,
-                    completed_at: row.get(12)?,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
+                    chat_message_id: row.get(10)?,
+                    worktree_path: row.get(11)?,
+                    started_at: row.get(12)?,
+                    completed_at: row.get(13)?,
+                    created_at: row.get(14)?,
+                    updated_at: row.get(15)?,
                 })
             },
         )
@@ -167,6 +169,15 @@ impl Db {
         conn.execute(
             "UPDATE runs SET worktree_path = ?1, updated_at = ?2 WHERE id = ?3",
             params![worktree_path, now_iso(), run_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_run_chat_message_id(&self, run_id: &str, chat_message_id: &str) -> Result<()> {
+        let conn = self.connect()?;
+        conn.execute(
+            "UPDATE runs SET chat_message_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![chat_message_id, now_iso(), run_id],
         )?;
         Ok(())
     }

@@ -24,6 +24,18 @@ impl Db {
         Ok(running_id.is_some())
     }
 
+    pub fn has_running_run_for_task(&self, task_id: &str) -> Result<bool> {
+        let conn = self.connect()?;
+        let running_id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM runs WHERE task_id = ?1 AND status = 'running' LIMIT 1",
+                [task_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(running_id.is_some())
+    }
+
     pub fn fail_stale_running_runs(&self) -> Result<usize> {
         let conn = self.connect()?;
         let ts = now_iso();

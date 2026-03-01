@@ -21,6 +21,8 @@ pub enum LogMsg {
         exit_code: Option<i32>,
         status: String,
     },
+    UserMessage(String),
+    TurnSeparator,
 }
 
 pub struct MsgStore {
@@ -124,6 +126,8 @@ fn msg_byte_size(msg: &LogMsg) -> usize {
             output_preview,
         } => tool.len() + output_preview.len(),
         LogMsg::Finished { status, .. } => 16 + status.len(),
+        LogMsg::UserMessage(s) => s.len(),
+        LogMsg::TurnSeparator => 16,
     }
 }
 
@@ -142,5 +146,7 @@ fn log_msg_to_json(msg: LogMsg) -> String {
         LogMsg::Finished { exit_code, status } => {
             json!({ "type": "finished", "data": json!({ "exitCode": exit_code, "status": status }).to_string() }).to_string()
         }
+        LogMsg::UserMessage(text) => json!({ "type": "user_message", "data": text }).to_string(),
+        LogMsg::TurnSeparator => json!({ "type": "turn_separator", "data": "" }).to_string(),
     }
 }

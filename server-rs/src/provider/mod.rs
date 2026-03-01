@@ -1,6 +1,7 @@
 pub mod cloudwatch;
 pub mod jira;
 pub mod postgres;
+pub mod routes;
 pub mod sentry;
 
 pub fn register_all(registry: &mut ProviderRegistry) {
@@ -79,7 +80,14 @@ pub trait Provider: Send + Sync {
     /// List resources (boards, projects) for binding to repos
     async fn list_resources(&self, config: &Value) -> Result<Vec<ProviderResource>>;
 
-    /// Sync items from provider. Called by background worker.
+    /// Whether this provider supports automatic background sync.
+    /// Providers that make expensive external connections (e.g. database diagnostics)
+    /// should return false and only sync on manual trigger.
+    fn auto_sync(&self) -> bool {
+        true
+    }
+
+    /// Sync items from provider. Called by background worker or manual trigger.
     /// Returns items that should be upserted.
     async fn sync_items(
         &self,

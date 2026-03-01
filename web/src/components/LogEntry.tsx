@@ -138,6 +138,27 @@ export function LogEntry({ type, data }: { type: string; data: string }) {
     );
   }
 
+  if (type === "user_message") {
+    return (
+      <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 my-2">
+        <svg className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+        </svg>
+        <span className="text-blue-200 text-sm whitespace-pre-wrap">{data}</span>
+      </div>
+    );
+  }
+
+  if (type === "turn_separator") {
+    return (
+      <div className="flex items-center gap-2 my-3">
+        <div className="flex-1 border-t border-zinc-700" />
+        <span className="text-xs text-zinc-500">Follow-up</span>
+        <div className="flex-1 border-t border-zinc-700" />
+      </div>
+    );
+  }
+
   // other
   return <div className="text-gray-500 font-mono">{data}</div>;
 }
