@@ -1,95 +1,82 @@
-# Local Approval-First Coding Agent
+# idIA Manager
 
-Local-first, approval-first coding agent with pluggable provider system. Connects to external services (Jira, Sentry, CloudWatch, PostgreSQL) via a unified provider interface, syncs tasks, generates implementation plans requiring human approval, then launches a git branch and executes.
+Local-first, approval-first coding agent with a pluggable provider system. Connects to external services via a unified provider interface, syncs tasks, generates implementation plans requiring human approval, then launches a git branch and executes.
 
 ## Features
 
-### Core
-- Local repo selection and registration
-- AI agent discovery (Claude Code, Codex, Gemini, OpenCode, Cursor) with per-repo profile selection
-- Plan generation, user approval (approve/reject/revise), run execution on approved plans
-- Git worktree isolation for parallel work
-- SQLite persistence, Rust backend (Axum + rusqlite)
+- **Kanban Board** — Visual task management with drag-and-drop
+- **Plan Generation** — AI-powered implementation plans from task descriptions
+- **Human Approval** — Plans require explicit approval before execution
+- **Code Review** — Inline diff review with comments, merge strategies, push & PR creation
+- **Chat** — Follow-up messages to running agents
+- **Provider System** — Pluggable integrations for external services
+- **Agent Profiles** — Configurable AI agent selection per task, repo, or action
+- **Git Workflow** — Branch creation, worktrees, merge strategies, push, PR via `gh` CLI
 
-### Providers (Pluggable)
-- **Jira** — Board sync, task import, assignee filtering
-- **Sentry** — Error/issue sync, stack trace viewing, task creation
-- **PostgreSQL** — Performance analyzer, slow query detection
-- **CloudWatch Logs** — Log investigation pipeline: AI agent analyzes codebase, generates CW Insights queries, fetches logs, performs root cause analysis
+## Providers
 
-### CloudWatch Log Investigator
-3-stage flow:
-1. **Query Generation** — Agent analyzes the codebase, generates a CloudWatch Insights query, runs it automatically
-2. **Results Review** — Error logs, request traces, and the generated query are shown to the user
-3. **Analysis** — On user approval, the agent analyzes logs and produces root cause + fix suggestions
-
-Additional features: save queries, run saved queries (agent is skipped), create tasks from investigations.
-
-### Settings
-All provider settings pre-fill with current credentials and selected resource (board/project/log group/DB) when opened.
-
-## Setup
-```bash
-# Rust toolchain required (cargo/rustc):
-# https://rustup.rs/
-npm install
-cd web && npm install && cd ..
-```
-
-## Running
-```bash
-npm run dev
-```
-
-- Backend: `http://localhost:4310`
-- Frontend: `http://localhost:5173`
-
-## Build & Typecheck
-```bash
-npm run typecheck
-npm run build
-npm run check:server   # cargo check
-```
+| Provider | Description |
+|----------|-------------|
+| **Jira** | Sync Jira issues as tasks |
+| **Sentry** | Import Sentry issues for investigation |
+| **PostgreSQL** | Query databases, import schema/data |
+| **CloudWatch** | AWS CloudWatch log analysis |
+| **SonarQube** | Local Docker-based code scanning with quality gate/profile management |
 
 ## Architecture
 
-```
-server-rs/           Rust backend (Axum + rusqlite)
-├── src/
-│   ├── main.rs          Route definitions + handlers
-│   ├── provider/        Pluggable provider system
-│   │   ├── jira/        Jira REST API v3
-│   │   ├── sentry/      Sentry REST API
-│   │   ├── postgres/    PostgreSQL performance analyzer
-│   │   └── cloudwatch/  AWS CloudWatch Logs + AI investigator
-│   ├── db/              SQLite modules (repos, tasks, plans, runs, providers, investigations)
-│   ├── planner.rs       Plan generation via AI agent CLI
-│   ├── executor.rs      Git operations, branch/worktree management
-│   └── discovery.rs     AI agent binary discovery
-web/                 React frontend (React 19, Vite 7, Tailwind CSS v4)
-├── src/
-│   ├── App.tsx          Main component
-│   ├── providers/       Frontend provider registry (mirrors backend)
-│   │   ├── jira/
-│   │   ├── sentry/
-│   │   ├── postgres/
-│   │   └── cloudwatch/  Drawer + Investigation modal
-│   └── components/      Shared UI (kanban, settings, icons)
+Monorepo with two main parts:
+
+- **server-rs/** — Rust backend (Axum + rusqlite). Single-binary HTTP server with SQLite persistence.
+- **web/** — React frontend (React 19, Vite 7, Tailwind CSS v4). Two-column layout with kanban board and detail sidebar.
+
+## Prerequisites
+
+- [Rust](https://rustup.rs/) (stable)
+- [Node.js](https://nodejs.org/) (v18+)
+- [Docker](https://www.docker.com/) (optional, for SonarQube local scanning)
+
+## Getting Started
+
+```bash
+# Install dependencies
+npm install
+cd web && npm install && cd ..
+
+# Development (runs backend + frontend concurrently)
+npm run dev
 ```
 
-## Adding a New Provider
+Backend: http://localhost:4310 — Frontend: http://localhost:5173 (proxies `/api` to backend)
 
-### Backend
-1. Create `server-rs/src/provider/<name>/`, implement the `Provider` trait
-2. Add `pub mod <name>;` and register in `register_all()` in `provider/mod.rs`
+## Commands
 
-### Frontend
-1. Create `web/src/providers/<name>/` (DrawerSection + index.ts)
-2. Import and call register in `providers/init.ts`
+```bash
+npm run dev              # Run backend + frontend concurrently
+npm run dev:server       # Rust backend only
+npm run dev:web          # Vite frontend only
+npm run build            # Production build (web + cargo)
+npm run typecheck        # Frontend type checking
+npm run check:server     # cargo check on backend
+```
 
-No changes needed in App.tsx, ExtensionsDrawer.tsx, or ProviderSettingsModal.tsx.
+## Configuration
 
-## Local DB Location
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Backend port | `4310` |
+| `APP_DATA_DIR` | SQLite database directory | OS app data dir |
+
+Database location:
 - macOS: `~/Library/Application Support/jira-approval-local-agent/agent.db`
 - Linux: `~/.local/share/jira-approval-local-agent/agent.db`
-- Windows: `%APPDATA%\\jira-approval-local-agent\\agent.db`
+
+## Task Lifecycle
+
+```
+TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → IN_REVIEW → DONE
+```
+
+## License
+
+MIT
