@@ -25,7 +25,8 @@ export function EditTaskModal({
   const [useWorktree, setUseWorktree] = useState(true);
   const [agentProfileId, setAgentProfileId] = useState("");
 
-  // Populate form when task changes or modal opens
+  // Populate form only when a different task is opened (not on every re-render)
+  const taskId = task?.id;
   useEffect(() => {
     if (!task || !open) return;
     setTitle(task.title);
@@ -36,7 +37,8 @@ export function EditTaskModal({
     setAutoStart(task.auto_start);
     setUseWorktree(task.use_worktree);
     setAgentProfileId(task.agent_profile_id ?? "");
-  }, [task, open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, open]);
 
   if (!open || !task) return null;
 
@@ -48,7 +50,7 @@ export function EditTaskModal({
   return (
     <div className="fixed inset-0 z-[72] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-[520px] rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
+      <div className="relative w-full max-w-[86%] rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
         <div className="flex items-center justify-between border-b border-border-default px-6 py-4">
           <h3 className="text-base font-medium text-text-primary">Edit Task</h3>
           <button onClick={onClose} className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
@@ -58,7 +60,7 @@ export function EditTaskModal({
 
         <form
           onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
-          className="space-y-3 px-6 py-5"
+          className="flex flex-col px-6 py-5 h-[420px]"
         >
           <TaskFormFields
             title={title} setTitle={setTitle}
@@ -72,7 +74,7 @@ export function EditTaskModal({
             agentProfiles={agentProfiles}
             autoFocus
           />
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-3">
             <button type="submit" disabled={busy || !title.trim()} className={btnPrimary}>
               Save
             </button>

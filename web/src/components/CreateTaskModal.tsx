@@ -47,7 +47,7 @@ export function CreateTaskModal({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-[520px] rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
+      <div className="relative w-full max-w-[86%] rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
         <div className="flex items-center justify-between border-b border-border-default px-6 py-4">
           <div>
             <h3 className="text-base font-medium text-text-primary">Create Task</h3>
@@ -60,7 +60,7 @@ export function CreateTaskModal({
 
         <form
           onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }}
-          className="space-y-3 px-6 py-5"
+          className="flex flex-col px-6 py-5 h-[420px]"
         >
           <TaskFormFields
             title={title} setTitle={setTitle}
@@ -74,7 +74,7 @@ export function CreateTaskModal({
             agentProfiles={agentProfiles}
             autoFocus
           />
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-3">
             <button type="submit" disabled={busy || !title.trim()} className={btnPrimary}>
               Create in To Do
             </button>

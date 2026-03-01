@@ -25,88 +25,94 @@ export function TaskFormFields({
   autoFocus?: boolean;
 }) {
   return (
-    <>
-      <input
-        autoFocus={autoFocus}
-        className={inputClass}
-        placeholder="Task title…"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      <textarea
-        className={`${inputClass} min-h-[92px] resize-none`}
-        placeholder="Description (optional)"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-      />
-      <select
-        className={selectClass}
-        value={priority}
-        onChange={(e) => setPriority(e.target.value)}
-      >
-        <option value="">Priority (optional)</option>
-        <option value="Highest">Highest</option>
-        <option value="High">High</option>
-        <option value="Medium">Medium</option>
-        <option value="Low">Low</option>
-        <option value="Lowest">Lowest</option>
-      </select>
+    <div className="flex gap-0 flex-1 min-h-0">
+      {/* Sol sidebar */}
+      <div className="w-[200px] shrink-0 border-r border-border-default pr-4 space-y-3">
+        <div>
+          <label className="text-xs text-text-muted mb-1 block">Priority</label>
+          <select
+            className={selectClass}
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+          >
+            <option value="">(optional)</option>
+            <option value="Highest">Highest</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+            <option value="Lowest">Lowest</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-text-muted mb-1 block">Agent / Model</label>
+          <select
+            className={selectClass}
+            value={agentProfileId}
+            onChange={(e) => setAgentProfileId(e.target.value)}
+          >
+            <option value="">(repo default)</option>
+            {agentProfiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.agent_name} / {p.model}
+              </option>
+            ))}
+          </select>
+        </div>
+        <hr className="border-border-default" />
+        <label className="flex items-center gap-2 text-xs text-text-secondary">
+          <input
+            type="checkbox"
+            checked={requirePlan}
+            onChange={(e) => setRequirePlan(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+          />
+          Require plan
+        </label>
+        <label className="flex items-center gap-2 text-xs text-text-secondary">
+          <input
+            type="checkbox"
+            checked={autoApprovePlan}
+            onChange={(e) => setAutoApprovePlan(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+          />
+          Auto approve
+        </label>
+        <label className="flex items-center gap-2 text-xs text-text-secondary">
+          <input
+            type="checkbox"
+            checked={autoStart}
+            onChange={(e) => setAutoStart(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+          />
+          Autostart
+        </label>
+        <label className="flex items-center gap-2 text-xs text-text-secondary">
+          <input
+            type="checkbox"
+            checked={useWorktree}
+            onChange={(e) => setUseWorktree(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+          />
+          Worktree
+        </label>
+      </div>
 
-      <select
-        className={selectClass}
-        value={agentProfileId}
-        onChange={(e) => setAgentProfileId(e.target.value)}
-      >
-        <option value="">Agent / Model (repo default)</option>
-        {agentProfiles.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.agent_name} / {p.model}
-          </option>
-        ))}
-      </select>
-
-      <label className="flex items-center gap-2 rounded-md border border-border-default bg-surface-200 px-3 py-2 text-xs text-text-secondary">
+      {/* Sag content */}
+      <div className="flex-1 pl-5 flex flex-col gap-3 min-h-0">
         <input
-          type="checkbox"
-          checked={requirePlan}
-          onChange={(e) => setRequirePlan(e.target.checked)}
-          className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+          autoFocus={autoFocus}
+          className={inputClass}
+          placeholder="Task title…"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
         />
-        Require plan approval before execution
-      </label>
-      <label className="flex items-center gap-2 rounded-md border border-border-default bg-surface-200 px-3 py-2 text-xs text-text-secondary">
-        <input
-          type="checkbox"
-          checked={autoApprovePlan}
-          onChange={(e) => setAutoApprovePlan(e.target.checked)}
-          className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+        <textarea
+          className={`${inputClass} flex-1 resize-none min-h-0`}
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
         />
-        Auto Approve Plan
-      </label>
-      <label className="flex items-center gap-2 rounded-md border border-border-default bg-surface-200 px-3 py-2 text-xs text-text-secondary">
-        <input
-          type="checkbox"
-          checked={autoStart}
-          onChange={(e) => setAutoStart(e.target.checked)}
-          className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
-        />
-        {requirePlan
-          ? (autoApprovePlan
-              ? "Autostart (auto approve + run)"
-              : "Autostart (generate plan+tasklist, wait for approval)")
-          : "Autostart (direct run)"}
-      </label>
-      <label className="flex items-center gap-2 rounded-md border border-border-default bg-surface-200 px-3 py-2 text-xs text-text-secondary">
-        <input
-          type="checkbox"
-          checked={useWorktree}
-          onChange={(e) => setUseWorktree(e.target.checked)}
-          className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
-        />
-        {useWorktree
-          ? "Worktree isolation (agent works in separate worktree)"
-          : "Direct mode (agent works on current branch)"}
-      </label>
-    </>
+      </div>
+    </div>
   );
 }
