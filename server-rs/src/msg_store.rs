@@ -1,8 +1,6 @@
 use std::collections::VecDeque;
-use std::convert::Infallible;
 use std::sync::Arc;
 
-use axum::response::sse;
 use futures::stream::{self, StreamExt};
 use serde_json::json;
 use tokio::sync::{broadcast, RwLock};
@@ -87,10 +85,11 @@ impl MsgStore {
         self.session_id.read().await.clone()
     }
 
-    /// Returns an SSE stream: history first, then live messages.
-    pub async fn sse_stream(
+    /// Returns a WebSocket-friendly stream: history first, then live messages.
+    /// Each item is a JSON string ready to send as a WS text message.
+    pub async fn ws_stream(
         self: &Arc<Self>,
-    ) -> impl futures::Stream<Item = Result<sse::Event, Infallible>> {
+    ) -> impl futures::Stream<Item = String> {
         let history = {
             let h = self.history.read().await;
             h.iter().cloned().collect::<Vec<_>>()
@@ -98,11 +97,11 @@ impl MsgStore {
 
         let live_rx = self.tx.subscribe();
 
-        let history_stream = stream::iter(history.into_iter().map(|msg| Ok(log_msg_to_sse(&msg))));
+        let history_stream = stream::iter(history.into_iter().map(log_msg_to_json));
 
         let live_stream = BroadcastStream::new(live_rx).filter_map(|result| async move {
             match result {
-                Ok(msg) => Some(Ok(log_msg_to_sse(&msg))),
+                Ok(msg) => Some(log_msg_to_json(msg)),
                 Err(_) => None,
             }
         });
@@ -128,26 +127,20 @@ fn msg_byte_size(msg: &LogMsg) -> usize {
     }
 }
 
-fn log_msg_to_sse(msg: &LogMsg) -> sse::Event {
-    match msg {
-        LogMsg::Stdout(line) => sse::Event::default().event("stdout").data(line.clone()),
-        LogMsg::Stderr(line) => sse::Event::default().event("stderr").data(line.clone()),
-        LogMsg::Thinking(text) => sse::Event::default().event("thinking").data(text.clone()),
-        LogMsg::AgentText(text) => sse::Event::default().event("agent_text").data(text.clone()),
-        LogMsg::ToolUse {
-            tool,
-            input_preview,
-        } => sse::Event::default()
-            .event("tool_use")
-            .data(json!({ "tool": tool, "input": input_preview }).to_string()),
-        LogMsg::ToolResult {
-            tool,
-            output_preview,
-        } => sse::Event::default()
-            .event("tool_result")
-            .data(json!({ "tool": tool, "output": output_preview }).to_string()),
-        LogMsg::Finished { exit_code, status } => sse::Event::default()
-            .event("finished")
-            .data(json!({ "exitCode": exit_code, "status": status }).to_string()),
+fn log_msg_to_json(msg: LogMsg) -> String {
+    match &msg {
+        LogMsg::Stdout(line) => json!({ "type": "stdout", "data": line }).to_string(),
+        LogMsg::Stderr(line) => json!({ "type": "stderr", "data": line }).to_string(),
+        LogMsg::Thinking(text) => json!({ "type": "thinking", "data": text }).to_string(),
+        LogMsg::AgentText(text) => json!({ "type": "agent_text", "data": text }).to_string(),
+        LogMsg::ToolUse { tool, input_preview } => {
+            json!({ "type": "tool_use", "data": json!({ "tool": tool, "input": input_preview }).to_string() }).to_string()
+        }
+        LogMsg::ToolResult { tool, output_preview } => {
+            json!({ "type": "tool_result", "data": json!({ "tool": tool, "output": output_preview }).to_string() }).to_string()
+        }
+        LogMsg::Finished { exit_code, status } => {
+            json!({ "type": "finished", "data": json!({ "exitCode": exit_code, "status": status }).to_string() }).to_string()
+        }
     }
 }

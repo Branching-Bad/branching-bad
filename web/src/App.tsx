@@ -148,7 +148,6 @@ export default function App() {
   const {
     attachRunLogStream, attachPlanLogStream,
     closeAllRunStreams, closeAllPlanStreams,
-    eventSourcesRef,
   } = useEventStream({
     updateTaskRunState,
     updateTaskPlanState,
@@ -509,8 +508,7 @@ export default function App() {
       updateTaskRunState(selectedTaskId, (prev) => ({
         ...prev, activeRun: prev.activeRun ? { ...prev.activeRun, status: "cancelled" } : prev.activeRun, runFinished: true,
       }));
-      const source = eventSourcesRef.current.get(activeRun.id);
-      if (source) { source.close(); eventSourcesRef.current.delete(activeRun.id); }
+      closeAllRunStreams();
       if (selectedRepoId) {
         const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
         setTasks(t.tasks);

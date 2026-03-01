@@ -8,7 +8,6 @@ mod process_manager;
 mod provider;
 
 use std::{
-    convert::Infallible,
     env,
     fs::{self, File, OpenOptions},
     io::Write,
@@ -22,11 +21,9 @@ use anyhow::Context;
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
     http::StatusCode,
-    response::{
-        IntoResponse, Response,
-        sse::{self, KeepAlive, Sse},
-    },
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use db::Db;
@@ -124,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/plans", get(list_plans))
         .route("/api/plans/jobs/latest", get(get_latest_plan_job_for_task))
         .route("/api/plans/jobs/{job_id}", get(get_plan_job))
-        .route("/api/plans/jobs/{job_id}/logs", get(stream_plan_job_logs))
+        .route("/api/plans/jobs/{job_id}/ws", get(plan_job_ws_handler))
         .route("/api/plans/{plan_id}/action", post(plan_action))
         .route(
             "/api/plans/{plan_id}/manual-revision",
@@ -133,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/runs/start", post(start_run))
         .route("/api/runs/latest", get(get_latest_run_for_task))
         .route("/api/runs/{run_id}", get(get_run))
-        .route("/api/runs/{run_id}/logs", get(stream_run_logs))
+        .route("/api/runs/{run_id}/ws", get(run_ws_handler))
         .route("/api/runs/{run_id}/stop", post(stop_run))
         .route("/api/runs/{run_id}/diff", get(get_run_diff))
         .route("/api/tasks/{task_id}/review", post(submit_review))
@@ -1083,50 +1080,6 @@ async fn get_plan_job(
     Ok(Json(json!({ "job": job })))
 }
 
-async fn stream_plan_job_logs(
-    State(state): State<AppState>,
-    Path(path): Path<PlanJobPath>,
-) -> Result<Response, ApiError> {
-    let job = state
-        .db
-        .get_plan_job_by_id(&path.job_id)
-        .map_err(ApiError::internal)?
-        .ok_or_else(|| ApiError::not_found("Plan job not found."))?;
-
-    if let Some(store) = state.process_manager.get_store(&plan_store_key(&path.job_id)).await {
-        let stream: SseStream = Box::pin(store.sse_stream().await);
-        return Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response());
-    }
-
-    let mut sse_events: Vec<Result<sse::Event, Infallible>> = vec![Ok(
-        sse::Event::default().event("db_event").data(
-            json!({
-                "type": "status",
-                "payload": { "message": format!("Plan job status: {}", job.status) }
-            })
-            .to_string(),
-        ),
-    )];
-
-    if let Some(error) = job.error.as_deref() {
-        sse_events.push(Ok(sse::Event::default().event("stderr").data(error.to_string())));
-    }
-
-    if job.status == "running" || job.status == "pending" {
-        let stream: SseStream = Box::pin(
-            futures::stream::iter(sse_events)
-                .chain(futures::stream::pending::<Result<sse::Event, Infallible>>()),
-        );
-        return Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response());
-    }
-
-    sse_events.push(Ok(sse::Event::default().event("finished").data(
-        json!({ "exitCode": if job.status == "done" { Some(0) } else { None::<i32> }, "status": job.status }).to_string(),
-    )));
-    let stream: SseStream = Box::pin(futures::stream::iter(sse_events));
-    Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response())
-}
-
 async fn list_plans(
     State(state): State<AppState>,
     Query(query): Query<TaskQuery>,
@@ -1801,11 +1754,10 @@ async fn get_latest_run_for_task(
     Ok(Json(json!({ "run": null, "events": [] })))
 }
 
-type SseStream = std::pin::Pin<Box<dyn futures::Stream<Item = Result<sse::Event, Infallible>> + Send>>;
-
-async fn stream_run_logs(
+async fn run_ws_handler(
     State(state): State<AppState>,
     Path(path): Path<RunPath>,
+    ws: WebSocketUpgrade,
 ) -> Result<Response, ApiError> {
     let run = state
         .db
@@ -1815,46 +1767,132 @@ async fn stream_run_logs(
 
     // If run is live, stream from MsgStore
     if let Some(store) = state.process_manager.get_store(&path.run_id).await {
-        let stream: SseStream = Box::pin(store.sse_stream().await);
-        return Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response());
+        return Ok(ws.on_upgrade(move |socket| ws_send_stream(socket, store)));
     }
 
-    // Run is completed — return DB events as one-shot SSE then finished
+    // Run is still starting — poll for store to appear
+    if run.status == "running" {
+        let store_key = path.run_id.clone();
+        let pm = state.process_manager.clone();
+        let db = state.db.clone();
+        return Ok(ws.on_upgrade(move |socket| ws_wait_for_store(socket, pm, db, store_key, false)));
+    }
+
+    // Completed run — replay DB events then close
     let events = state
         .db
         .list_run_events(&path.run_id)
         .map_err(ApiError::internal)?;
 
-    let mut sse_events: Vec<Result<sse::Event, Infallible>> = events
+    let mut messages: Vec<String> = events
         .iter()
         .map(|e| {
-            Ok(sse::Event::default()
-                .event("db_event")
-                .data(json!({ "type": e.r#type, "payload": e.payload }).to_string()))
+            json!({ "type": "db_event", "data": json!({ "type": e.r#type, "payload": e.payload }).to_string() }).to_string()
         })
         .collect();
 
-    if run.status == "running" {
-        sse_events.push(Ok(sse::Event::default().event("db_event").data(
-            json!({
-                "type": "status",
-                "payload": { "message": "Run is starting. Waiting for agent stream..." }
-            })
-            .to_string(),
-        )));
-        let stream: SseStream = Box::pin(
-            futures::stream::iter(sse_events)
-                .chain(futures::stream::pending::<Result<sse::Event, Infallible>>()),
-        );
-        return Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response());
+    messages.push(
+        json!({ "type": "finished", "data": json!({ "exitCode": run.exit_code, "status": run.status }).to_string() }).to_string()
+    );
+
+    Ok(ws.on_upgrade(move |socket| ws_send_batch(socket, messages)))
+}
+
+async fn plan_job_ws_handler(
+    State(state): State<AppState>,
+    Path(path): Path<PlanJobPath>,
+    ws: WebSocketUpgrade,
+) -> Result<Response, ApiError> {
+    let job = state
+        .db
+        .get_plan_job_by_id(&path.job_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Plan job not found."))?;
+
+    if let Some(store) = state.process_manager.get_store(&plan_store_key(&path.job_id)).await {
+        return Ok(ws.on_upgrade(move |socket| ws_send_stream(socket, store)));
     }
 
-    sse_events.push(Ok(sse::Event::default().event("finished").data(
-        json!({ "exitCode": run.exit_code, "status": run.status }).to_string(),
-    )));
+    // Job is still pending/running — poll for store to appear
+    if job.status == "running" || job.status == "pending" {
+        let store_key = plan_store_key(&path.job_id);
+        let pm = state.process_manager.clone();
+        let db = state.db.clone();
+        return Ok(ws.on_upgrade(move |socket| ws_wait_for_store(socket, pm, db, store_key, true)));
+    }
 
-    let stream: SseStream = Box::pin(futures::stream::iter(sse_events));
-    Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response())
+    // Completed/failed — send status + finished
+    let mut messages: Vec<String> = vec![
+        json!({ "type": "db_event", "data": json!({ "type": "status", "payload": { "message": format!("Plan job status: {}", job.status) } }).to_string() }).to_string()
+    ];
+
+    if let Some(error) = job.error.as_deref() {
+        messages.push(json!({ "type": "stderr", "data": error }).to_string());
+    }
+
+    messages.push(
+        json!({ "type": "finished", "data": json!({ "exitCode": if job.status == "done" { Some(0) } else { None::<i32> }, "status": job.status }).to_string() }).to_string()
+    );
+
+    Ok(ws.on_upgrade(move |socket| ws_send_batch(socket, messages)))
+}
+
+async fn ws_send_stream(mut socket: WebSocket, store: Arc<MsgStore>) {
+    let mut stream = std::pin::pin!(store.ws_stream().await);
+    while let Some(json_str) = stream.next().await {
+        let is_finished = json_str.contains("\"type\":\"finished\"");
+        if socket.send(Message::Text(json_str.into())).await.is_err() {
+            break;
+        }
+        if is_finished {
+            break;
+        }
+    }
+    let _ = socket.send(Message::Close(None)).await;
+}
+
+async fn ws_send_batch(mut socket: WebSocket, messages: Vec<String>) {
+    for msg in messages {
+        if socket.send(Message::Text(msg.into())).await.is_err() {
+            break;
+        }
+    }
+    let _ = socket.send(Message::Close(None)).await;
+}
+
+/// Poll for a MsgStore to appear (job/run is starting but store isn't registered yet).
+/// `is_plan` controls the status message text.
+async fn ws_wait_for_store(
+    mut socket: WebSocket,
+    pm: Arc<ProcessManager>,
+    _db: Arc<Db>,
+    store_key: String,
+    is_plan: bool,
+) {
+    let status_msg = if is_plan {
+        "Waiting for plan output..."
+    } else {
+        "Run is starting. Waiting for agent stream..."
+    };
+    let _ = socket
+        .send(Message::Text(
+            json!({ "type": "db_event", "data": json!({ "type": "status", "payload": { "message": status_msg } }).to_string() })
+                .to_string()
+                .into(),
+        ))
+        .await;
+
+    // Poll every 500ms for up to 60 seconds
+    for _ in 0..120 {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        if let Some(store) = pm.get_store(&store_key).await {
+            // Store appeared — stream it
+            ws_send_stream(socket, store).await;
+            return;
+        }
+    }
+    // Timed out — close
+    let _ = socket.send(Message::Close(None)).await;
 }
 
 async fn stop_run(

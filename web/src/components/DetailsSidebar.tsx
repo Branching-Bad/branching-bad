@@ -1,7 +1,6 @@
-import { useRef, useEffect } from "react";
 import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun } from "../types";
 import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown } from "./icons";
-import { LogEntry } from "./LogEntry";
+import { LogViewer } from "./LogViewer";
 import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
 import { DiffReviewPanel } from "./DiffReviewPanel";
 
@@ -79,21 +78,6 @@ export function DetailsSidebar({
   onClearTaskPipeline: () => void;
   onExpandReview?: () => void;
 }) {
-  const logContainerRef = useRef<HTMLDivElement>(null);
-  const planLogContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-    }
-  }, [runLogs]);
-
-  useEffect(() => {
-    if (planLogContainerRef.current) {
-      planLogContainerRef.current.scrollTop = planLogContainerRef.current.scrollHeight;
-    }
-  }, [planLogs]);
-
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? latestPlan;
 
   return (
@@ -367,24 +351,15 @@ export function DetailsSidebar({
                       <span className="text-[11px] text-text-muted">job {activePlanJob.id.slice(0, 8)}</span>
                     )}
                   </div>
-                  <div
-                    ref={planLogContainerRef}
-                    className="max-h-[480px] overflow-y-auto rounded-lg border border-border-strong bg-[#0f0f0f] px-3 py-2 text-[11px] leading-relaxed"
-                  >
-                    {planLogs.length === 0 ? (
-                      <p className="py-6 text-center text-text-muted">
-                        {activePlanJob
-                          ? (planFinished ? "Plan output stream finished." : "Waiting for plan output...")
-                          : "No active plan job."}
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {planLogs.map((entry, index) => (
-                          <LogEntry key={`plan-${index}-${entry.type}`} type={entry.type} data={entry.data} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <LogViewer
+                    logs={planLogs}
+                    className="h-[480px]"
+                    emptyMessage={
+                      activePlanJob
+                        ? (planFinished ? "Plan output stream finished." : "Waiting for plan output...")
+                        : "No active plan job."
+                    }
+                  />
                 </div>
 
                 <div className="rounded-xl border border-border-default bg-surface-200 p-3">
@@ -594,20 +569,10 @@ export function DetailsSidebar({
 
                 <div className="rounded-xl border border-border-default bg-surface-200 p-3">
                   <h4 className="mb-2 text-xs font-medium text-text-secondary">Live Logs</h4>
-                  <div
-                    ref={logContainerRef}
-                    className="max-h-[360px] overflow-y-auto rounded-lg border border-border-strong bg-[#0f0f0f] px-3 py-2 text-[11px] leading-relaxed"
-                  >
-                    {runLogs.length === 0 ? (
-                      <p className="py-8 text-center text-text-muted">No output yet.</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {runLogs.map((entry, index) => (
-                          <LogEntry key={`${index}-${entry.type}`} type={entry.type} data={entry.data} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <LogViewer
+                    logs={runLogs}
+                    className="h-[360px]"
+                  />
                 </div>
 
                 <div className="rounded-xl border border-border-default bg-surface-200 p-3">

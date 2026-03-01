@@ -1,4 +1,13 @@
 import { useState } from "react";
+import { hasAnsi } from "fancy-ansi";
+import { AnsiHtml } from "fancy-ansi/react";
+
+function AnsiText({ text, className }: { text: string; className?: string }) {
+  if (hasAnsi(text)) {
+    return <AnsiHtml text={text} className={className} />;
+  }
+  return <span className={className}>{text}</span>;
+}
 
 export function LogEntry({ type, data }: { type: string; data: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -25,7 +34,9 @@ export function LogEntry({ type, data }: { type: string; data: string }) {
 
   if (type === "agent_text") {
     return (
-      <div className="text-blue-300 font-mono whitespace-pre-wrap">{data}</div>
+      <div className="font-mono whitespace-pre-wrap">
+        <AnsiText text={data} className="text-blue-300" />
+      </div>
     );
   }
 
@@ -56,20 +67,48 @@ export function LogEntry({ type, data }: { type: string; data: string }) {
       tool = parsed.tool || "result";
       output = parsed.output || "";
     } catch { /* raw string */ }
+
+    const lines = output.split("\n");
+    const isLong = lines.length > 3;
+    const previewText = isLong ? lines.slice(0, 3).join("\n") : output;
+
     return (
       <div className="text-emerald-400/70 ml-5">
-        <span className="text-[10px] uppercase tracking-wider text-emerald-500/50">{tool} result</span>
-        {output && <pre className="whitespace-pre-wrap truncate max-h-[80px] overflow-hidden font-mono">{output.slice(0, 300)}</pre>}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-emerald-500/50">{tool} result</span>
+          {isLong && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-[10px] text-emerald-400/50 hover:text-emerald-300 transition"
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          )}
+        </div>
+        {output && (
+          <pre className={`whitespace-pre-wrap font-mono ${expanded ? "max-h-[400px] overflow-y-auto" : ""}`}>
+            {expanded ? output : previewText}
+            {!expanded && isLong ? "\n..." : ""}
+          </pre>
+        )}
       </div>
     );
   }
 
   if (type === "stderr") {
-    return <div className="text-red-400 font-mono whitespace-pre-wrap">{data}</div>;
+    return (
+      <div className="font-mono whitespace-pre-wrap">
+        <AnsiText text={data} className="text-red-400" />
+      </div>
+    );
   }
 
   if (type === "stdout") {
-    return <div className="text-green-400 font-mono whitespace-pre-wrap">{data}</div>;
+    return (
+      <div className="font-mono whitespace-pre-wrap">
+        <AnsiText text={data} className="text-green-400" />
+      </div>
+    );
   }
 
   if (type === "db_event") {

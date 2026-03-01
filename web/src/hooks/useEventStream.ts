@@ -1,5 +1,6 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { api } from "../api";
+import { useWebSocketStream } from "./useWebSocketStream";
 import type { Task, Plan, PlanJob, ActiveRun, RunEvent, TaskRunState, TaskPlanState, ReviewComment, RunResponse } from "../types";
 
 export function useEventStream({
@@ -19,206 +20,213 @@ export function useEventStream({
   setInfo: (msg: string) => void;
   selectedTaskIdRef: React.RefObject<string>;
 }) {
-  const eventSourcesRef = useRef<Map<string, EventSource>>(new Map());
-  const planEventSourcesRef = useRef<Map<string, EventSource>>(new Map());
-  const runTaskIndexRef = useRef<Map<string, string>>(new Map());
-  const planJobTaskIndexRef = useRef<Map<string, string>>(new Map());
+  // --- Run WS ---
+  const [runWsUrl, setRunWsUrl] = useState<string | null>(null);
+  const runMetaRef = useRef<{ runId: string; taskId: string; repoId: string } | null>(null);
+  const runWs = useWebSocketStream(runWsUrl);
+  const prevRunFinishedRef = useRef(false);
 
-  const closeAllRunStreams = useCallback(() => {
-    for (const source of eventSourcesRef.current.values()) {
-      source.close();
-    }
-    eventSourcesRef.current.clear();
-    runTaskIndexRef.current.clear();
-  }, []);
+  // --- Plan WS ---
+  const [planWsUrl, setPlanWsUrl] = useState<string | null>(null);
+  const planMetaRef = useRef<{ jobId: string; taskId: string; repoId: string } | null>(null);
+  const planWs = useWebSocketStream(planWsUrl);
+  const prevPlanFinishedRef = useRef(false);
 
-  const closeAllPlanStreams = useCallback(() => {
-    for (const source of planEventSourcesRef.current.values()) {
-      source.close();
-    }
-    planEventSourcesRef.current.clear();
-    planJobTaskIndexRef.current.clear();
-  }, []);
-
+  // --- Callbacks (declared before effects that use them) ---
   const attachRunLogStream = useCallback(
     (runId: string, taskId: string, repoIdForRefresh: string) => {
-      if (eventSourcesRef.current.has(runId)) return;
-
-      const es = new EventSource(`/api/runs/${runId}/logs`);
-      eventSourcesRef.current.set(runId, es);
-      runTaskIndexRef.current.set(runId, taskId);
-
-      for (const evtType of ["stdout", "stderr", "thinking", "agent_text", "tool_use", "tool_result", "db_event"] as const) {
-        es.addEventListener(evtType, (event) => {
-          const data = (event as MessageEvent).data;
-          updateTaskRunState(taskId, (prev) => ({
-            ...prev,
-            runLogs: [...prev.runLogs, { type: evtType, data }],
-          }));
-        });
-      }
-
-      es.addEventListener("finished", (event) => {
-        let finishedStatus = "done";
-        try {
-          const data = JSON.parse((event as MessageEvent).data) as { status?: string };
-          if (data.status) finishedStatus = data.status;
-        } catch { /* ignore */ }
-
-        updateTaskRunState(taskId, (prev) => ({
-          ...prev,
-          runFinished: true,
-          activeRun: prev.activeRun ? { ...prev.activeRun, status: finishedStatus } : prev.activeRun,
-        }));
-
-        es.close();
-        eventSourcesRef.current.delete(runId);
-        runTaskIndexRef.current.delete(runId);
-
-        if (repoIdForRefresh) {
-          api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoIdForRefresh)}`)
-            .then((tasksPayload) => setTasks(tasksPayload.tasks))
-            .catch(() => {});
-        }
-
-        api<{ run: RunResponse["run"]; events: RunEvent[] }>(`/api/runs/${runId}`)
-          .then((runPayload) => {
-            updateTaskRunState(taskId, (prev) => ({
-              ...prev,
-              activeRun: runPayload.run,
-              runResult: { run: runPayload.run, events: runPayload.events, artifactPath: "" },
-              runFinished: runPayload.run.status !== "running",
-            }));
-          })
-          .catch(() => {});
-
-        api<{ reviewComments: ReviewComment[] }>(`/api/tasks/${encodeURIComponent(taskId)}/reviews`)
-          .then((payload) => setReviewComments(payload.reviewComments))
-          .catch(() => {});
-
-        setInfo("Run finished.");
-      });
-
-      es.onerror = () => {
-        updateTaskRunState(taskId, (prev) => ({ ...prev, runFinished: true }));
-        es.close();
-        eventSourcesRef.current.delete(runId);
-        runTaskIndexRef.current.delete(runId);
-      };
+      runMetaRef.current = { runId, taskId, repoId: repoIdForRefresh };
+      prevRunFinishedRef.current = false;
+      setRunWsUrl(`/api/runs/${runId}/ws`);
     },
-    [updateTaskRunState, setTasks, setReviewComments, setInfo],
+    [],
   );
 
   const attachPlanLogStream = useCallback(
     (jobId: string, taskId: string, repoIdForRefresh: string) => {
-      if (planEventSourcesRef.current.has(jobId)) return;
+      planMetaRef.current = { jobId, taskId, repoId: repoIdForRefresh };
+      prevPlanFinishedRef.current = false;
+      setPlanWsUrl(`/api/plans/jobs/${jobId}/ws`);
+    },
+    [],
+  );
 
-      const es = new EventSource(`/api/plans/jobs/${jobId}/logs`);
-      planEventSourcesRef.current.set(jobId, es);
-      planJobTaskIndexRef.current.set(jobId, taskId);
+  const closeAllRunStreams = useCallback(() => {
+    setRunWsUrl(null);
+    runMetaRef.current = null;
+  }, []);
 
-      for (const evtType of ["stdout", "stderr", "thinking", "agent_text", "tool_use", "tool_result", "db_event"] as const) {
-        es.addEventListener(evtType, (event) => {
-          const data = (event as MessageEvent).data;
-          updateTaskPlanState(taskId, (prev) => ({
-            ...prev,
-            planLogs: [...prev.planLogs, { type: evtType, data }],
-          }));
-        });
-      }
+  const closeAllPlanStreams = useCallback(() => {
+    setPlanWsUrl(null);
+    planMetaRef.current = null;
+  }, []);
 
-      es.addEventListener("finished", (event) => {
-        let finishedStatus = "done";
-        try {
-          const data = JSON.parse((event as MessageEvent).data) as { status?: string };
-          if (data.status) finishedStatus = data.status;
-        } catch {
-          // ignore parse errors
-        }
+  // --- Run log forwarding ---
+  useEffect(() => {
+    const meta = runMetaRef.current;
+    if (!meta) return;
+    const { taskId } = meta;
 
+    updateTaskRunState(taskId, (prev) => ({
+      ...prev,
+      runLogs: runWs.logs,
+    }));
+  }, [runWs.logs, updateTaskRunState]);
+
+  // --- Run finished handling ---
+  useEffect(() => {
+    const meta = runMetaRef.current;
+    if (!meta) return;
+    if (!runWs.isFinished) {
+      prevRunFinishedRef.current = false;
+      return;
+    }
+    if (prevRunFinishedRef.current) return;
+    prevRunFinishedRef.current = true;
+
+    const { runId, taskId, repoId } = meta;
+
+    let finishedStatus = "done";
+    const finishedEntry = runWs.logs.find((e) => e.type === "finished");
+    if (finishedEntry) {
+      try {
+        const data = JSON.parse(finishedEntry.data) as { status?: string };
+        if (data.status) finishedStatus = data.status;
+      } catch { /* ignore */ }
+    }
+
+    updateTaskRunState(taskId, (prev) => ({
+      ...prev,
+      runFinished: true,
+      activeRun: prev.activeRun ? { ...prev.activeRun, status: finishedStatus } : prev.activeRun,
+    }));
+
+    if (repoId) {
+      api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoId)}`)
+        .then((payload) => setTasks(payload.tasks))
+        .catch(() => {});
+    }
+
+    api<{ run: RunResponse["run"]; events: RunEvent[] }>(`/api/runs/${runId}`)
+      .then((payload) => {
+        updateTaskRunState(taskId, (prev) => ({
+          ...prev,
+          activeRun: payload.run,
+          runResult: { run: payload.run, events: payload.events, artifactPath: "" },
+          runFinished: payload.run.status !== "running",
+        }));
+      })
+      .catch(() => {});
+
+    api<{ reviewComments: ReviewComment[] }>(`/api/tasks/${encodeURIComponent(taskId)}/reviews`)
+      .then((payload) => setReviewComments(payload.reviewComments))
+      .catch(() => {});
+
+    setInfo("Run finished.");
+  }, [runWs.isFinished, runWs.logs, updateTaskRunState, setTasks, setReviewComments, setInfo]);
+
+  // --- Plan log forwarding ---
+  useEffect(() => {
+    const meta = planMetaRef.current;
+    if (!meta) return;
+    const { taskId } = meta;
+
+    updateTaskPlanState(taskId, (prev) => ({
+      ...prev,
+      planLogs: planWs.logs,
+    }));
+  }, [planWs.logs, updateTaskPlanState]);
+
+  // --- Plan finished handling ---
+  useEffect(() => {
+    const meta = planMetaRef.current;
+    if (!meta) return;
+    if (!planWs.isFinished) {
+      prevPlanFinishedRef.current = false;
+      return;
+    }
+    if (prevPlanFinishedRef.current) return;
+    prevPlanFinishedRef.current = true;
+
+    const { jobId, taskId, repoId } = meta;
+
+    let finishedStatus = "done";
+    const finishedEntry = planWs.logs.find((e) => e.type === "finished");
+    if (finishedEntry) {
+      try {
+        const data = JSON.parse(finishedEntry.data) as { status?: string };
+        if (data.status) finishedStatus = data.status;
+      } catch { /* ignore */ }
+    }
+
+    updateTaskPlanState(taskId, (prev) => ({
+      ...prev,
+      planFinished: true,
+      activeJob: prev.activeJob ? { ...prev.activeJob, status: finishedStatus } : prev.activeJob,
+    }));
+
+    api<{ job: PlanJob }>(`/api/plans/jobs/${jobId}`)
+      .then((payload) => {
         updateTaskPlanState(taskId, (prev) => ({
           ...prev,
-          planFinished: true,
-          activeJob: prev.activeJob ? { ...prev.activeJob, status: finishedStatus } : prev.activeJob,
+          activeJob: payload.job,
+          planFinished: payload.job.status !== "running" && payload.job.status !== "pending",
         }));
+      })
+      .catch(() => {});
 
-        es.close();
-        planEventSourcesRef.current.delete(jobId);
-        planJobTaskIndexRef.current.delete(jobId);
+    if (taskId === selectedTaskIdRef.current) {
+      api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(taskId)}`)
+        .then((payload) => setPlans(payload.plans))
+        .catch(() => {});
+    }
 
-        api<{ job: PlanJob }>(`/api/plans/jobs/${jobId}`)
-          .then((payload) => {
-            updateTaskPlanState(taskId, (prev) => ({
-              ...prev,
-              activeJob: payload.job,
-              planFinished: payload.job.status !== "running" && payload.job.status !== "pending",
-            }));
-          })
-          .catch(() => {});
+    if (repoId) {
+      api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoId)}`)
+        .then((payload) => setTasks(payload.tasks))
+        .catch(() => {});
+    }
 
-        if (taskId === selectedTaskIdRef.current) {
-          api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(taskId)}`)
-            .then((payload) => setPlans(payload.plans))
-            .catch(() => {});
-        }
-
-        if (repoIdForRefresh) {
-          api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoIdForRefresh)}`)
-            .then((payload) => setTasks(payload.tasks))
-            .catch(() => {});
-        }
-
-        // After plan finishes, check if an auto-started run exists and attach its log stream
-        if (finishedStatus === "done") {
-          const pollForRun = (attempt: number) => {
-            if (attempt > 5) return;
-            setTimeout(() => {
-              api<{ run: ActiveRun | null; events: RunEvent[] }>(
-                `/api/runs/latest?taskId=${encodeURIComponent(taskId)}`,
-              )
-                .then((payload) => {
-                  const run = payload.run;
-                  if (!run) {
-                    pollForRun(attempt + 1);
-                    return;
-                  }
-                  updateTaskRunState(taskId, (prev) => ({
-                    ...prev,
-                    activeRun: run,
-                    runLogs: [],
-                    runResult: {
-                      run,
-                      events: payload.events,
-                      artifactPath: "",
-                    },
-                    runFinished: run.status !== "running",
-                  }));
-                  if (run.status === "running") {
-                    attachRunLogStream(run.id, taskId, repoIdForRefresh);
-                  }
-                })
-                .catch(() => pollForRun(attempt + 1));
-            }, attempt === 0 ? 500 : 2000);
-          };
-          pollForRun(0);
-        }
-      });
-
-      es.onerror = () => {
-        updateTaskPlanState(taskId, (prev) => ({ ...prev, planFinished: true }));
-        es.close();
-        planEventSourcesRef.current.delete(jobId);
-        planJobTaskIndexRef.current.delete(jobId);
+    // After plan finishes, check if an auto-started run exists and attach its log stream
+    if (finishedStatus === "done") {
+      const pollForRun = (attempt: number) => {
+        if (attempt > 5) return;
+        setTimeout(() => {
+          api<{ run: ActiveRun | null; events: RunEvent[] }>(
+            `/api/runs/latest?taskId=${encodeURIComponent(taskId)}`,
+          )
+            .then((payload) => {
+              const run = payload.run;
+              if (!run) {
+                pollForRun(attempt + 1);
+                return;
+              }
+              updateTaskRunState(taskId, (prev) => ({
+                ...prev,
+                activeRun: run,
+                runLogs: [],
+                runResult: {
+                  run,
+                  events: payload.events,
+                  artifactPath: "",
+                },
+                runFinished: run.status !== "running",
+              }));
+              if (run.status === "running") {
+                attachRunLogStream(run.id, taskId, repoId);
+              }
+            })
+            .catch(() => pollForRun(attempt + 1));
+        }, attempt === 0 ? 500 : 2000);
       };
-    },
-    [selectedTaskIdRef, updateTaskPlanState, updateTaskRunState, attachRunLogStream, setPlans, setTasks],
-  );
+      pollForRun(0);
+    }
+  }, [planWs.isFinished, planWs.logs, selectedTaskIdRef, updateTaskPlanState, updateTaskRunState, attachRunLogStream, setPlans, setTasks]);
 
   return {
     attachRunLogStream,
     attachPlanLogStream,
     closeAllRunStreams,
     closeAllPlanStreams,
-    eventSourcesRef,
   };
 }
