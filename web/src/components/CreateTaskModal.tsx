@@ -1,31 +1,48 @@
+import { useState } from "react";
 import type { AgentProfile } from "../types";
 import { IconX } from "./icons";
 import { btnPrimary, btnSecondary } from "./shared";
 import { TaskFormFields } from "./TaskFormFields";
 
+export type TaskFormValues = {
+  title: string;
+  description: string;
+  priority: string;
+  requirePlan: boolean;
+  autoApprovePlan: boolean;
+  autoStart: boolean;
+  useWorktree: boolean;
+  agentProfileId: string;
+};
+
 export function CreateTaskModal({
   open, onClose, busy,
-  title, setTitle, description, setDescription,
-  priority, setPriority, requirePlan, setRequirePlan,
-  autoApprovePlan, setAutoApprovePlan, autoStart, setAutoStart,
-  useWorktree, setUseWorktree,
-  agentProfileId, setAgentProfileId, agentProfiles,
-  onCreate, repoName,
+  agentProfiles,
+  onSubmit, repoName,
 }: {
   open: boolean; onClose: () => void; busy: boolean;
-  title: string; setTitle: (v: string) => void;
-  description: string; setDescription: (v: string) => void;
-  priority: string; setPriority: (v: string) => void;
-  requirePlan: boolean; setRequirePlan: (v: boolean) => void;
-  autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
-  autoStart: boolean; setAutoStart: (v: boolean) => void;
-  useWorktree: boolean; setUseWorktree: (v: boolean) => void;
-  agentProfileId: string; setAgentProfileId: (v: string) => void;
   agentProfiles: AgentProfile[];
-  onCreate: () => void;
+  onSubmit: (fields: TaskFormValues) => Promise<void>;
   repoName: string;
 }) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("");
+  const [requirePlan, setRequirePlan] = useState(true);
+  const [autoApprovePlan, setAutoApprovePlan] = useState(false);
+  const [autoStart, setAutoStart] = useState(false);
+  const [useWorktree, setUseWorktree] = useState(true);
+  const [agentProfileId, setAgentProfileId] = useState("");
+
   if (!open) return null;
+
+  const handleSubmit = async () => {
+    await onSubmit({ title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, agentProfileId });
+    setTitle(""); setDescription(""); setPriority("");
+    setRequirePlan(true); setAutoApprovePlan(false); setAutoStart(false); setUseWorktree(true);
+    setAgentProfileId("");
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
@@ -42,7 +59,7 @@ export function CreateTaskModal({
         </div>
 
         <form
-          onSubmit={(e) => { e.preventDefault(); void onCreate(); }}
+          onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }}
           className="space-y-3 px-6 py-5"
         >
           <TaskFormFields

@@ -1,30 +1,49 @@
-import type { AgentProfile } from "../types";
+import { useState, useEffect } from "react";
+import type { AgentProfile, Task } from "../types";
 import { IconX } from "./icons";
 import { btnPrimary, btnSecondary } from "./shared";
 import { TaskFormFields } from "./TaskFormFields";
+import type { TaskFormValues } from "./CreateTaskModal";
 
 export function EditTaskModal({
   open, onClose, busy,
-  title, setTitle, description, setDescription,
-  priority, setPriority, requirePlan, setRequirePlan,
-  autoApprovePlan, setAutoApprovePlan, autoStart, setAutoStart,
-  useWorktree, setUseWorktree,
-  agentProfileId, setAgentProfileId, agentProfiles,
+  task,
+  agentProfiles,
   onSave,
 }: {
   open: boolean; onClose: () => void; busy: boolean;
-  title: string; setTitle: (v: string) => void;
-  description: string; setDescription: (v: string) => void;
-  priority: string; setPriority: (v: string) => void;
-  requirePlan: boolean; setRequirePlan: (v: boolean) => void;
-  autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
-  autoStart: boolean; setAutoStart: (v: boolean) => void;
-  useWorktree: boolean; setUseWorktree: (v: boolean) => void;
-  agentProfileId: string; setAgentProfileId: (v: string) => void;
+  task: Task | null;
   agentProfiles: AgentProfile[];
-  onSave: () => void;
+  onSave: (taskId: string, fields: TaskFormValues) => Promise<void>;
 }) {
-  if (!open) return null;
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("");
+  const [requirePlan, setRequirePlan] = useState(true);
+  const [autoApprovePlan, setAutoApprovePlan] = useState(false);
+  const [autoStart, setAutoStart] = useState(false);
+  const [useWorktree, setUseWorktree] = useState(true);
+  const [agentProfileId, setAgentProfileId] = useState("");
+
+  // Populate form when task changes or modal opens
+  useEffect(() => {
+    if (!task || !open) return;
+    setTitle(task.title);
+    setDescription(task.description ?? "");
+    setPriority(task.priority ?? "");
+    setRequirePlan(task.require_plan);
+    setAutoApprovePlan(task.auto_approve_plan);
+    setAutoStart(task.auto_start);
+    setUseWorktree(task.use_worktree);
+    setAgentProfileId(task.agent_profile_id ?? "");
+  }, [task, open]);
+
+  if (!open || !task) return null;
+
+  const handleSave = async () => {
+    await onSave(task.id, { title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, agentProfileId });
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-[72] flex items-center justify-center">
@@ -38,7 +57,7 @@ export function EditTaskModal({
         </div>
 
         <form
-          onSubmit={(e) => { e.preventDefault(); void onSave(); }}
+          onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
           className="space-y-3 px-6 py-5"
         >
           <TaskFormFields
