@@ -83,19 +83,37 @@ Port `4310` (override with `PORT` env var). DB path via `directories` crate (ove
 
 ### web/ — React Frontend (React 19, Vite 7, Tailwind CSS v4)
 
-- `App.tsx` — Main component with all UI state and logic
+- `App.tsx` — Thin shell (~295 lines): UI state, hook wiring, JSX layout. All domain logic lives in custom hooks.
 - `api.ts` — Typed `api<T>()` fetch helper for all backend calls
 - Two-column layout: left sidebar (repo/extensions/agent config), main area (kanban board + plan approval + run output)
 - Vite proxies `/api/*` to the backend in dev mode
 - Some UI strings are in Turkish
 
+#### hooks/ — Domain-specific custom hooks (extracted from App.tsx)
+- `useBootstrap.ts` — Repos, agent profiles, provider metas, bootstrap fetch
+- `useRepoSelection.ts` — Repo/agent selection, repo submit, agent discovery
+- `useTaskState.ts` — Tasks CRUD, grouping, polling, pipeline management
+- `usePlanState.ts` — Plans lifecycle, plan jobs, validation, manual revision
+- `useRunState.ts` — Run start/stop, run state tracking
+- `useReviewState.ts` — Review comments, diff fetching, line comments, apply-to-main
+- `useChatState.ts` — Chat messages, send/cancel
+- `useEventStream.ts` — WebSocket bridge: forwards run/plan WS events to domain hook state
+- `useWebSocketStream.ts` — Low-level WebSocket connection with reconnect logic
+- `usePolling.ts` — Generic polling interval hook
+- `streamTypes.ts` — `StreamFunctions` type shared across hooks (ref pattern breaks circular dep between domain hooks and useEventStream)
+
 #### components/
 - `ExtensionsDrawer.tsx` — Drawer that dynamically renders provider sections from registry
 - `ProviderSettingsModal.tsx` — Modal for provider connection/config, renders connect forms from backend metadata
 - `SettingsModal.tsx` — General settings modal
-- `KanbanBoard.tsx`, `DetailsSidebar.tsx`, `CreateTaskModal.tsx`, `EditTaskModal.tsx` — Task management UI
+- `KanbanBoard.tsx`, `DetailsSidebar.tsx` — Task management UI
+- `CreateTaskModal.tsx`, `EditTaskModal.tsx` — Task modals with internal form state, accept `onSubmit(fields)` / `onSave(taskId, fields)` callbacks. Export `TaskFormValues` type.
+- `TaskFormFields.tsx` — Shared form fields component used by both task modals
 - `ChatPanel.tsx` — Chat/follow-up message panel for active runs
-- `LogEntry.tsx` — Log entry rendering with WebSocket streaming
+- `DiffReviewModal.tsx`, `DiffReviewPanel.tsx`, `DiffViewer.tsx` — Diff review UI with inline commenting
+- `LogEntry.tsx`, `LogViewer.tsx` — Log entry rendering with WebSocket streaming
+- `FolderPicker.tsx` — Filesystem folder picker for repo path selection
+- `InlineCommentEditor.tsx` — Inline comment editor for diff review
 - `icons.tsx` — SVG icon components
 - `shared.ts` — Shared UI utilities
 
