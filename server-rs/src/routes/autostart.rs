@@ -81,6 +81,7 @@ async fn process_autostart_job(
                 plan_id: None,
                 task_id: Some(task.id.clone()),
                 profile_id: None,
+                branch_name: None,
             }),
         )
         .await
@@ -125,6 +126,7 @@ async fn process_autostart_job(
                     plan_id: Some(plan.id.clone()),
                     task_id: None,
                     profile_id: None,
+                    branch_name: None,
                 }),
             )
             .await

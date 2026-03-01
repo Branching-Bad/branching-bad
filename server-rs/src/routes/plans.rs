@@ -746,6 +746,7 @@ pub(crate) fn spawn_plan_generation_job(
                             plan_id: Some(plan.id.clone()),
                             task_id: None,
                             profile_id: None,
+                            branch_name: None,
                         }),
                     )
                     .await

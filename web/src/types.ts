@@ -1,5 +1,5 @@
 /* ─── Types ─── */
-export type Repo = { id: string; name: string; path: string };
+export type Repo = { id: string; name: string; path: string; default_branch: string };
 export type AgentProfile = {
   id: string; provider: string; agent_name: string;
   model: string; command: string; source: string; discovery_kind: string;
@@ -14,6 +14,8 @@ export type Task = {
   last_pipeline_error?: string | null;
   last_pipeline_at?: string | null;
   agent_profile_id?: string | null;
+  pr_url?: string | null;
+  pr_number?: number | null;
   source?: string; updated_at: string;
 };
 export type Plan = {
@@ -112,6 +114,18 @@ export type ChatMessage = {
   created_at: string;
 };
 export type LaneKey = "todo" | "inprogress" | "inreview" | "done" | "archived";
+export type MergeStrategy = "squash" | "merge" | "rebase";
+export type ApplyToMainOptions = {
+  autoCommit?: boolean;
+  commitMessage?: string;
+  strategy?: MergeStrategy;
+};
+export type GitStatusInfo = {
+  commits: string[];
+  diffStat: string;
+  ahead: number;
+  behind: number;
+};
 
 /* ─── Provider Types ─── */
 export type ConnectField = {

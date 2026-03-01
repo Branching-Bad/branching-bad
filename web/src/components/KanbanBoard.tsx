@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { Task, LaneKey, AgentProfile } from "../types";
+import type { Task, LaneKey, AgentProfile, TaskRunState } from "../types";
 import { api } from "../api";
-import { IconPlus } from "./icons";
+import { IconPlus, IconGitBranch } from "./icons";
 import { formatDate, laneMeta, laneFromStatus } from "./shared";
 
 export function KanbanBoard({
@@ -14,6 +14,7 @@ export function KanbanBoard({
   setTasks,
   onError,
   agentProfiles,
+  taskRunStates,
 }: {
   groupedTasks: Record<LaneKey, Task[]>;
   selectedTaskId: string;
@@ -24,6 +25,7 @@ export function KanbanBoard({
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   onError: (msg: string) => void;
   agentProfiles: AgentProfile[];
+  taskRunStates?: Record<string, TaskRunState>;
 }) {
   const [dragOverLane, setDragOverLane] = useState<LaneKey | null>(null);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
@@ -153,7 +155,31 @@ export function KanbanBoard({
                     </div>
                   </div>
                   <p className="mt-1.5 text-sm leading-snug text-text-primary">{task.title}</p>
-                  <p className="mt-2 text-[11px] text-text-muted">{formatDate(task.updated_at)}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    {task.pr_url && (
+                      <a
+                        href={task.pr_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-0.5 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-400 hover:underline"
+                        title={`PR #${task.pr_number}`}
+                      >
+                        PR #{task.pr_number}
+                      </a>
+                    )}
+                    {(() => {
+                      const trs = taskRunStates?.[task.id];
+                      const branch = trs?.activeRun?.branch_name;
+                      return branch ? (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-surface-300 px-1.5 py-0.5 text-[10px] text-text-muted" title={branch}>
+                          <IconGitBranch className="h-2.5 w-2.5" />
+                          <span className="max-w-[80px] truncate">{branch}</span>
+                        </span>
+                      ) : null;
+                    })()}
+                    <span className="text-[11px] text-text-muted">{formatDate(task.updated_at)}</span>
+                  </div>
                 </button>
               ))}
               {groupedTasks[lane.key].length === 0 && (

@@ -573,9 +573,19 @@ fn is_structured_cli_event(line: &str) -> bool {
         .is_some()
 }
 
-/// Detect the base branch of a repo (main or master).
-pub fn detect_base_branch(repo_path: &str) -> Result<String> {
-    for candidate in &["main", "master"] {
+/// Detect the base branch, preferring a configured default if provided.
+pub fn detect_base_branch_with_default(repo_path: &str, configured: Option<&str>) -> Result<String> {
+    let mut candidates: Vec<&str> = Vec::new();
+    if let Some(branch) = configured.filter(|b| !b.is_empty()) {
+        candidates.push(branch);
+    }
+    for fallback in &["main", "master"] {
+        if !candidates.contains(fallback) {
+            candidates.push(fallback);
+        }
+    }
+
+    for candidate in &candidates {
         let output = Command::new("git")
             .args(["-C", repo_path, "rev-parse", "--verify", candidate])
             .output()
@@ -584,7 +594,28 @@ pub fn detect_base_branch(repo_path: &str) -> Result<String> {
             return Ok(candidate.to_string());
         }
     }
-    Err(anyhow!("could not detect base branch (tried main, master)"))
+    Err(anyhow!(
+        "could not detect base branch (tried {})",
+        candidates.join(", ")
+    ))
+}
+
+/// List remote branches for a repo.
+pub fn list_branches(repo_path: &str) -> Result<Vec<String>> {
+    assert_git_repo(repo_path)?;
+    // List local branches
+    let output = Command::new("git")
+        .args(["-C", repo_path, "branch", "--format=%(refname:short)"])
+        .output()
+        .context("failed to list branches")?;
+    let mut branches: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.to_string())
+        .collect();
+    branches.sort();
+    branches.dedup();
+    Ok(branches)
 }
 
 pub struct ApplyResult {
@@ -644,20 +675,7 @@ pub fn apply_branch_to_base_unstaged(
         .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
 
     if !merge.status.success() {
-        // Conflict — collect conflicted files
-        let diff = Command::new("git")
-            .args(["-C", repo_path, "diff", "--name-only", "--diff-filter=U"])
-            .output()
-            .ok();
-        let conflicted_files: Vec<String> = diff
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .lines()
-                    .filter(|l| !l.is_empty())
-                    .map(|l| l.to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+        let conflicted_files = collect_conflict_files(repo_path);
 
         // Abort merge
         let _ = Command::new("git")
@@ -701,6 +719,270 @@ pub enum ApplyError {
     Conflict(MergeConflictError),
 }
 
+/// Commit all changes in the working directory.
+pub fn git_commit_all(repo_path: &str, message: &str) -> Result<String> {
+    let add = Command::new("git")
+        .args(["-C", repo_path, "add", "-A"])
+        .output()
+        .context("failed to run git add")?;
+    if !add.status.success() {
+        return Err(anyhow!(
+            "git add failed: {}",
+            String::from_utf8_lossy(&add.stderr).trim()
+        ));
+    }
+
+    let commit = Command::new("git")
+        .args(["-C", repo_path, "commit", "-m", message])
+        .output()
+        .context("failed to run git commit")?;
+    if !commit.status.success() {
+        let stderr = String::from_utf8_lossy(&commit.stderr).trim().to_string();
+        if stderr.contains("nothing to commit") {
+            return Ok("nothing to commit".to_string());
+        }
+        return Err(anyhow!("git commit failed: {}", stderr));
+    }
+    Ok(String::from_utf8_lossy(&commit.stdout).trim().to_string())
+}
+
+/// Push a branch to origin.
+pub fn git_push(repo_path: &str, branch: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["-C", repo_path, "push", "origin", branch])
+        .output()
+        .context("failed to run git push")?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "git push failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
+}
+
+/// Create a PR using the `gh` CLI.
+pub fn gh_create_pr(
+    repo_path: &str,
+    title: &str,
+    body: &str,
+    base_branch: &str,
+) -> Result<String> {
+    let output = Command::new("gh")
+        .args([
+            "pr", "create",
+            "--title", title,
+            "--body", body,
+            "--base", base_branch,
+        ])
+        .current_dir(repo_path)
+        .output()
+        .context("failed to run gh pr create")?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "gh pr create failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Check if `gh` CLI is available.
+pub fn has_gh_cli() -> bool {
+    which::which("gh").is_ok()
+}
+
+/// Get git status for a run's branch.
+pub fn git_status_info(
+    repo_path: &str,
+    base_branch: &str,
+    task_branch: &str,
+) -> Result<GitStatusInfo> {
+    // Commit list
+    let log_output = Command::new("git")
+        .args([
+            "-C", repo_path,
+            "log", "--oneline",
+            &format!("{base_branch}..{task_branch}"),
+        ])
+        .output()
+        .context("failed to run git log")?;
+    let commits: Vec<String> = String::from_utf8_lossy(&log_output.stdout)
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.to_string())
+        .collect();
+
+    // Diff stat
+    let diff_output = Command::new("git")
+        .args([
+            "-C", repo_path,
+            "diff", "--stat",
+            &format!("{base_branch}..{task_branch}"),
+        ])
+        .output()
+        .context("failed to run git diff --stat")?;
+    let diff_stat = String::from_utf8_lossy(&diff_output.stdout).trim().to_string();
+
+    // Behind count (ahead is derived from commits.len())
+    let rev_list = Command::new("git")
+        .args([
+            "-C", repo_path,
+            "rev-list", "--count",
+            &format!("{task_branch}..{base_branch}"),
+        ])
+        .output()
+        .context("failed to run git rev-list")?;
+    let behind = String::from_utf8_lossy(&rev_list.stdout)
+        .trim()
+        .parse::<usize>()
+        .unwrap_or(0);
+
+    Ok(GitStatusInfo {
+        ahead: commits.len(),
+        commits,
+        diff_stat,
+        behind,
+    })
+}
+
+/// Collect list of conflicted files from a failed merge/rebase.
+fn collect_conflict_files(repo_path: &str) -> Vec<String> {
+    Command::new("git")
+        .args(["-C", repo_path, "diff", "--name-only", "--diff-filter=U"])
+        .output()
+        .ok()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(|l| l.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Merge with --no-ff (creates a merge commit on base branch).
+pub fn apply_merge_no_ff(
+    repo_path: &str,
+    task_branch: &str,
+    base_branch: &str,
+    worktree_path: Option<&str>,
+) -> std::result::Result<ApplyResult, ApplyError> {
+    if let Some(wt_path) = worktree_path {
+        let _ = remove_worktree(repo_path, wt_path);
+    }
+
+    let checkout = Command::new("git")
+        .args(["-C", repo_path, "checkout", base_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    if !checkout.status.success() {
+        return Err(ApplyError::Internal(anyhow!(
+            "failed to checkout {}: {}",
+            base_branch,
+            String::from_utf8_lossy(&checkout.stderr).trim()
+        )));
+    }
+
+    let merge = Command::new("git")
+        .args(["-C", repo_path, "merge", "--no-ff", task_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+
+    if !merge.status.success() {
+        let conflicted_files = collect_conflict_files(repo_path);
+        let _ = Command::new("git").args(["-C", repo_path, "merge", "--abort"]).output();
+        return Err(ApplyError::Conflict(MergeConflictError { conflicted_files }));
+    }
+
+    let status = Command::new("git")
+        .args(["-C", repo_path, "diff", "--stat", "HEAD~1..HEAD"])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    let files_changed = String::from_utf8_lossy(&status.stdout).lines().count().saturating_sub(1);
+
+    let _ = Command::new("git").args(["-C", repo_path, "branch", "-D", task_branch]).output();
+
+    Ok(ApplyResult { files_changed, base_branch: base_branch.to_string() })
+}
+
+/// Rebase task branch onto base branch, then fast-forward base.
+pub fn apply_rebase(
+    repo_path: &str,
+    task_branch: &str,
+    base_branch: &str,
+    worktree_path: Option<&str>,
+) -> std::result::Result<ApplyResult, ApplyError> {
+    if let Some(wt_path) = worktree_path {
+        let _ = remove_worktree(repo_path, wt_path);
+    }
+
+    // Checkout task branch and rebase it onto base
+    let checkout = Command::new("git")
+        .args(["-C", repo_path, "checkout", task_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    if !checkout.status.success() {
+        return Err(ApplyError::Internal(anyhow!(
+            "failed to checkout {}",
+            task_branch
+        )));
+    }
+
+    let rebase = Command::new("git")
+        .args(["-C", repo_path, "rebase", base_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+
+    if !rebase.status.success() {
+        let _ = Command::new("git").args(["-C", repo_path, "rebase", "--abort"]).output();
+        let conflicted_files = collect_conflict_files(repo_path);
+        let stderr = String::from_utf8_lossy(&rebase.stderr).trim().to_string();
+        let files = if conflicted_files.is_empty() {
+            vec![format!("Rebase conflict: {}", stderr)]
+        } else {
+            conflicted_files
+        };
+        return Err(ApplyError::Conflict(MergeConflictError { conflicted_files: files }));
+    }
+
+    // Fast-forward base branch
+    let _ = Command::new("git")
+        .args(["-C", repo_path, "checkout", base_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    let ff = Command::new("git")
+        .args(["-C", repo_path, "merge", "--ff-only", task_branch])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    if !ff.status.success() {
+        return Err(ApplyError::Internal(anyhow!(
+            "failed to fast-forward {}: {}",
+            base_branch,
+            String::from_utf8_lossy(&ff.stderr).trim()
+        )));
+    }
+
+    // Count files in the merge
+    let status = Command::new("git")
+        .args(["-C", repo_path, "diff", "--stat", "HEAD~1..HEAD"])
+        .output()
+        .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
+    let files_changed = String::from_utf8_lossy(&status.stdout).lines().count().saturating_sub(1);
+
+    let _ = Command::new("git").args(["-C", repo_path, "branch", "-d", task_branch]).output();
+
+    Ok(ApplyResult { files_changed, base_branch: base_branch.to_string() })
+}
+
+pub struct GitStatusInfo {
+    pub commits: Vec<String>,
+    pub diff_stat: String,
+    pub ahead: usize,
+    pub behind: usize,
+}
+
 /// Apply worktree branch changes to the base branch as unstaged changes.
 /// The main repo is already on the base branch (worktree isolation), so no stash/checkout needed.
 /// After merge, removes the worktree.
@@ -738,20 +1020,7 @@ pub fn apply_worktree_to_base_unstaged(
         .map_err(|e| ApplyError::Internal(anyhow!(e)))?;
 
     if !merge.status.success() {
-        // Conflict — collect conflicted files
-        let diff = Command::new("git")
-            .args(["-C", repo_path, "diff", "--name-only", "--diff-filter=U"])
-            .output()
-            .ok();
-        let conflicted_files: Vec<String> = diff
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .lines()
-                    .filter(|l| !l.is_empty())
-                    .map(|l| l.to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+        let conflicted_files = collect_conflict_files(repo_path);
 
         // Abort merge
         let _ = Command::new("git")

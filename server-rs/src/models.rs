@@ -6,8 +6,14 @@ pub struct Repo {
     pub id: String,
     pub name: String,
     pub path: String,
+    #[serde(default = "default_main")]
+    pub default_branch: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+fn default_main() -> String {
+    "main".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +40,8 @@ pub struct TaskWithPayload {
     pub last_pipeline_at: Option<String>,
     pub agent_profile_id: Option<String>,
     pub source: String,
+    pub pr_url: Option<String>,
+    pub pr_number: Option<i64>,
     pub payload: Value,
     pub created_at: String,
     pub updated_at: String,

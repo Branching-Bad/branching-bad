@@ -18,7 +18,7 @@ use tokio::io::AsyncWriteExt;
 use crate::AppState;
 use crate::db::Db;
 use crate::errors::ApiError;
-use crate::executor::{create_worktree, save_plan_artifact, spawn_agent};
+use crate::executor::{create_worktree, git_status_info, save_plan_artifact, spawn_agent};
 use crate::msg_store::{LogMsg, MsgStore};
 use crate::process_manager::ProcessManager;
 use super::shared::{StartRunPayload, TaskQuery, build_agent_command, sanitize_branch_segment};
@@ -31,6 +31,7 @@ pub(crate) fn run_routes() -> Router<AppState> {
         .route("/api/runs/{run_id}/ws", get(run_ws_handler))
         .route("/api/runs/{run_id}/stop", post(stop_run))
         .route("/api/runs/{run_id}/diff", get(get_run_diff))
+        .route("/api/runs/{run_id}/git-status", get(get_run_git_status))
 }
 
 #[derive(Debug, Deserialize)]
@@ -205,23 +206,20 @@ pub(crate) async fn start_run(
     };
     let agent_command = build_agent_command(&profile);
 
-    let agent_segment = sanitize_branch_segment(&profile.provider);
-    let task_segment = sanitize_branch_segment(&task.jira_issue_key);
     let branch_name = if task.use_worktree {
-        format!(
-            "agent/{}-{}-{}",
-            if agent_segment.is_empty() {
-                "agent".to_string()
-            } else {
-                agent_segment
-            },
-            if task_segment.is_empty() {
-                "task".to_string()
-            } else {
-                task_segment
-            },
-            chrono::Utc::now().timestamp()
-        )
+        // Use custom branch name if provided, otherwise auto-generate
+        if let Some(custom) = payload.branch_name.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+            sanitize_branch_segment(custom)
+        } else {
+            let agent_segment = sanitize_branch_segment(&profile.provider);
+            let task_segment = sanitize_branch_segment(&task.jira_issue_key);
+            format!(
+                "agent/{}-{}-{}",
+                if agent_segment.is_empty() { "agent".to_string() } else { agent_segment },
+                if task_segment.is_empty() { "task".to_string() } else { task_segment },
+                chrono::Utc::now().timestamp()
+            )
+        }
     } else {
         String::new()
     };
@@ -672,6 +670,29 @@ async fn get_run_diff(
         .get_run_diff(&path.run_id)
         .map_err(ApiError::internal)?;
     Ok(Json(json!({ "diff": diff.unwrap_or_default() })))
+}
+
+async fn get_run_git_status(
+    State(state): State<AppState>,
+    Path(path): Path<RunPath>,
+) -> Result<Json<Value>, ApiError> {
+    let run = state.db.get_run_by_id(&path.run_id).map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Run not found"))?;
+    let task = state.db.get_task_by_id(&run.task_id).map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Task not found"))?;
+    let repo = state.db.get_repo_by_id(&task.repo_id).map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Repo not found"))?;
+
+    let working_dir = run.worktree_path.as_deref().unwrap_or(&repo.path);
+    let info = git_status_info(working_dir, &repo.default_branch, &run.branch_name)
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(json!({
+        "commits": info.commits,
+        "diffStat": info.diff_stat,
+        "ahead": info.ahead,
+        "behind": info.behind,
+    })))
 }
 
 /// Shared helper: spawn a follow-up agent run, optionally resuming a Claude session.

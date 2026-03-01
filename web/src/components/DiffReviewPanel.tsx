@@ -1,6 +1,7 @@
-import type { Task, ReviewComment, LineComment } from "../types";
+import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo } from "../types";
 import { DiffViewer } from "./DiffViewer";
 import { IconExpand } from "./icons";
+import { MergeOptionsBar } from "./MergeOptionsBar";
 import { formatDate } from "./shared";
 
 type Selection = {
@@ -26,10 +27,13 @@ export function DiffReviewPanel({
   draftText,
   setDraftText,
   applyConflicts,
+  gitStatus,
   busy,
   onSubmitReview,
   onSubmitBatchReview,
   onApplyToMain,
+  onPushBranch,
+  onCreatePR,
   onMarkTaskDone,
   onLineSelect,
   onLineSave,
@@ -50,10 +54,13 @@ export function DiffReviewPanel({
   draftText: string;
   setDraftText: (v: string) => void;
   applyConflicts: string[];
+  gitStatus?: GitStatusInfo | null;
   busy: boolean;
   onSubmitReview: () => void;
   onSubmitBatchReview: () => void;
-  onApplyToMain: () => void;
+  onApplyToMain: (opts?: ApplyToMainOptions) => void;
+  onPushBranch?: () => void;
+  onCreatePR?: () => void;
   onMarkTaskDone: () => void;
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
@@ -62,37 +69,26 @@ export function DiffReviewPanel({
 }) {
   return (
     <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-      {/* Action bar */}
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <h4 className="text-xs font-medium text-text-secondary">Review Feedback</h4>
-          {onExpandReview && (
-            <button onClick={onExpandReview} title="Expand" className="rounded-md p-0.5 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
-              <IconExpand className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedTask?.use_worktree !== false && (
-            <button
-              onClick={onApplyToMain}
-              disabled={busy}
-              className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
-            >
-              Apply to Main
-            </button>
-          )}
-          {selectedTask?.status !== "DONE" && (
-            <button
-              onClick={onMarkTaskDone}
-              disabled={busy}
-              className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
-            >
-              Mark as Done
-            </button>
-          )}
-        </div>
+      {/* Header */}
+      <div className="mb-3 flex items-center gap-1.5">
+        <h4 className="text-xs font-medium text-text-secondary">Review Feedback</h4>
+        {onExpandReview && (
+          <button onClick={onExpandReview} title="Expand" className="rounded-md p-0.5 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
+            <IconExpand className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
+
+      {/* Merge options, PR link, git status, action buttons */}
+      <MergeOptionsBar
+        selectedTask={selectedTask}
+        gitStatus={gitStatus}
+        busy={busy}
+        onApplyToMain={onApplyToMain}
+        onPushBranch={onPushBranch}
+        onCreatePR={onCreatePR}
+        onMarkTaskDone={onMarkTaskDone}
+      />
 
       {/* Conflict display */}
       {applyConflicts.length > 0 && (

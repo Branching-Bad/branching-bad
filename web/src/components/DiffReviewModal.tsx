@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { parseDiff } from "react-diff-view";
 import type { FileData } from "react-diff-view";
-import type { Task, ReviewComment, LineComment } from "../types";
+import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo } from "../types";
 import { DiffViewer } from "./DiffViewer";
+import { MergeOptionsBar } from "./MergeOptionsBar";
 import { IconX } from "./icons";
 import { formatDate } from "./shared";
 
@@ -178,10 +179,13 @@ export function DiffReviewModal({
   draftText,
   setDraftText,
   applyConflicts,
+  gitStatus,
   busy,
   onSubmitReview,
   onSubmitBatchReview,
   onApplyToMain,
+  onPushBranch,
+  onCreatePR,
   onMarkTaskDone,
   onLineSelect,
   onLineSave,
@@ -203,10 +207,13 @@ export function DiffReviewModal({
   draftText: string;
   setDraftText: (v: string) => void;
   applyConflicts: string[];
+  gitStatus?: GitStatusInfo | null;
   busy: boolean;
   onSubmitReview: () => void;
   onSubmitBatchReview: () => void;
-  onApplyToMain: () => void;
+  onApplyToMain: (opts?: ApplyToMainOptions) => void;
+  onPushBranch?: () => void;
+  onCreatePR?: () => void;
   onMarkTaskDone: () => void;
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
@@ -282,50 +289,39 @@ export function DiffReviewModal({
 
           {/* Right: diff + review controls */}
           <div ref={rightPanelRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-            {/* Action bar */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1 rounded-lg border border-border-strong bg-surface-300 p-0.5">
-                <button
-                  onClick={() => setReviewMode("batch")}
-                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
-                    reviewMode === "batch"
-                      ? "bg-surface-100 text-text-primary shadow-sm"
-                      : "text-text-muted hover:text-text-secondary"
-                  }`}
-                >
-                  Batch Review
-                </button>
-                <button
-                  onClick={() => setReviewMode("instant")}
-                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
-                    reviewMode === "instant"
-                      ? "bg-surface-100 text-text-primary shadow-sm"
-                      : "text-text-muted hover:text-text-secondary"
-                  }`}
-                >
-                  Instant
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedTask?.use_worktree !== false && (
-                  <button
-                    onClick={onApplyToMain}
-                    disabled={busy}
-                    className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
-                  >
-                    Apply to Main
-                  </button>
-                )}
-                {selectedTask?.status !== "DONE" && (
-                  <button
-                    onClick={onMarkTaskDone}
-                    disabled={busy}
-                    className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
-                  >
-                    Mark as Done
-                  </button>
-                )}
-              </div>
+            {/* Merge options, PR link, git status, action buttons */}
+            <MergeOptionsBar
+              selectedTask={selectedTask}
+              gitStatus={gitStatus}
+              busy={busy}
+              onApplyToMain={onApplyToMain}
+              onPushBranch={onPushBranch}
+              onCreatePR={onCreatePR}
+              onMarkTaskDone={onMarkTaskDone}
+            />
+
+            {/* Mode toggle */}
+            <div className="flex items-center gap-1 rounded-lg border border-border-strong bg-surface-300 p-0.5">
+              <button
+                onClick={() => setReviewMode("batch")}
+                className={`flex-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                  reviewMode === "batch"
+                    ? "bg-surface-100 text-text-primary shadow-sm"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                Batch Review
+              </button>
+              <button
+                onClick={() => setReviewMode("instant")}
+                className={`flex-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                  reviewMode === "instant"
+                    ? "bg-surface-100 text-text-primary shadow-sm"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                Instant
+              </button>
             </div>
 
             {/* Conflict display */}

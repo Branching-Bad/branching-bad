@@ -34,6 +34,8 @@ pub(crate) struct StartRunPayload {
     pub task_id: Option<String>,
     #[serde(rename = "profileId")]
     pub profile_id: Option<String>,
+    #[serde(rename = "branchName")]
+    pub branch_name: Option<String>,
 }
 
 // ── Utility functions ──

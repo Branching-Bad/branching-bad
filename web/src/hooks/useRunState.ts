@@ -78,6 +78,8 @@ export function useRunState({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [customBranchName, setCustomBranchName] = useState("");
+
   const startRun = useCallback(async () => {
     if (!selectedTaskId || !selectedTask) { setError("Select a task first."); return; }
     if (!selectedProfileId) { setError("Select an agent/model for this repo first."); return; }
@@ -88,6 +90,7 @@ export function useRunState({
     const body: Record<string, string> = { profileId: selectedProfileId };
     if (approvedPlan) body.planId = approvedPlan.id;
     if (!approvedPlan) body.taskId = taskId;
+    if (customBranchName.trim()) body.branchName = customBranchName.trim();
 
     setBusy(true); setError("");
     updateTaskRunState(taskId, (prev) => ({ ...prev, runLogs: [], runFinished: false, runResult: null }));
@@ -96,6 +99,7 @@ export function useRunState({
         method: "POST", body: JSON.stringify(body),
       });
       updateTaskRunState(taskId, (prev) => ({ ...prev, activeRun: payload.run }));
+      setCustomBranchName("");
       setBusy(false);
       setInfo("Run started. Streaming logs...");
       if (repoIdForRefresh) {
@@ -108,7 +112,7 @@ export function useRunState({
       }
       setError((e as Error).message); setBusy(false);
     }
-  }, [selectedTaskId, selectedTask, selectedProfileId, approvedPlan, selectedRepoId, updateTaskRunState, streamRef, setTasks, setError, setInfo, setBusy]);
+  }, [selectedTaskId, selectedTask, selectedProfileId, approvedPlan, selectedRepoId, customBranchName, updateTaskRunState, streamRef, setTasks, setError, setInfo, setBusy]);
 
   const stopRun = useCallback(async () => {
     if (!selectedTaskId || !activeRun) return;
@@ -130,5 +134,6 @@ export function useRunState({
     taskRunStates, updateTaskRunState,
     activeRun, runLogs, runFinished, runResult,
     startRun, stopRun,
+    customBranchName, setCustomBranchName,
   };
 }

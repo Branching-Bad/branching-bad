@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { api } from "../api";
-import type { Task, ReviewComment, LineComment, TaskRunState } from "../types";
+import type { Task, ReviewComment, LineComment, TaskRunState, GitStatusInfo, ApplyToMainOptions } from "../types";
 import type { StreamFunctions } from "./streamTypes";
 
 export function useReviewState({
@@ -37,12 +37,13 @@ export function useReviewState({
   const [lineSelection, setLineSelection] = useState<{filePath: string; lineStart: number; lineEnd: number; hunk: string; anchorKey: string} | null>(null);
   const [draftText, setDraftText] = useState("");
   const [applyConflicts, setApplyConflicts] = useState<string[]>([]);
+  const [gitStatus, setGitStatus] = useState<GitStatusInfo | null>(null);
 
   // Reset review state when task changes
   useEffect(() => {
     if (!selectedTaskId) {
       setReviewComments([]); setRunDiff(""); setBatchLineComments([]);
-      setLineSelection(null); setDraftText("");
+      setLineSelection(null); setDraftText(""); setGitStatus(null);
       return;
     }
     void (async () => {
@@ -74,6 +75,9 @@ export function useReviewState({
       .then((res) => setRunDiff(res.diff || ""))
       .catch(() => setRunDiff(""))
       .finally(() => setRunDiffLoading(false));
+    api<GitStatusInfo>(`/api/runs/${encodeURIComponent(diffRunId)}/git-status`)
+      .then((res) => setGitStatus(res))
+      .catch(() => setGitStatus(null));
   }, [diffRunId]);
 
   const handleLineSelect = useCallback((filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => {
@@ -198,17 +202,51 @@ export function useReviewState({
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [selectedTaskId, reviewText, batchLineComments, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
 
-  const applyToMain = useCallback(async () => {
+  const applyToMain = useCallback(async (opts?: ApplyToMainOptions) => {
     if (!selectedTaskId) return;
     setError(""); setInfo(""); setBusy(true); setApplyConflicts([]);
     try {
-      const res = await fetch(`/api/tasks/${encodeURIComponent(selectedTaskId)}/apply-to-main`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      const body: Record<string, unknown> = {};
+      if (opts?.autoCommit) body.autoCommit = true;
+      if (opts?.commitMessage) body.commitMessage = opts.commitMessage;
+      if (opts?.strategy) body.strategy = opts.strategy;
+      const res = await fetch(`/api/tasks/${encodeURIComponent(selectedTaskId)}/apply-to-main`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
       if (res.status === 409 && data.conflict) { setApplyConflicts(data.conflictedFiles ?? []); }
-      else if (res.ok && data.applied) { setApplyConflicts([]); setInfo(`Changes applied to ${data.baseBranch} as unstaged (${data.filesChanged} files).`); }
+      else if (res.ok && data.applied) {
+        setApplyConflicts([]);
+        const commitMsg = data.committed ? " and committed" : " as unstaged";
+        setInfo(`Changes applied to ${data.baseBranch}${commitMsg} (${data.filesChanged} files). Strategy: ${data.strategy ?? "squash"}`);
+      }
       else { setError(data.error ?? "Failed to apply changes."); }
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [selectedTaskId, setError, setInfo, setBusy]);
+
+  const pushBranch = useCallback(async () => {
+    if (!selectedTaskId) return;
+    setError(""); setBusy(true);
+    try {
+      await api(`/api/tasks/${encodeURIComponent(selectedTaskId)}/push`, { method: "POST" });
+      setInfo("Branch pushed to origin.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }, [selectedTaskId, setError, setInfo, setBusy]);
+
+  const createPR = useCallback(async () => {
+    if (!selectedTaskId) return;
+    setError(""); setBusy(true);
+    try {
+      const data = await api<{ prUrl: string; prNumber: number }>(`/api/tasks/${encodeURIComponent(selectedTaskId)}/create-pr`, { method: "POST" });
+      setInfo(`PR created: ${data.prUrl}`);
+      if (selectedRepoId) {
+        const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
+        setTasks(t.tasks);
+      }
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }, [selectedTaskId, selectedRepoId, setTasks, setError, setInfo, setBusy]);
 
   const markTaskDone = useCallback(async () => {
     if (!selectedTaskId) return;
@@ -230,6 +268,7 @@ export function useReviewState({
     applyConflicts,
     handleLineSelect, handleLineSave, handleLineCancel,
     submitReview, submitBatchReview,
-    applyToMain, markTaskDone,
+    gitStatus,
+    applyToMain, pushBranch, createPR, markTaskDone,
   };
 }

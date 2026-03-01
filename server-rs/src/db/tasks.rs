@@ -93,10 +93,10 @@ impl Db {
     pub fn list_tasks_by_repo(&self, repo_id: &str) -> Result<Vec<TaskWithPayload>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
-            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, agent_profile_id, payload_json, created_at, updated_at FROM tasks WHERE repo_id = ?1 ORDER BY updated_at DESC",
+            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, agent_profile_id, pr_url, pr_number, payload_json, created_at, updated_at FROM tasks WHERE repo_id = ?1 ORDER BY updated_at DESC",
         )?;
         let rows = stmt.query_map([repo_id], |row| {
-            let payload_raw: String = row.get(18)?;
+            let payload_raw: String = row.get(20)?;
             Ok(TaskWithPayload {
                 id: row.get(0)?,
                 repo_id: row.get(1)?,
@@ -116,9 +116,11 @@ impl Db {
                 last_pipeline_error: row.get(15)?,
                 last_pipeline_at: row.get(16)?,
                 agent_profile_id: row.get(17)?,
+                pr_url: row.get(18)?,
+                pr_number: row.get(19)?,
                 payload: serde_json::from_str(&payload_raw).unwrap_or(Value::Null),
-                created_at: row.get(19)?,
-                updated_at: row.get(20)?,
+                created_at: row.get(21)?,
+                updated_at: row.get(22)?,
             })
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
@@ -128,10 +130,10 @@ impl Db {
     pub fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskWithPayload>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, agent_profile_id, payload_json, created_at, updated_at FROM tasks WHERE id = ?1",
+            "SELECT id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, agent_profile_id, pr_url, pr_number, payload_json, created_at, updated_at FROM tasks WHERE id = ?1",
             [task_id],
             |row| {
-                let payload_raw: String = row.get(18)?;
+                let payload_raw: String = row.get(20)?;
                 Ok(TaskWithPayload {
                     id: row.get(0)?,
                     repo_id: row.get(1)?,
@@ -151,9 +153,11 @@ impl Db {
                     last_pipeline_error: row.get(15)?,
                     last_pipeline_at: row.get(16)?,
                     agent_profile_id: row.get(17)?,
+                    pr_url: row.get(18)?,
+                    pr_number: row.get(19)?,
                     payload: serde_json::from_str(&payload_raw).unwrap_or(Value::Null),
-                    created_at: row.get(19)?,
-                    updated_at: row.get(20)?,
+                    created_at: row.get(21)?,
+                    updated_at: row.get(22)?,
                 })
             },
         )
@@ -270,6 +274,15 @@ impl Db {
                 now_iso(),
                 task_id
             ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_task_pr(&self, task_id: &str, pr_url: &str, pr_number: Option<i64>) -> Result<()> {
+        let conn = self.connect()?;
+        conn.execute(
+            "UPDATE tasks SET pr_url = ?1, pr_number = ?2, updated_at = ?3 WHERE id = ?4",
+            params![pr_url, pr_number, now_iso(), task_id],
         )?;
         Ok(())
     }

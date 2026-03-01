@@ -172,6 +172,7 @@ export default function App() {
           setTasks={task.setTasks}
           onError={setError}
           agentProfiles={boot.agentProfiles}
+          taskRunStates={run.taskRunStates}
         />
       </main>
 
@@ -197,6 +198,7 @@ export default function App() {
           batchLineComments={review.batchLineComments} setBatchLineComments={review.setBatchLineComments}
           lineSelection={review.lineSelection} draftText={review.draftText} setDraftText={review.setDraftText}
           applyConflicts={review.applyConflicts}
+          gitStatus={review.gitStatus}
           busy={busy}
           onClose={() => setDetailsOpen(false)}
           onEditTask={() => setEditTaskModalOpen(true)}
@@ -209,7 +211,9 @@ export default function App() {
           onStopRun={() => void run.stopRun()}
           onSubmitReview={() => void review.submitReview()}
           onSubmitBatchReview={() => void review.submitBatchReview()}
-          onApplyToMain={() => void review.applyToMain()}
+          onApplyToMain={(opts) => void review.applyToMain(opts)}
+          onPushBranch={() => void review.pushBranch()}
+          onCreatePR={() => void review.createPR()}
           onMarkTaskDone={() => void review.markTaskDone()}
           onLineSelect={review.handleLineSelect}
           onLineSave={review.handleLineSave}
@@ -219,6 +223,8 @@ export default function App() {
           onRequeueAutostart={() => void task.requeueAutostart()}
           onClearTaskPipeline={() => void task.clearTaskPipeline()}
           onExpandReview={() => setReviewModalOpen(true)}
+          customBranchName={run.customBranchName}
+          setCustomBranchName={run.setCustomBranchName}
         />
       )}
 
@@ -240,10 +246,13 @@ export default function App() {
           draftText={review.draftText}
           setDraftText={review.setDraftText}
           applyConflicts={review.applyConflicts}
+          gitStatus={review.gitStatus}
           busy={busy}
           onSubmitReview={() => void review.submitReview()}
           onSubmitBatchReview={() => void review.submitBatchReview()}
-          onApplyToMain={() => void review.applyToMain()}
+          onApplyToMain={(opts) => void review.applyToMain(opts)}
+          onPushBranch={() => void review.pushBranch()}
+          onCreatePR={() => void review.createPR()}
           onMarkTaskDone={() => void review.markTaskDone()}
           onLineSelect={review.handleLineSelect}
           onLineSave={review.handleLineSave}
@@ -276,6 +285,7 @@ export default function App() {
         discoverAgents={repo.discoverAgents} saveAgentSelection={repo.saveAgentSelection}
         repoPath={repo.repoPath} setRepoPath={repo.setRepoPath}
         repoName={repo.repoName} setRepoName={repo.setRepoName}
+        onReposChange={boot.bootstrap}
       />
 
       <CreateTaskModal

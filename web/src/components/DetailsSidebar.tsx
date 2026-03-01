@@ -1,4 +1,4 @@
-import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage } from "../types";
+import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage, ApplyToMainOptions, GitStatusInfo } from "../types";
 import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown } from "./icons";
 import { LogViewer } from "./LogViewer";
 import { ChatPanel } from "./ChatPanel";
@@ -26,17 +26,19 @@ export function DetailsSidebar({
   batchLineComments, setBatchLineComments,
   lineSelection, draftText, setDraftText,
   applyConflicts,
+  gitStatus,
   busy,
   onClose,
   onEditTask, onDeleteTask,
   onCreatePlan, onPlanAction, onValidateTasklist, onSaveManualRevision,
   onStartRun, onStopRun,
-  onSubmitReview, onSubmitBatchReview, onApplyToMain, onMarkTaskDone,
+  onSubmitReview, onSubmitBatchReview, onApplyToMain, onPushBranch, onCreatePR, onMarkTaskDone,
   onLineSelect, onLineSave, onLineCancel,
   onRequeueAutostart, onClearTaskPipeline,
   chatMessages, chatQueuedCount,
   onSendChat, onCancelQueuedChat,
   onExpandReview,
+  customBranchName, setCustomBranchName,
 }: {
   selectedTask: Task;
   plans: Plan[]; selectedPlanId: string; setSelectedPlanId: (v: string) => void;
@@ -60,6 +62,7 @@ export function DetailsSidebar({
   lineSelection: { filePath: string; lineStart: number; lineEnd: number; hunk: string; anchorKey: string } | null;
   draftText: string; setDraftText: (v: string) => void;
   applyConflicts: string[];
+  gitStatus?: GitStatusInfo | null;
   busy: boolean;
   onClose: () => void;
   onEditTask: () => void;
@@ -72,7 +75,9 @@ export function DetailsSidebar({
   onStopRun: () => void;
   onSubmitReview: () => void;
   onSubmitBatchReview: () => void;
-  onApplyToMain: () => void;
+  onApplyToMain: (opts?: ApplyToMainOptions) => void;
+  onPushBranch?: () => void;
+  onCreatePR?: () => void;
   onMarkTaskDone: () => void;
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
@@ -83,6 +88,8 @@ export function DetailsSidebar({
   onRequeueAutostart: () => void;
   onClearTaskPipeline: () => void;
   onExpandReview?: () => void;
+  customBranchName: string;
+  setCustomBranchName: (v: string) => void;
 }) {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? latestPlan;
 
@@ -541,7 +548,17 @@ export function DetailsSidebar({
                       </span>
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  {selectedTask.use_worktree && !activeRun && (
+                    <div className="mt-2">
+                      <input
+                        value={customBranchName}
+                        onChange={(e) => setCustomBranchName(e.target.value)}
+                        className="w-full rounded-lg border border-border-strong bg-surface-100 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                        placeholder="Branch name (auto-generated if empty)"
+                      />
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
                     {taskRequiresPlan && !approvedPlan && (
                       <span className="rounded-full border border-yellow-700 bg-yellow-950/40 px-2 py-0.5 text-yellow-400">
                         Plan approval required
@@ -557,9 +574,12 @@ export function DetailsSidebar({
                         <span className={`rounded-full border px-2 py-0.5 font-medium ${runStatusColor(activeRun.status)}`}>
                           {activeRun.status}
                         </span>
-                        <span className="rounded-full border border-border-strong bg-surface-300 px-2 py-0.5 text-text-secondary">
-                          {activeRun.branch_name}
-                        </span>
+                        {activeRun.branch_name && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-border-strong bg-surface-300 px-2 py-0.5 text-text-secondary">
+                            <IconGitBranch className="h-3 w-3" />
+                            {activeRun.branch_name}
+                          </span>
+                        )}
                       </>
                     )}
                   </div>
@@ -635,10 +655,13 @@ export function DetailsSidebar({
                 draftText={draftText}
                 setDraftText={setDraftText}
                 applyConflicts={applyConflicts}
+                gitStatus={gitStatus}
                 busy={busy}
                 onSubmitReview={onSubmitReview}
                 onSubmitBatchReview={onSubmitBatchReview}
                 onApplyToMain={onApplyToMain}
+                onPushBranch={onPushBranch}
+                onCreatePR={onCreatePR}
                 onMarkTaskDone={onMarkTaskDone}
                 onLineSelect={onLineSelect}
                 onLineSave={onLineSave}

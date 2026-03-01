@@ -39,7 +39,7 @@ Single-binary HTTP server. `main.rs` is the entrypoint (~105 lines) that wires t
 - `errors.rs` — `ApiError` struct with `bad_request`, `not_found`, `conflict`, `internal` constructors
 - `models.rs` — All data structs (Repo, Task, Plan, Run, ProviderAccountRow, etc.)
 - `planner.rs` — `build_plan()`: walks repo files with walkdir, scores by keyword overlap, produces markdown + structured JSON plan
-- `executor.rs` — Git operations: branch creation (`codex/<ISSUE_KEY>-<ts>`), plan artifact saving to `.local-agent/`, diff capture, agent command probing
+- `executor.rs` — Git operations: branch creation, worktree management, diff capture, merge strategies (squash/merge/rebase), push, PR creation via `gh` CLI, git status info, agent command probing
 - `discovery.rs` — Scans PATH for AI agent binaries (codex, claude, gemini, opencode, cursor), reads their config files
 - `process_manager.rs` — Manages spawned agent processes
 - `msg_store.rs` — Message/event storage for run logs
@@ -47,18 +47,27 @@ Single-binary HTTP server. `main.rs` is the entrypoint (~105 lines) that wires t
 #### routes/ — HTTP handler modules (each exports `xxx_routes() -> Router<AppState>`)
 - `shared.rs` — Shared types (`TaskPath`, `RepoQuery`, `TaskQuery`, `StartRunPayload`) and utility functions (`resolve_agent_command`, `build_agent_command`, `plan_store_key`, `enqueue_autostart_if_enabled`, etc.)
 - `health.rs` — Health check, bootstrap endpoint
-- `repos.rs` — Repo CRUD
+- `repos.rs` — Repo CRUD, default branch config, branch listing
 - `tasks.rs` — Task sync, list, create, update, pipeline management
 - `plans.rs` — Plan CRUD, approve/reject/revise, plan jobs, `spawn_plan_generation_job`
-- `runs.rs` — Run lifecycle, WebSocket log streaming, `start_run`, `spawn_resume_run`
-- `reviews.rs` — Review submission, apply-to-main
+- `runs.rs` — Run lifecycle, WebSocket log streaming, `start_run`, `spawn_resume_run`, git-status endpoint
+- `reviews.rs` — Review submission, apply-to-main (with merge strategy), push branch, create PR
 - `agents.rs` — Agent discovery and per-repo selection
 - `autostart.rs` — Background autostart worker (`spawn_autostart_worker`)
 - `chat.rs` — Chat/follow-up message system
 - `fs.rs` — Filesystem listing for folder picker
 
+#### migrations/ — Refinery SQL migrations (embedded at compile time)
+- `V1__initial_schema.sql` — Base tables and indexes
+- `V2__add_columns.sql` — Column additions for extended features
+- `V3__nullable_jira.sql` — Jira field nullability migration
+- `V4__add_default_branch.sql` — Configurable default branch per repo
+- `V6__add_pr_tracking.sql` — PR URL/number tracking on tasks
+
+New migrations: add `V{N}__description.sql` file, runs automatically at boot via `refinery`.
+
 #### db/ — SQLite module (split into domain files)
-- `mod.rs` — Schema init, connection helper, `now_iso()` utility
+- `mod.rs` — Schema init via refinery embedded migrations, connection helper, `now_iso()` utility
 - `repos.rs` — Repo CRUD
 - `tasks.rs` — Task CRUD + state transitions
 - `plans.rs` — Plan CRUD + plan actions
@@ -94,8 +103,8 @@ Port `4310` (override with `PORT` env var). DB path via `directories` crate (ove
 - `useRepoSelection.ts` — Repo/agent selection, repo submit, agent discovery
 - `useTaskState.ts` — Tasks CRUD, grouping, polling, pipeline management
 - `usePlanState.ts` — Plans lifecycle, plan jobs, validation, manual revision
-- `useRunState.ts` — Run start/stop, run state tracking
-- `useReviewState.ts` — Review comments, diff fetching, line comments, apply-to-main
+- `useRunState.ts` — Run start/stop, run state tracking, custom branch name
+- `useReviewState.ts` — Review comments, diff fetching, line comments, apply-to-main, push, PR creation, git status
 - `useChatState.ts` — Chat messages, send/cancel
 - `useEventStream.ts` — WebSocket bridge: forwards run/plan WS events to domain hook state
 - `useWebSocketStream.ts` — Low-level WebSocket connection with reconnect logic
@@ -111,6 +120,7 @@ Port `4310` (override with `PORT` env var). DB path via `directories` crate (ove
 - `TaskFormFields.tsx` — Shared form fields component used by both task modals
 - `ChatPanel.tsx` — Chat/follow-up message panel for active runs
 - `DiffReviewModal.tsx`, `DiffReviewPanel.tsx`, `DiffViewer.tsx` — Diff review UI with inline commenting
+- `MergeOptionsBar.tsx` — Shared merge options (strategy, auto-commit, push, PR, git status) used by DiffReviewPanel and DiffReviewModal
 - `LogEntry.tsx`, `LogViewer.tsx` — Log entry rendering with WebSocket streaming
 - `FolderPicker.tsx` — Filesystem folder picker for repo path selection
 - `InlineCommentEditor.tsx` — Inline comment editor for diff review
@@ -145,9 +155,9 @@ Follow this checklist — **no changes needed** in `main.rs`, `App.tsx`, `Extens
 
 All routes under `/api/`. Key groups:
 - `/api/repos` — CRUD for local git repositories
-- `/api/tasks/*` — Sync, list, create, update, review tasks
+- `/api/tasks/*` — Sync, list, create, update, review, push, create-pr, apply-to-main, complete
 - `/api/plans/*` — Create plans, list plans, approve/reject/revise, plan jobs
-- `/api/runs/*` — Start runs, get status, stream logs (WebSocket), stop
+- `/api/runs/*` — Start runs, get status, stream logs (WebSocket), stop, git-status
 - `/api/agents/*` — Discover AI agents in PATH, select per-repo profile
 - `/api/providers/*` — Generic provider endpoints (connect, accounts, resources, bind, items, sync)
 - `/api/chat/*` — Chat/follow-up messages for active runs

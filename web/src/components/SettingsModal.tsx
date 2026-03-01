@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { FormEvent } from "react";
 import type { Repo, AgentProfile } from "../types";
+import { api } from "../api";
 import { IconX, IconRefresh } from "./icons";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
 import { FolderPicker } from "./FolderPicker";
@@ -11,6 +12,7 @@ export function SettingsModal({
   selectedProfile, busy, error: extError, info: extInfo,
   onRepoSubmit, discoverAgents, saveAgentSelection,
   repoPath, setRepoPath, repoName, setRepoName,
+  onReposChange,
 }: {
   open: boolean; onClose: () => void;
   repos: Repo[]; agentProfiles: AgentProfile[];
@@ -24,8 +26,29 @@ export function SettingsModal({
   saveAgentSelection: () => void;
   repoPath: string; setRepoPath: (v: string) => void;
   repoName: string; setRepoName: (v: string) => void;
+  onReposChange?: () => void;
 }) {
   const [tab, setTab] = useState("repo");
+  const [branches, setBranches] = useState<string[]>([]);
+  const selectedRepo = repos.find((r) => r.id === selectedRepoId);
+
+  useEffect(() => {
+    if (!selectedRepoId || !open) { setBranches([]); return; }
+    api<{ branches: string[]; default: string }>(`/api/repos/${encodeURIComponent(selectedRepoId)}/branches`)
+      .then((res) => setBranches(res.branches))
+      .catch(() => setBranches([]));
+  }, [selectedRepoId, open]);
+
+  const handleDefaultBranchChange = useCallback(async (branch: string) => {
+    if (!selectedRepoId || !branch) return;
+    try {
+      await api(`/api/repos/${encodeURIComponent(selectedRepoId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ defaultBranch: branch }),
+      });
+      onReposChange?.();
+    } catch { /* silent */ }
+  }, [selectedRepoId, onReposChange]);
 
   if (!open) return null;
 
@@ -70,6 +93,25 @@ export function SettingsModal({
                   {repos.map((repo) => <option key={repo.id} value={repo.id}>{repo.name}</option>)}
                 </select>
               </div>
+              {selectedRepo && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Default Branch</label>
+                  <select
+                    className={selectClass}
+                    value={selectedRepo.default_branch}
+                    onChange={(e) => void handleDefaultBranchChange(e.target.value)}
+                  >
+                    {branches.length > 0 ? branches.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    )) : (
+                      <option value={selectedRepo.default_branch}>{selectedRepo.default_branch}</option>
+                    )}
+                  </select>
+                  <p className="mt-1 text-[11px] text-text-muted">
+                    Base branch for merging changes (currently: {selectedRepo.default_branch})
+                  </p>
+                </div>
+              )}
               <div className="rounded-xl border border-border-default bg-surface-200 p-4">
                 <h3 className="mb-3 text-sm font-medium text-text-secondary">Add New Repository</h3>
                 <form onSubmit={onRepoSubmit} className="space-y-3">
