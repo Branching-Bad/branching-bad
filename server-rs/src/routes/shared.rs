@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::AppState;
 use crate::errors::ApiError;
-use crate::models::TaskWithPayload;
+use crate::models::{AgentProfile, TaskWithPayload};
 
 // ── Shared Path / Query / Payload structs ──
 
@@ -91,6 +91,41 @@ pub(crate) fn resolve_agent_command(state: &AppState, repo_id: &str) -> Option<S
         .get_agent_profile_by_id(&pref.agent_profile_id)
         .ok()??;
     Some(build_agent_command(&profile))
+}
+
+/// 3-tier profile resolution: explicit payload > task override > repo default.
+pub(crate) fn resolve_agent_profile(
+    state: &AppState,
+    explicit_profile_id: Option<&str>,
+    task: &TaskWithPayload,
+) -> Result<AgentProfile, ApiError> {
+    if let Some(profile_id) = explicit_profile_id
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        return state
+            .db
+            .get_agent_profile_by_id(profile_id)
+            .map_err(ApiError::internal)?
+            .ok_or_else(|| ApiError::bad_request("Agent profile not found."));
+    }
+    if let Some(ref task_profile_id) = task.agent_profile_id {
+        return state
+            .db
+            .get_agent_profile_by_id(task_profile_id)
+            .map_err(ApiError::internal)?
+            .ok_or_else(|| ApiError::bad_request("Task agent profile not found."));
+    }
+    let pref = state
+        .db
+        .get_repo_agent_preference(&task.repo_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::bad_request("Select an AI profile for this repo."))?;
+    state
+        .db
+        .get_agent_profile_by_id(&pref.agent_profile_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::bad_request("Agent profile not found."))
 }
 
 pub(crate) fn build_agent_command(profile: &crate::models::AgentProfile) -> String {

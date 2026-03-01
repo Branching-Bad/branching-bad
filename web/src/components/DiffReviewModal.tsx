@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { parseDiff } from "react-diff-view";
 import type { FileData } from "react-diff-view";
-import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo } from "../types";
+import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo, AgentProfile } from "../types";
+import { AgentProfileSelect } from "./AgentProfileSelect";
 import { DiffViewer } from "./DiffViewer";
 import { MergeOptionsBar } from "./MergeOptionsBar";
 import { IconX } from "./icons";
@@ -190,6 +191,9 @@ export function DiffReviewModal({
   onLineSelect,
   onLineSave,
   onLineCancel,
+  agentProfiles,
+  reviewProfileId,
+  onReviewProfileChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -218,6 +222,9 @@ export function DiffReviewModal({
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
   onLineCancel: () => void;
+  agentProfiles?: AgentProfile[];
+  reviewProfileId?: string;
+  onReviewProfileChange?: (v: string) => void;
 }) {
   const files = useMemo(() => {
     if (!runDiff) return [];
@@ -402,23 +409,28 @@ export function DiffReviewModal({
             />
 
             {/* Submit area */}
-            {reviewMode === "batch" ? (
-              <button
-                onClick={onSubmitBatchReview}
-                disabled={busy || (batchLineComments.length === 0 && !reviewText.trim())}
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
-              >
-                Review Gonder ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
-              </button>
-            ) : (
-              <button
-                onClick={onSubmitReview}
-                disabled={busy || !reviewText.trim()}
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
-              >
-                Submit Feedback
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {agentProfiles && onReviewProfileChange && (
+                <AgentProfileSelect profiles={agentProfiles} value={reviewProfileId ?? ""} onChange={onReviewProfileChange} />
+              )}
+              {reviewMode === "batch" ? (
+                <button
+                  onClick={onSubmitBatchReview}
+                  disabled={busy || (batchLineComments.length === 0 && !reviewText.trim())}
+                  className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                >
+                  Review Gonder ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
+                </button>
+              ) : (
+                <button
+                  onClick={onSubmitReview}
+                  disabled={busy || !reviewText.trim()}
+                  className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                >
+                  Submit Feedback
+                </button>
+              )}
+            </div>
 
             {/* Past review comments */}
             {reviewComments.length > 0 && (

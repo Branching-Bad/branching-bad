@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import type { ChatMessage } from "../types";
+import type { ChatMessage, AgentProfile } from "../types";
+import { AgentProfileSelect } from "./AgentProfileSelect";
 import { formatDate } from "./shared";
 
 export function ChatPanel({
@@ -8,12 +9,18 @@ export function ChatPanel({
   onCancelQueued,
   messages,
   queuedCount,
+  agentProfiles,
+  chatProfileId,
+  onChatProfileChange,
 }: {
   isRunning: boolean;
   onSend: (content: string) => Promise<void>;
   onCancelQueued: () => Promise<void>;
   messages: ChatMessage[];
   queuedCount: number;
+  agentProfiles?: AgentProfile[];
+  chatProfileId?: string;
+  onChatProfileChange?: (v: string) => void;
 }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -104,6 +111,14 @@ export function ChatPanel({
           rows={1}
           className="flex-1 resize-none rounded-lg border border-border-strong bg-surface-100 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
         />
+        {agentProfiles && onChatProfileChange && (
+          <AgentProfileSelect
+            profiles={agentProfiles}
+            value={chatProfileId ?? ""}
+            onChange={onChatProfileChange}
+            className="shrink-0 rounded-lg border border-border-strong bg-surface-100 px-2 py-2 text-[11px] text-text-secondary focus:border-brand focus:outline-none"
+          />
+        )}
         <button
           onClick={() => void handleSend()}
           disabled={!input.trim() || sending}

@@ -39,6 +39,9 @@ export function DetailsSidebar({
   onSendChat, onCancelQueuedChat,
   onExpandReview,
   customBranchName, setCustomBranchName,
+  agentProfiles,
+  reviewProfileId, onReviewProfileChange,
+  chatProfileId, onChatProfileChange,
 }: {
   selectedTask: Task;
   plans: Plan[]; selectedPlanId: string; setSelectedPlanId: (v: string) => void;
@@ -90,6 +93,11 @@ export function DetailsSidebar({
   onExpandReview?: () => void;
   customBranchName: string;
   setCustomBranchName: (v: string) => void;
+  agentProfiles?: AgentProfile[];
+  reviewProfileId?: string;
+  onReviewProfileChange?: (v: string) => void;
+  chatProfileId?: string;
+  onChatProfileChange?: (v: string) => void;
 }) {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? latestPlan;
 
@@ -459,6 +467,20 @@ export function DetailsSidebar({
                     const items = phases.flatMap((p) => p.tasks ?? []);
                     if (!items.some((t) => t.complexity || t.suggested_model)) return null;
                     const cxColors: Record<string, string> = { low: "bg-blue-500/15 text-blue-400", medium: "bg-orange-500/15 text-orange-400", high: "bg-red-500/15 text-red-400" };
+                    const modelOptions = ["haiku", "sonnet", "opus"];
+                    const updateTaskModel = (taskId: string, newModel: string) => {
+                      try {
+                        const parsed = JSON.parse(manualTasklistJsonText);
+                        for (const phase of parsed.phases ?? []) {
+                          for (const task of phase.tasks ?? []) {
+                            if (task.id === taskId) {
+                              task.suggested_model = newModel || undefined;
+                            }
+                          }
+                        }
+                        setManualTasklistJsonText(JSON.stringify(parsed, null, 2));
+                      } catch { /* ignore parse errors */ }
+                    };
                     return (
                       <div className="rounded-xl border border-border-default bg-surface-200 p-3">
                         <h4 className="mb-2 text-xs font-medium text-text-secondary">Tasklist Overview</h4>
@@ -471,11 +493,14 @@ export function DetailsSidebar({
                                   {t.complexity}
                                 </span>
                               )}
-                              {t.suggested_model && (
-                                <span className="shrink-0 rounded bg-purple-500/10 px-1.5 py-0.5 text-purple-400">
-                                  {t.suggested_model}
-                                </span>
-                              )}
+                              <select
+                                value={t.suggested_model ?? ""}
+                                onChange={(e) => updateTaskModel(t.id, e.target.value)}
+                                className="shrink-0 rounded border border-purple-500/30 bg-purple-500/10 px-1 py-0.5 text-[10px] text-purple-400 focus:border-purple-400 focus:outline-none"
+                              >
+                                <option value="">-</option>
+                                {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                              </select>
                             </div>
                           ))}
                         </div>
@@ -608,6 +633,9 @@ export function DetailsSidebar({
                     onCancelQueued={onCancelQueuedChat}
                     messages={chatMessages}
                     queuedCount={chatQueuedCount}
+                    agentProfiles={agentProfiles}
+                    chatProfileId={chatProfileId}
+                    onChatProfileChange={onChatProfileChange}
                   />
                 )}
 
@@ -667,6 +695,9 @@ export function DetailsSidebar({
                 onLineSave={onLineSave}
                 onLineCancel={onLineCancel}
                 onExpandReview={onExpandReview}
+                agentProfiles={agentProfiles}
+                reviewProfileId={reviewProfileId}
+                onReviewProfileChange={onReviewProfileChange}
               />
             )}
           </div>

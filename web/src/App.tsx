@@ -225,6 +225,11 @@ export default function App() {
           onExpandReview={() => setReviewModalOpen(true)}
           customBranchName={run.customBranchName}
           setCustomBranchName={run.setCustomBranchName}
+          agentProfiles={boot.agentProfiles}
+          reviewProfileId={review.reviewProfileId}
+          onReviewProfileChange={review.setReviewProfileId}
+          chatProfileId={chat.chatProfileId}
+          onChatProfileChange={chat.setChatProfileId}
         />
       )}
 
@@ -257,6 +262,9 @@ export default function App() {
           onLineSelect={review.handleLineSelect}
           onLineSave={review.handleLineSave}
           onLineCancel={review.handleLineCancel}
+          agentProfiles={boot.agentProfiles}
+          reviewProfileId={review.reviewProfileId}
+          onReviewProfileChange={review.setReviewProfileId}
         />
       )}
 

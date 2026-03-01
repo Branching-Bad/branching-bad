@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use crate::AppState;
 use crate::errors::ApiError;
 use crate::msg_store::{LogMsg, MsgStore};
-use super::shared::{TaskPath, build_agent_command};
+use super::shared::{TaskPath, build_agent_command, resolve_agent_profile};
 use super::runs::spawn_resume_run;
 
 pub(crate) fn chat_routes() -> Router<AppState> {
@@ -35,6 +35,8 @@ pub(crate) fn chat_routes() -> Router<AppState> {
 #[derive(Debug, Deserialize)]
 struct SendChatPayload {
     content: String,
+    #[serde(rename = "profileId")]
+    profile_id: Option<String>,
 }
 
 async fn send_chat_message(
@@ -83,27 +85,7 @@ async fn send_chat_message(
         .map_err(ApiError::internal)?
         .ok_or_else(|| ApiError::not_found("Repo not found."))?;
 
-    let profile = if let Some(ref task_profile_id) = task.agent_profile_id {
-        state
-            .db
-            .get_agent_profile_by_id(task_profile_id)
-            .map_err(ApiError::internal)?
-    } else {
-        state
-            .db
-            .get_repo_agent_preference(&repo.id)
-            .map_err(ApiError::internal)?
-            .and_then(|pref| {
-                state
-                    .db
-                    .get_agent_profile_by_id(&pref.agent_profile_id)
-                    .ok()
-                    .flatten()
-            })
-    };
-
-    let profile = profile
-        .ok_or_else(|| ApiError::bad_request("No agent profile configured for this task/repo."))?;
+    let profile = resolve_agent_profile(&state, payload.profile_id.as_deref(), &task)?;
 
     let agent_command = build_agent_command(&profile);
 
@@ -267,27 +249,7 @@ async fn dispatch_next_queued_chat(
         .map_err(ApiError::internal)?
         .ok_or_else(|| ApiError::not_found("Repo not found."))?;
 
-    let profile = if let Some(ref task_profile_id) = task.agent_profile_id {
-        state
-            .db
-            .get_agent_profile_by_id(task_profile_id)
-            .map_err(ApiError::internal)?
-    } else {
-        state
-            .db
-            .get_repo_agent_preference(&repo.id)
-            .map_err(ApiError::internal)?
-            .and_then(|pref| {
-                state
-                    .db
-                    .get_agent_profile_by_id(&pref.agent_profile_id)
-                    .ok()
-                    .flatten()
-            })
-    };
-
-    let profile = profile
-        .ok_or_else(|| ApiError::bad_request("No agent profile configured."))?;
+    let profile = resolve_agent_profile(&state, None, &task)?;
     let agent_command = build_agent_command(&profile);
     let content = chat_msg.content.clone();
 

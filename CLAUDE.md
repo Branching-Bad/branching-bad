@@ -33,142 +33,94 @@ Backend: http://localhost:4310, Frontend: http://localhost:5173 (proxies /api to
 
 ### server-rs/ — Rust Backend (Axum + rusqlite)
 
-Single-binary HTTP server. `main.rs` is the entrypoint (~105 lines) that wires together route modules via `.merge()`.
+Single-binary HTTP server. `main.rs` wires together route modules via `.merge()`.
 
 #### Core modules
-- `errors.rs` — `ApiError` struct with `bad_request`, `not_found`, `conflict`, `internal` constructors
-- `models.rs` — All data structs (Repo, Task, Plan, Run, ProviderAccountRow, etc.)
-- `planner.rs` — `build_plan()`: walks repo files with walkdir, scores by keyword overlap, produces markdown + structured JSON plan
-- `executor.rs` — Git operations: branch creation, worktree management, diff capture, merge strategies (squash/merge/rebase), push, PR creation via `gh` CLI, git status info, agent command probing
-- `discovery.rs` — Scans PATH for AI agent binaries (codex, claude, gemini, opencode, cursor), reads their config files
+- `errors.rs` — `ApiError` with `bad_request`, `not_found`, `conflict`, `internal` constructors
+- `models.rs` — All data structs (Repo, Task, Plan, Run, AgentProfile, etc.)
+- `planner.rs` — `build_plan()`: walks repo, scores files by keyword overlap, produces markdown + structured JSON plan
+- `executor.rs` — Git operations: branch, worktree, diff, merge strategies, push, PR via `gh` CLI
+- `discovery.rs` — Scans PATH for AI agent binaries, reads config files
 - `process_manager.rs` — Manages spawned agent processes
 - `msg_store.rs` — Message/event storage for run logs
 
 #### routes/ — HTTP handler modules (each exports `xxx_routes() -> Router<AppState>`)
-- `shared.rs` — Shared types (`TaskPath`, `RepoQuery`, `TaskQuery`, `StartRunPayload`) and utility functions (`resolve_agent_command`, `build_agent_command`, `plan_store_key`, `enqueue_autostart_if_enabled`, etc.)
-- `health.rs` — Health check, bootstrap endpoint
-- `repos.rs` — Repo CRUD, default branch config, branch listing
-- `tasks.rs` — Task sync, list, create, update, pipeline management
-- `plans.rs` — Plan CRUD, approve/reject/revise, plan jobs, `spawn_plan_generation_job`
-- `runs.rs` — Run lifecycle, WebSocket log streaming, `start_run`, `spawn_resume_run`, git-status endpoint
-- `reviews.rs` — Review submission, apply-to-main (with merge strategy), push branch, create PR
-- `agents.rs` — Agent discovery and per-repo selection
-- `autostart.rs` — Background autostart worker (`spawn_autostart_worker`)
-- `chat.rs` — Chat/follow-up message system
-- `fs.rs` — Filesystem listing for folder picker
+- `shared.rs` — Shared types and utilities: `resolve_agent_profile` (3-tier resolution), `build_agent_command`, `enqueue_autostart_if_enabled`, etc.
+- `runs.rs` — Run lifecycle, WebSocket log streaming, `start_run`, `spawn_resume_run`
+- `reviews.rs` — Review submission, apply-to-main (merge strategies), push, PR creation
+- `chat.rs` — Chat/follow-up messages with agent profile override support
+- `plans.rs` — Plan CRUD, approve/reject/revise, plan jobs
+- `tasks.rs` — Task sync, CRUD, pipeline management
+- `repos.rs`, `agents.rs`, `autostart.rs`, `health.rs`, `fs.rs`
 
-#### migrations/ — Refinery SQL migrations (embedded at compile time)
-- `V1__initial_schema.sql` — Base tables and indexes
-- `V2__add_columns.sql` — Column additions for extended features
-- `V3__nullable_jira.sql` — Jira field nullability migration
-- `V4__add_default_branch.sql` — Configurable default branch per repo
-- `V6__add_pr_tracking.sql` — PR URL/number tracking on tasks
+#### db/ — SQLite module (split by domain: repos, tasks, plans, runs, agents, providers, etc.)
 
-New migrations: add `V{N}__description.sql` file, runs automatically at boot via `refinery`.
-
-#### db/ — SQLite module (split into domain files)
-- `mod.rs` — Schema init via refinery embedded migrations, connection helper, `now_iso()` utility
-- `repos.rs` — Repo CRUD
-- `tasks.rs` — Task CRUD + state transitions
-- `plans.rs` — Plan CRUD + plan actions
-- `plan_jobs.rs` — Background plan generation jobs
-- `runs.rs` — Run CRUD + event logging
-- `agents.rs` — Agent profile + repo agent preference CRUD
-- `autostart.rs` — Autostart job queue
-- `providers.rs` — Provider accounts, resources, bindings, items CRUD
-- `reviews.rs` — Review comments
-- `chat.rs` — Chat messages
-- `maintenance.rs` — Cleanup/recovery operations
+Schema init via refinery embedded migrations. New migrations: add `V{N}__description.sql`, runs automatically at boot.
 
 #### provider/ — Pluggable provider system
-- `mod.rs` — `Provider` trait (with `auto_sync()` flag), `ProviderRegistry`, `register_all()`, shared types
-- `routes.rs` — Generic provider HTTP handlers (connect, accounts, resources, bind, items, sync) + `spawn_provider_sync_worker`
-- `jira/` — Jira provider (REST API v3 + Agile v1, Basic Auth)
-- `sentry/` — Sentry provider (REST API, Auth Token)
-- `postgres/` — PostgreSQL diagnostics provider (slow queries, N+1, missing/unused indexes, vacuum). `auto_sync: false` — only runs on manual trigger
-- `cloudwatch/` — AWS CloudWatch Logs provider with custom routes (`provider/cloudwatch/routes.rs`)
+- `mod.rs` — `Provider` trait, `ProviderRegistry`, `register_all()`
+- `routes.rs` — Generic HTTP handlers (connect, accounts, resources, bind, items, sync)
+- Implementations: `jira/`, `sentry/`, `postgres/` (`auto_sync: false`), `cloudwatch/`
 
 Port `4310` (override with `PORT` env var). DB path via `directories` crate (override with `APP_DATA_DIR` env var).
 
 ### web/ — React Frontend (React 19, Vite 7, Tailwind CSS v4)
 
-- `App.tsx` — Thin shell (~295 lines): UI state, hook wiring, JSX layout. All domain logic lives in custom hooks.
+- `App.tsx` — Thin shell (~295 lines): UI state, hook wiring, JSX layout. All domain logic in custom hooks.
 - `api.ts` — Typed `api<T>()` fetch helper for all backend calls
 - Two-column layout: left sidebar (repo/extensions/agent config), main area (kanban board + plan approval + run output)
-- Vite proxies `/api/*` to the backend in dev mode
-- Some UI strings are in Turkish
+- Vite proxies `/api/*` to backend in dev mode. Some UI strings are in Turkish.
 
-#### hooks/ — Domain-specific custom hooks (extracted from App.tsx)
-- `useBootstrap.ts` — Repos, agent profiles, provider metas, bootstrap fetch
-- `useRepoSelection.ts` — Repo/agent selection, repo submit, agent discovery
-- `useTaskState.ts` — Tasks CRUD, grouping, polling, pipeline management
-- `usePlanState.ts` — Plans lifecycle, plan jobs, validation, manual revision
-- `useRunState.ts` — Run start/stop, run state tracking, custom branch name
-- `useReviewState.ts` — Review comments, diff fetching, line comments, apply-to-main, push, PR creation, git status
-- `useChatState.ts` — Chat messages, send/cancel
-- `useEventStream.ts` — WebSocket bridge: forwards run/plan WS events to domain hook state
-- `useWebSocketStream.ts` — Low-level WebSocket connection with reconnect logic
-- `usePolling.ts` — Generic polling interval hook
-- `streamTypes.ts` — `StreamFunctions` type shared across hooks (ref pattern breaks circular dep between domain hooks and useEventStream)
+#### hooks/ — Domain-specific custom hooks (one per domain, extracted from App.tsx)
 
-#### components/
-- `ExtensionsDrawer.tsx` — Drawer that dynamically renders provider sections from registry
-- `ProviderSettingsModal.tsx` — Modal for provider connection/config, renders connect forms from backend metadata
-- `SettingsModal.tsx` — General settings modal
-- `KanbanBoard.tsx`, `DetailsSidebar.tsx` — Task management UI
-- `CreateTaskModal.tsx`, `EditTaskModal.tsx` — Task modals with internal form state, accept `onSubmit(fields)` / `onSave(taskId, fields)` callbacks. Export `TaskFormValues` type.
-- `TaskFormFields.tsx` — Shared form fields component used by both task modals
-- `ChatPanel.tsx` — Chat/follow-up message panel for active runs
-- `DiffReviewModal.tsx`, `DiffReviewPanel.tsx`, `DiffViewer.tsx` — Diff review UI with inline commenting
-- `MergeOptionsBar.tsx` — Shared merge options (strategy, auto-commit, push, PR, git status) used by DiffReviewPanel and DiffReviewModal
-- `LogEntry.tsx`, `LogViewer.tsx` — Log entry rendering with WebSocket streaming
-- `FolderPicker.tsx` — Filesystem folder picker for repo path selection
-- `InlineCommentEditor.tsx` — Inline comment editor for diff review
-- `icons.tsx` — SVG icon components
-- `shared.ts` — Shared UI utilities
+`useBootstrap`, `useRepoSelection`, `useTaskState`, `usePlanState`, `useRunState`, `useReviewState` (includes `reviewProfileId`), `useChatState` (includes `chatProfileId`), `useEventStream`, `useWebSocketStream`, `usePolling`. Shared type: `streamTypes.ts`.
 
-#### providers/ — Frontend provider registry (mirrors backend pattern)
-- `types.ts` — `ProviderUI` type (drawerSection + settingsTab components), `DrawerSectionProps`, `SettingsTabProps`
-- `registry.ts` — `registerProviderUI()`, `getProviderUI()`, `getAllProviderUIs()`
-- `init.ts` — `initProviders()`: calls each provider's register function at app startup
-- `jira/` — Jira drawer section + settings tab
-- `sentry/` — Sentry drawer section + settings tab
+#### components/ — Key patterns
+
+- **Shared components**: `AgentProfileSelect` (agent dropdown), `TaskFormFields` (shared form fields for Create/Edit modals), `MergeOptionsBar` (merge strategy + push + PR controls)
+- **Main UI**: `KanbanBoard`, `DetailsSidebar` (tab-based: plan/tasklist/run/review)
+- **Review**: `DiffReviewPanel`, `DiffReviewModal` (expanded), `DiffViewer`, `InlineCommentEditor`
+- **Other**: `ChatPanel`, `LogViewer`/`LogEntry`, `FolderPicker`, `ExtensionsDrawer`, `SettingsModal`, `ProviderSettingsModal`
+
+#### providers/ — Frontend provider registry (mirrors backend)
+
+`registerProviderUI()` / `getProviderUI()` pattern. Init in `init.ts`. Each provider has a drawer section + settings tab.
 
 ### reference/vibe-kanban/ — External reference project, not part of the active application
 
-## Adding a New Provider
+## Key Patterns
 
-Follow this checklist — **no changes needed** in `main.rs`, `App.tsx`, `ExtensionsDrawer.tsx`, or `ProviderSettingsModal.tsx`.
+### Agent Profile Resolution
 
-### Backend
-1. Create `server-rs/src/provider/<name>/` directory
-2. Implement the `Provider` trait (meta, validate_credentials, list_resources, sync_items, item_to_task_fields, mask_account)
-3. Override `auto_sync()` to return `false` if the provider makes expensive external connections (e.g. database queries)
-4. Add `pub fn register(registry: &mut ProviderRegistry)` in the provider module
-5. In `server-rs/src/provider/mod.rs`: add `pub mod <name>;` and one line in `register_all()`
+All run-triggering endpoints use `resolve_agent_profile()` from `routes/shared.rs` — 3-tier resolution:
 
-### Frontend
-1. Create `web/src/providers/<name>/` directory with DrawerSection + index.ts
-2. In `web/src/providers/init.ts`: import and call `register<Name>UI()`
+1. **Explicit payload** — `profileId` from request body (UI dropdown override)
+2. **Task override** — `task.agent_profile_id` (set at task creation/edit)
+3. **Repo default** — `repo_agent_preferences` table (set in settings)
+
+Used by: `start_run`, `submit_review`, `send_chat_message`, `dispatch_next_queued_chat`. `start_run` additionally persists explicit selection as repo preference.
+
+### Task State Machine
+
+TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → IN_REVIEW → DONE/FAILED
+Side states: PLAN_REVISE_REQUESTED, PAUSED_FOR_REAPPROVAL, CANCELLED
+
+### Adding a New Provider
+
+**No changes needed** in `main.rs`, `App.tsx`, `ExtensionsDrawer.tsx`, or `ProviderSettingsModal.tsx`.
+
+**Backend:**
+1. Create `server-rs/src/provider/<name>/`, implement `Provider` trait
+2. Override `auto_sync()` → `false` for expensive providers
+3. Add `register()` fn, wire in `provider/mod.rs` `register_all()`
+
+**Frontend:**
+1. Create `web/src/providers/<name>/` with DrawerSection + index.ts
+2. Register in `web/src/providers/init.ts`
 
 ## API Routes
 
-All routes under `/api/`. Key groups:
-- `/api/repos` — CRUD for local git repositories
-- `/api/tasks/*` — Sync, list, create, update, review, push, create-pr, apply-to-main, complete
-- `/api/plans/*` — Create plans, list plans, approve/reject/revise, plan jobs
-- `/api/runs/*` — Start runs, get status, stream logs (WebSocket), stop, git-status
-- `/api/agents/*` — Discover AI agents in PATH, select per-repo profile
-- `/api/providers/*` — Generic provider endpoints (connect, accounts, resources, bind, items, sync)
-- `/api/chat/*` — Chat/follow-up messages for active runs
-- `/api/bootstrap` — Returns repos + provider accounts + agent profiles in one call
-- `/api/pipeline/clear-all` — Reset all pipeline state
-- `/api/fs/list` — Filesystem listing for folder picker
-
-## Task State Machine
-
-TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → IN_REVIEW → DONE/FAILED
-With side states: PLAN_REVISE_REQUESTED, PAUSED_FOR_REAPPROVAL, CANCELLED
+All under `/api/`. Key groups: `/api/repos`, `/api/tasks/*`, `/api/plans/*`, `/api/runs/*`, `/api/agents/*`, `/api/providers/*`, `/api/chat/*`, `/api/bootstrap`, `/api/fs/list`, `/api/pipeline/clear-all`
 
 ## SQLite Schema
 

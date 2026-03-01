@@ -19,7 +19,7 @@ use crate::executor::{
 };
 use crate::models::{TaskWithPayload, Run, Repo};
 use crate::msg_store::{LogMsg, MsgStore};
-use super::shared::{TaskPath, build_agent_command};
+use super::shared::{TaskPath, build_agent_command, resolve_agent_profile};
 use super::runs::spawn_resume_run;
 
 pub(crate) fn review_routes() -> Router<AppState> {
@@ -166,29 +166,7 @@ async fn submit_review(
         .cloned()
         .ok_or_else(|| ApiError::bad_request("No comments to submit."))?;
 
-    let profile = if let Some(profile_id) = payload
-        .profile_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-    {
-        state
-            .db
-            .get_agent_profile_by_id(profile_id)
-            .map_err(ApiError::internal)?
-            .ok_or_else(|| ApiError::bad_request("Agent profile not found."))?
-    } else {
-        let preference = state
-            .db
-            .get_repo_agent_preference(&repo.id)
-            .map_err(ApiError::internal)?
-            .ok_or_else(|| ApiError::bad_request("Select an AI profile for this repo."))?;
-        state
-            .db
-            .get_agent_profile_by_id(&preference.agent_profile_id)
-            .map_err(ApiError::internal)?
-            .ok_or_else(|| ApiError::bad_request("Agent profile not found."))?
-    };
+    let profile = resolve_agent_profile(&state, payload.profile_id.as_deref(), &task)?;
     let agent_command = build_agent_command(&profile);
 
     let run = state

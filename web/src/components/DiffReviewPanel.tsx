@@ -1,4 +1,5 @@
-import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo } from "../types";
+import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo, AgentProfile } from "../types";
+import { AgentProfileSelect } from "./AgentProfileSelect";
 import { DiffViewer } from "./DiffViewer";
 import { IconExpand } from "./icons";
 import { MergeOptionsBar } from "./MergeOptionsBar";
@@ -39,6 +40,9 @@ export function DiffReviewPanel({
   onLineSave,
   onLineCancel,
   onExpandReview,
+  agentProfiles,
+  reviewProfileId,
+  onReviewProfileChange,
 }: {
   selectedTask: Task;
   reviewComments: ReviewComment[];
@@ -66,6 +70,9 @@ export function DiffReviewPanel({
   onLineSave: () => void;
   onLineCancel: () => void;
   onExpandReview?: () => void;
+  agentProfiles?: AgentProfile[];
+  reviewProfileId?: string;
+  onReviewProfileChange?: (v: string) => void;
 }) {
   return (
     <div className="rounded-xl border border-border-default bg-surface-200 p-3">
@@ -193,23 +200,28 @@ export function DiffReviewPanel({
       />
 
       {/* Submit area */}
-      {reviewMode === "batch" ? (
-        <button
-          onClick={onSubmitBatchReview}
-          disabled={busy || (batchLineComments.length === 0 && !reviewText.trim())}
-          className="mt-2 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
-        >
-          Review Gonder ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
-        </button>
-      ) : (
-        <button
-          onClick={onSubmitReview}
-          disabled={busy || !reviewText.trim()}
-          className="mt-2 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
-        >
-          Submit Feedback
-        </button>
-      )}
+      <div className="mt-2 flex items-center gap-2">
+        {agentProfiles && onReviewProfileChange && (
+          <AgentProfileSelect profiles={agentProfiles} value={reviewProfileId ?? ""} onChange={onReviewProfileChange} />
+        )}
+        {reviewMode === "batch" ? (
+          <button
+            onClick={onSubmitBatchReview}
+            disabled={busy || (batchLineComments.length === 0 && !reviewText.trim())}
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+          >
+            Review Gonder ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
+          </button>
+        ) : (
+          <button
+            onClick={onSubmitReview}
+            disabled={busy || !reviewText.trim()}
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+          >
+            Submit Feedback
+          </button>
+        )}
+      </div>
 
       {/* Past review comments */}
       {reviewComments.length > 0 && (

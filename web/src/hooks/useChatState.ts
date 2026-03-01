@@ -17,6 +17,7 @@ export function useChatState({
   setError: (msg: string) => void;
 }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatProfileId, setChatProfileId] = useState("");
 
   const chatQueuedCount = useMemo(() => chatMessages.filter((m) => m.status === "queued").length, [chatMessages]);
 
@@ -33,7 +34,7 @@ export function useChatState({
     try {
       const res = await api<{ chatMessage: ChatMessage; run: ActiveRun | null }>(
         `/api/tasks/${encodeURIComponent(selectedTaskId)}/chat`,
-        { method: "POST", body: JSON.stringify({ content }) },
+        { method: "POST", body: JSON.stringify({ content, profileId: chatProfileId || undefined }) },
       );
       setChatMessages((prev) => [...prev, res.chatMessage]);
       if (res.run) {
@@ -46,7 +47,7 @@ export function useChatState({
         streamRef.current?.attachRunLogStream(res.run.id, selectedTaskId, selectedRepoId);
       }
     } catch (e) { setError((e as Error).message); }
-  }, [selectedTaskId, selectedRepoId, updateTaskRunState, streamRef, setError]);
+  }, [selectedTaskId, selectedRepoId, chatProfileId, updateTaskRunState, streamRef, setError]);
 
   const cancelQueuedChat = useCallback(async () => {
     if (!selectedTaskId) return;
@@ -58,6 +59,7 @@ export function useChatState({
 
   return {
     chatMessages, setChatMessages,
+    chatProfileId, setChatProfileId,
     chatQueuedCount,
     sendChatMessage, cancelQueuedChat,
   };
