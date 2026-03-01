@@ -70,12 +70,17 @@ npm run check:server     # cargo check on backend
 Database location:
 - macOS: `~/Library/Application Support/jira-approval-local-agent/agent.db`
 - Linux: `~/.local/share/jira-approval-local-agent/agent.db`
+- Windows: `%APPDATA%\jira-approval-local-agent\agent.db`
 
 ## Task Lifecycle
 
 ```
-TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → IN_REVIEW → DONE
+TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → IN_REVIEW → DONE/FAILED
+                                ↓              ↑
+                     PLAN_REVISE_REQUESTED ─────┘
 ```
+
+Optional **auto-approve** skips the manual approval step — plans are approved and execution starts automatically. Tasks can also be `PAUSED_FOR_REAPPROVAL` or `CANCELLED`.
 
 ## License
 
