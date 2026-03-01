@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Local-first, approval-first coding agent with pluggable provider system. Connects to external services (Jira, Sentry, etc.) via a unified provider interface, syncs tasks, generates implementation plans requiring human approval, then launches a git branch and executes. SQLite persistence stored in OS app data directory.
+Local-first, approval-first coding agent with pluggable provider system. Connects to external services (Jira, Sentry, PostgreSQL, CloudWatch, etc.) via a unified provider interface, syncs tasks, generates implementation plans requiring human approval, then launches a git branch and executes. SQLite persistence stored in OS app data directory.
 
 ## Commands
 
@@ -33,15 +33,29 @@ Backend: http://localhost:4310, Frontend: http://localhost:5173 (proxies /api to
 
 ### server-rs/ — Rust Backend (Axum + rusqlite)
 
-Single-binary HTTP server. `main.rs` contains all Axum handlers and route definitions.
+Single-binary HTTP server. `main.rs` is the entrypoint (~105 lines) that wires together route modules via `.merge()`.
 
 #### Core modules
+- `errors.rs` — `ApiError` struct with `bad_request`, `not_found`, `conflict`, `internal` constructors
 - `models.rs` — All data structs (Repo, Task, Plan, Run, ProviderAccountRow, etc.)
 - `planner.rs` — `build_plan()`: walks repo files with walkdir, scores by keyword overlap, produces markdown + structured JSON plan
 - `executor.rs` — Git operations: branch creation (`codex/<ISSUE_KEY>-<ts>`), plan artifact saving to `.local-agent/`, diff capture, agent command probing
 - `discovery.rs` — Scans PATH for AI agent binaries (codex, claude, gemini, opencode, cursor), reads their config files
 - `process_manager.rs` — Manages spawned agent processes
 - `msg_store.rs` — Message/event storage for run logs
+
+#### routes/ — HTTP handler modules (each exports `xxx_routes() -> Router<AppState>`)
+- `shared.rs` — Shared types (`TaskPath`, `RepoQuery`, `TaskQuery`, `StartRunPayload`) and utility functions (`resolve_agent_command`, `build_agent_command`, `plan_store_key`, `enqueue_autostart_if_enabled`, etc.)
+- `health.rs` — Health check, bootstrap endpoint
+- `repos.rs` — Repo CRUD
+- `tasks.rs` — Task sync, list, create, update, pipeline management
+- `plans.rs` — Plan CRUD, approve/reject/revise, plan jobs, `spawn_plan_generation_job`
+- `runs.rs` — Run lifecycle, WebSocket log streaming, `start_run`, `spawn_resume_run`
+- `reviews.rs` — Review submission, apply-to-main
+- `agents.rs` — Agent discovery and per-repo selection
+- `autostart.rs` — Background autostart worker (`spawn_autostart_worker`)
+- `chat.rs` — Chat/follow-up message system
+- `fs.rs` — Filesystem listing for folder picker
 
 #### db/ — SQLite module (split into domain files)
 - `mod.rs` — Schema init, connection helper, `now_iso()` utility
@@ -54,12 +68,16 @@ Single-binary HTTP server. `main.rs` contains all Axum handlers and route defini
 - `autostart.rs` — Autostart job queue
 - `providers.rs` — Provider accounts, resources, bindings, items CRUD
 - `reviews.rs` — Review comments
+- `chat.rs` — Chat messages
 - `maintenance.rs` — Cleanup/recovery operations
 
 #### provider/ — Pluggable provider system
-- `mod.rs` — `Provider` trait, `ProviderRegistry`, `register_all()`, shared types (ProviderMeta, ConnectField, etc.)
+- `mod.rs` — `Provider` trait (with `auto_sync()` flag), `ProviderRegistry`, `register_all()`, shared types
+- `routes.rs` — Generic provider HTTP handlers (connect, accounts, resources, bind, items, sync) + `spawn_provider_sync_worker`
 - `jira/` — Jira provider (REST API v3 + Agile v1, Basic Auth)
 - `sentry/` — Sentry provider (REST API, Auth Token)
+- `postgres/` — PostgreSQL diagnostics provider (slow queries, N+1, missing/unused indexes, vacuum). `auto_sync: false` — only runs on manual trigger
+- `cloudwatch/` — AWS CloudWatch Logs provider with custom routes (`provider/cloudwatch/routes.rs`)
 
 Port `4310` (override with `PORT` env var). DB path via `directories` crate (override with `APP_DATA_DIR` env var).
 
@@ -76,6 +94,8 @@ Port `4310` (override with `PORT` env var). DB path via `directories` crate (ove
 - `ProviderSettingsModal.tsx` — Modal for provider connection/config, renders connect forms from backend metadata
 - `SettingsModal.tsx` — General settings modal
 - `KanbanBoard.tsx`, `DetailsSidebar.tsx`, `CreateTaskModal.tsx`, `EditTaskModal.tsx` — Task management UI
+- `ChatPanel.tsx` — Chat/follow-up message panel for active runs
+- `LogEntry.tsx` — Log entry rendering with WebSocket streaming
 - `icons.tsx` — SVG icon components
 - `shared.ts` — Shared UI utilities
 
@@ -95,8 +115,9 @@ Follow this checklist — **no changes needed** in `main.rs`, `App.tsx`, `Extens
 ### Backend
 1. Create `server-rs/src/provider/<name>/` directory
 2. Implement the `Provider` trait (meta, validate_credentials, list_resources, sync_items, item_to_task_fields, mask_account)
-3. Add `pub fn register(registry: &mut ProviderRegistry)` in the provider module
-4. In `server-rs/src/provider/mod.rs`: add `pub mod <name>;` and one line in `register_all()`
+3. Override `auto_sync()` to return `false` if the provider makes expensive external connections (e.g. database queries)
+4. Add `pub fn register(registry: &mut ProviderRegistry)` in the provider module
+5. In `server-rs/src/provider/mod.rs`: add `pub mod <name>;` and one line in `register_all()`
 
 ### Frontend
 1. Create `web/src/providers/<name>/` directory with DrawerSection + index.ts
@@ -108,20 +129,21 @@ All routes under `/api/`. Key groups:
 - `/api/repos` — CRUD for local git repositories
 - `/api/tasks/*` — Sync, list, create, update, review tasks
 - `/api/plans/*` — Create plans, list plans, approve/reject/revise, plan jobs
-- `/api/runs/*` — Start runs, get status, stream logs, stop
+- `/api/runs/*` — Start runs, get status, stream logs (WebSocket), stop
 - `/api/agents/*` — Discover AI agents in PATH, select per-repo profile
 - `/api/providers/*` — Generic provider endpoints (connect, accounts, resources, bind, items, sync)
+- `/api/chat/*` — Chat/follow-up messages for active runs
 - `/api/bootstrap` — Returns repos + provider accounts + agent profiles in one call
 - `/api/pipeline/clear-all` — Reset all pipeline state
 - `/api/fs/list` — Filesystem listing for folder picker
 
 ## Task State Machine
 
-TODO → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → IN_REVIEW → DONE/FAILED
+TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → IN_REVIEW → DONE/FAILED
 With side states: PLAN_REVISE_REQUESTED, PAUSED_FOR_REAPPROVAL, CANCELLED
 
 ## SQLite Schema
 
-Tables: `repos`, `tasks`, `plans`, `plan_actions`, `plan_jobs`, `autostart_jobs`, `runs`, `events`, `agent_profiles`, `repo_agent_preferences`, `review_comments`, `provider_accounts`, `provider_resources`, `provider_bindings`, `provider_items`
+Tables: `repos`, `tasks`, `plans`, `plan_actions`, `plan_jobs`, `autostart_jobs`, `runs`, `events`, `agent_profiles`, `repo_agent_preferences`, `review_comments`, `chat_messages`, `provider_accounts`, `provider_resources`, `provider_bindings`, `provider_items`
 
 DB location: macOS `~/Library/Application Support/jira-approval-local-agent/agent.db`, Linux `~/.local/share/jira-approval-local-agent/agent.db`
