@@ -81,7 +81,3 @@ TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → 
 ```
 
 Optional **auto-approve** skips the manual approval step — plans are approved and execution starts automatically. Tasks can also be `PAUSED_FOR_REAPPROVAL` or `CANCELLED`.
-
-## License
-
-MIT
