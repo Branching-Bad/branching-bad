@@ -2,6 +2,7 @@ import { registerCloudWatchUI } from "./cloudwatch";
 import { registerJiraUI } from "./jira";
 import { registerPostgresUI } from "./postgres";
 import { registerSentryUI } from "./sentry";
+import { registerSonarQubeUI } from "./sonarqube";
 
 // Call this once at app startup to register all provider UIs.
 // To add a new provider: create providers/<name>/ folder, implement the component,
@@ -11,4 +12,5 @@ export function initProviders() {
   registerSentryUI();
   registerPostgresUI();
   registerCloudWatchUI();
+  registerSonarQubeUI();
 }

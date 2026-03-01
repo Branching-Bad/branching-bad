@@ -193,6 +193,41 @@ impl Db {
         })
     }
 
+    pub fn update_binding_config(
+        &self,
+        repo_id: &str,
+        account_id: &str,
+        resource_id: &str,
+        config_json: &str,
+    ) -> Result<()> {
+        let conn = self.connect()?;
+        let ts = now_iso();
+        let n = conn.execute(
+            "UPDATE provider_bindings SET config_json = ?1, updated_at = ?2 WHERE repo_id = ?3 AND provider_account_id = ?4 AND provider_resource_id = ?5",
+            params![config_json, ts, repo_id, account_id, resource_id],
+        )?;
+        if n == 0 {
+            return Err(anyhow::anyhow!("Binding not found"));
+        }
+        Ok(())
+    }
+
+    pub fn get_binding_config(
+        &self,
+        repo_id: &str,
+        account_id: &str,
+        resource_id: &str,
+    ) -> Result<Option<String>> {
+        let conn = self.connect()?;
+        conn.query_row(
+            "SELECT config_json FROM provider_bindings WHERE repo_id = ?1 AND provider_account_id = ?2 AND provider_resource_id = ?3",
+            params![repo_id, account_id, resource_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(anyhow::Error::from)
+    }
+
     pub fn list_provider_bindings(&self, provider_id: &str) -> Result<Vec<ProviderBindingRow>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(

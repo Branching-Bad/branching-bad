@@ -9,17 +9,19 @@ mod process_manager;
 mod provider;
 mod routes;
 
-use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use axum::Router;
 use directories::ProjectDirs;
+use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     db::Db,
     process_manager::ProcessManager,
     provider::ProviderRegistry,
+    provider::sonarqube::routes::SetupJob,
 };
 
 #[derive(Clone)]
@@ -27,6 +29,7 @@ pub struct AppState {
     pub db: Arc<Db>,
     pub process_manager: Arc<ProcessManager>,
     pub registry: Arc<ProviderRegistry>,
+    pub setup_jobs: Arc<Mutex<HashMap<String, SetupJob>>>,
 }
 
 #[tokio::main]
@@ -60,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
         db,
         process_manager,
         registry: Arc::new(registry),
+        setup_jobs: Arc::new(Mutex::new(HashMap::new())),
     };
     routes::autostart::spawn_autostart_worker(state.clone());
     provider::routes::spawn_provider_sync_worker(state.clone());
@@ -76,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::fs::fs_routes())
         .merge(provider::routes::provider_routes())
         .merge(provider::cloudwatch::routes::cloudwatch_routes())
+        .merge(provider::sonarqube::routes::sonarqube_routes())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

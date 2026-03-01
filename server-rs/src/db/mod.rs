@@ -9,6 +9,7 @@ mod providers;
 mod repos;
 mod reviews;
 mod runs;
+mod sonar_scans;
 mod tasks;
 
 use std::path::PathBuf;

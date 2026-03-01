@@ -3,12 +3,14 @@ pub mod jira;
 pub mod postgres;
 pub mod routes;
 pub mod sentry;
+pub mod sonarqube;
 
 pub fn register_all(registry: &mut ProviderRegistry) {
     jira::register(registry);
     sentry::register(registry);
     postgres::register(registry);
     cloudwatch::register(registry);
+    sonarqube::register(registry);
 }
 
 use anyhow::Result;
