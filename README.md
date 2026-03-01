@@ -21,7 +21,7 @@ Local-first, approval-first coding agent with a pluggable provider system. Conne
 | **Sentry** | Import Sentry issues for investigation |
 | **PostgreSQL** | Query databases, import schema/data |
 | **CloudWatch** | AWS CloudWatch log analysis |
-| **SonarQube** | Local Docker-based code scanning with quality gate/profile management |
+| **SonarQube** | Connect to corporate SonarQube servers to sync issues, or run local Docker-based scans with quality gate/profile management |
 
 ## Architecture
 
