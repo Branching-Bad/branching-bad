@@ -137,7 +137,7 @@ impl Provider for SonarQubeProvider {
         TaskFieldsFromItem {
             title: format!("{prefix} {message}"),
             description: Some(description),
-            require_plan: true,
+            require_plan: false,
             auto_start: false,
         }
     }
