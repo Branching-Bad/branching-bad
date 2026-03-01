@@ -81,6 +81,10 @@ struct TasklistItem {
     suggested_subagent: Option<String>,
     #[serde(default)]
     estimated_size: Option<String>,
+    #[serde(default)]
+    suggested_model: Option<String>,
+    #[serde(default)]
+    complexity: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -302,7 +306,9 @@ Output schema (exact keys, no extra keys, no null values):
             "affected_files": ["path/file.ext"],
             "acceptance_criteria": ["string"],
             "suggested_subagent": "string",
-            "estimated_size": "S|M|L"
+            "estimated_size": "S|M|L",
+            "complexity": "low|medium|high",
+            "suggested_model": "opus|sonnet|haiku"
           }}
         ]
       }}
@@ -326,6 +332,14 @@ Constraints:
 - `blocked_by` and `blocks` references must point to existing task IDs.
 - At least one phase and one task required.
 - `tasklist_json` serialized size must stay <= 256KB.
+- `complexity` is REQUIRED for every task. Assess based on scope, number of files, and risk:
+  - "low": simple grep, lookup, single-file edit, config change
+  - "medium": multi-file changes, moderate logic, standard patterns
+  - "high": cross-cutting changes, complex logic, architectural decisions, risky refactors
+- `suggested_model` is REQUIRED for every task. Choose based on complexity:
+  - "haiku": low complexity tasks (exploration, simple edits, lookups)
+  - "sonnet": medium complexity tasks (standard feature work, multi-file changes)
+  - "opus": high complexity tasks (architecture, complex logic, critical code)
 "#,
         issue_key = task.jira_issue_key,
         plan_version = target_plan_version,
@@ -556,6 +570,11 @@ fn validate_tasklist_json(
             if let Some(size) = task.estimated_size.as_deref() {
                 if size != "S" && size != "M" && size != "L" {
                     bail!("task {} estimated_size must be S, M, or L", task.id);
+                }
+            }
+            if let Some(complexity) = task.complexity.as_deref() {
+                if complexity != "low" && complexity != "medium" && complexity != "high" {
+                    bail!("task {} complexity must be low, medium, or high", task.id);
                 }
             }
             all_task_ids.insert(task.id.clone());

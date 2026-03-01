@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Task, LaneKey } from "../types";
+import type { Task, LaneKey, AgentProfile } from "../types";
 import { api } from "../api";
 import { IconPlus } from "./icons";
 import { formatDate, laneMeta, laneFromStatus } from "./shared";
@@ -13,6 +13,7 @@ export function KanbanBoard({
   statusFromLane,
   setTasks,
   onError,
+  agentProfiles,
 }: {
   groupedTasks: Record<LaneKey, Task[]>;
   selectedTaskId: string;
@@ -22,6 +23,7 @@ export function KanbanBoard({
   statusFromLane: (lane: LaneKey) => string;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   onError: (msg: string) => void;
+  agentProfiles: AgentProfile[];
 }) {
   const [dragOverLane, setDragOverLane] = useState<LaneKey | null>(null);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
@@ -136,9 +138,19 @@ export function KanbanBoard({
                     <span className={`text-xs font-medium ${task.id === selectedTaskId ? "text-brand" : "text-text-muted"}`}>
                       {task.jira_issue_key}
                     </span>
-                    {task.priority && (
-                      <span className="text-[10px] text-text-muted">{task.priority}</span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {task.agent_profile_id && (() => {
+                        const p = agentProfiles.find((ap) => ap.id === task.agent_profile_id);
+                        return p ? (
+                          <span className="rounded bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-400" title={`${p.agent_name} / ${p.model}`}>
+                            {p.agent_name}/{p.model}
+                          </span>
+                        ) : null;
+                      })()}
+                      {task.priority && (
+                        <span className="text-[10px] text-text-muted">{task.priority}</span>
+                      )}
+                    </div>
                   </div>
                   <p className="mt-1.5 text-sm leading-snug text-text-primary">{task.title}</p>
                   <p className="mt-2 text-[11px] text-text-muted">{formatDate(task.updated_at)}</p>

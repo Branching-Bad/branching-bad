@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS repo_agent_preferences (
         self.ensure_column_exists(&conn, "review_comments", "diff_hunk", "TEXT")?;
         self.ensure_column_exists(&conn, "review_comments", "review_mode", "TEXT NOT NULL DEFAULT 'instant'")?;
         self.ensure_column_exists(&conn, "review_comments", "batch_id", "TEXT")?;
+        self.ensure_column_exists(&conn, "tasks", "agent_profile_id", "TEXT")?;
 
         conn.execute_batch(
             r#"

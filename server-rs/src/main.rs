@@ -444,6 +444,15 @@ async fn update_task(
     let auto_start = payload.auto_start.unwrap_or(task.auto_start);
     let use_worktree = payload.use_worktree.unwrap_or(task.use_worktree);
 
+    let agent_profile_id = match payload.agent_profile_id {
+        Some(Some(ref v)) => {
+            let trimmed = v.trim().to_string();
+            if trimmed.is_empty() { None } else { Some(trimmed) }
+        }
+        Some(None) => None,
+        None => task.agent_profile_id.clone(),
+    };
+
     state
         .db
         .update_task_details(
@@ -455,6 +464,7 @@ async fn update_task(
             auto_start,
             auto_approve_plan,
             use_worktree,
+            agent_profile_id.as_deref(),
         )
         .map_err(ApiError::internal)?;
 
@@ -1503,6 +1513,7 @@ async fn start_run(
     }
 
     let profile = if let Some(profile_id) = payload.profile_id.as_deref().map(str::trim) {
+        // 1. Explicit profile_id in payload (highest priority)
         if profile_id.is_empty() {
             return Err(ApiError::bad_request("profileId cannot be empty."));
         }
@@ -1516,7 +1527,15 @@ async fn start_run(
             .set_repo_agent_preference(&repo.id, profile_id)
             .map_err(ApiError::internal)?;
         profile
+    } else if let Some(ref task_profile_id) = task.agent_profile_id {
+        // 2. Task-level agent profile override
+        state
+            .db
+            .get_agent_profile_by_id(task_profile_id)
+            .map_err(ApiError::internal)?
+            .ok_or_else(|| ApiError::bad_request("Task-level agent profile no longer exists."))?
     } else {
+        // 3. Repo-level default
         let preference = state
             .db
             .get_repo_agent_preference(&repo.id)
@@ -1708,7 +1727,7 @@ async fn start_run(
         let tasklist_pretty =
             serde_json::to_string_pretty(&plan_tasklist_json).unwrap_or_else(|_| "{}".to_string());
         let prompt = format!(
-            "You are working on issue {}.\n\nTask: {}\n\nDescription: {}\n\nExecution Plan:\n{}\n\nTasklist JSON:\n{}\n\nExecution constraints:\n- Follow phase order.\n- Report progress using task IDs from tasklist.\n- If useful, use subagents/tools for parallelizable subtasks while preserving dependencies.",
+            "You are working on issue {}.\n\nTask: {}\n\nDescription: {}\n\nExecution Plan:\n{}\n\nTasklist JSON:\n{}\n\nExecution constraints:\n- Follow phase order and respect blocked_by dependencies between tasks.\n- Report progress using task IDs from tasklist.\n- Each task has a `complexity` (low/medium/high) and `suggested_model` field. When delegating subtasks to subagents, use the suggested model tier or an equivalent capability level available to you. Low complexity tasks should use the fastest/cheapest model, high complexity tasks should use the most capable model.\n- If useful, use subagents/tools for parallelizable subtasks while preserving dependencies.",
             issue_key,
             task.title,
             task.description.as_deref().unwrap_or("No description"),
@@ -3130,6 +3149,7 @@ async fn provider_create_task_from_item(
         auto_start: Some(fields.auto_start),
         auto_approve_plan: Some(false),
         use_worktree: Some(true),
+        agent_profile_id: None,
     };
 
     let task = state
@@ -3530,6 +3550,8 @@ struct UpdateTaskPayload {
     auto_approve_plan: Option<bool>,
     #[serde(rename = "useWorktree")]
     use_worktree: Option<bool>,
+    #[serde(rename = "agentProfileId")]
+    agent_profile_id: Option<Option<String>>,
 }
 
 // ── CloudWatch Investigation Handlers ──
@@ -3861,6 +3883,7 @@ async fn cw_create_task(
         auto_start: Some(false),
         auto_approve_plan: None,
         use_worktree: None,
+        agent_profile_id: None,
     };
 
     let task = state

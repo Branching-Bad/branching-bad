@@ -13,6 +13,7 @@ export type Task = {
   use_worktree: boolean;
   last_pipeline_error?: string | null;
   last_pipeline_at?: string | null;
+  agent_profile_id?: string | null;
   source?: string; updated_at: string;
 };
 export type Plan = {

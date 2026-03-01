@@ -1,3 +1,4 @@
+import type { AgentProfile } from "../types";
 import { IconX } from "./icons";
 import { btnPrimary, btnSecondary } from "./shared";
 import { TaskFormFields } from "./TaskFormFields";
@@ -8,6 +9,7 @@ export function EditTaskModal({
   priority, setPriority, requirePlan, setRequirePlan,
   autoApprovePlan, setAutoApprovePlan, autoStart, setAutoStart,
   useWorktree, setUseWorktree,
+  agentProfileId, setAgentProfileId, agentProfiles,
   onSave,
 }: {
   open: boolean; onClose: () => void; busy: boolean;
@@ -18,6 +20,8 @@ export function EditTaskModal({
   autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
   autoStart: boolean; setAutoStart: (v: boolean) => void;
   useWorktree: boolean; setUseWorktree: (v: boolean) => void;
+  agentProfileId: string; setAgentProfileId: (v: string) => void;
+  agentProfiles: AgentProfile[];
   onSave: () => void;
 }) {
   if (!open) return null;
@@ -45,6 +49,8 @@ export function EditTaskModal({
             autoApprovePlan={autoApprovePlan} setAutoApprovePlan={setAutoApprovePlan}
             autoStart={autoStart} setAutoStart={setAutoStart}
             useWorktree={useWorktree} setUseWorktree={setUseWorktree}
+            agentProfileId={agentProfileId} setAgentProfileId={setAgentProfileId}
+            agentProfiles={agentProfiles}
             autoFocus
           />
           <div className="flex gap-2 pt-1">

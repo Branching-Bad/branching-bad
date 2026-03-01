@@ -32,6 +32,7 @@ pub struct TaskWithPayload {
     pub use_worktree: bool,
     pub last_pipeline_error: Option<String>,
     pub last_pipeline_at: Option<String>,
+    pub agent_profile_id: Option<String>,
     pub source: String,
     pub payload: Value,
     pub created_at: String,
@@ -54,6 +55,8 @@ pub struct CreateTaskPayload {
     pub auto_approve_plan: Option<bool>,
     #[serde(rename = "useWorktree")]
     pub use_worktree: Option<bool>,
+    #[serde(rename = "agentProfileId")]
+    pub agent_profile_id: Option<String>,
 }
 
 fn default_true() -> bool {

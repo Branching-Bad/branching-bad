@@ -1,3 +1,4 @@
+import type { AgentProfile } from "../types";
 import { inputClass, selectClass } from "./shared";
 
 export function TaskFormFields({
@@ -8,6 +9,8 @@ export function TaskFormFields({
   autoApprovePlan, setAutoApprovePlan,
   autoStart, setAutoStart,
   useWorktree, setUseWorktree,
+  agentProfileId, setAgentProfileId,
+  agentProfiles,
   autoFocus,
 }: {
   title: string; setTitle: (v: string) => void;
@@ -17,6 +20,8 @@ export function TaskFormFields({
   autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
   autoStart: boolean; setAutoStart: (v: boolean) => void;
   useWorktree: boolean; setUseWorktree: (v: boolean) => void;
+  agentProfileId: string; setAgentProfileId: (v: string) => void;
+  agentProfiles: AgentProfile[];
   autoFocus?: boolean;
 }) {
   return (
@@ -45,6 +50,19 @@ export function TaskFormFields({
         <option value="Medium">Medium</option>
         <option value="Low">Low</option>
         <option value="Lowest">Lowest</option>
+      </select>
+
+      <select
+        className={selectClass}
+        value={agentProfileId}
+        onChange={(e) => setAgentProfileId(e.target.value)}
+      >
+        <option value="">Agent / Model (repo default)</option>
+        {agentProfiles.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.agent_name} / {p.model}
+          </option>
+        ))}
       </select>
 
       <label className="flex items-center gap-2 rounded-md border border-border-default bg-surface-200 px-3 py-2 text-xs text-text-secondary">

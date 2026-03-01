@@ -462,6 +462,40 @@ export function DetailsSidebar({
                   />
                 </div>
 
+                {/* Tasklist Summary */}
+                {(() => {
+                  try {
+                    const tl = JSON.parse(manualTasklistJsonText);
+                    const phases = tl?.phases as Array<{ id: string; name: string; tasks: Array<{ id: string; title: string; complexity?: string; suggested_model?: string }> }> | undefined;
+                    if (!phases?.length) return null;
+                    const items = phases.flatMap((p) => p.tasks ?? []);
+                    if (!items.some((t) => t.complexity || t.suggested_model)) return null;
+                    const cxColors: Record<string, string> = { low: "bg-blue-500/15 text-blue-400", medium: "bg-orange-500/15 text-orange-400", high: "bg-red-500/15 text-red-400" };
+                    return (
+                      <div className="rounded-xl border border-border-default bg-surface-200 p-3">
+                        <h4 className="mb-2 text-xs font-medium text-text-secondary">Tasklist Overview</h4>
+                        <div className="space-y-1.5">
+                          {items.map((t) => (
+                            <div key={t.id} className="flex items-center gap-2 text-[11px]">
+                              <span className="min-w-0 flex-1 truncate text-text-primary" title={t.title}>{t.id}: {t.title}</span>
+                              {t.complexity && (
+                                <span className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${cxColors[t.complexity] ?? "bg-surface-300 text-text-muted"}`}>
+                                  {t.complexity}
+                                </span>
+                              )}
+                              {t.suggested_model && (
+                                <span className="shrink-0 rounded bg-purple-500/10 px-1.5 py-0.5 text-purple-400">
+                                  {t.suggested_model}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  } catch { return null; }
+                })()}
+
                 <div className="rounded-xl border border-border-default bg-surface-200 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <h4 className="text-xs font-medium text-text-secondary">Tasklist JSON</h4>

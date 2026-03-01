@@ -57,6 +57,7 @@ export default function App() {
   const [newTaskAutoApprovePlan, setNewTaskAutoApprovePlan] = useState(false);
   const [newTaskAutoStart, setNewTaskAutoStart] = useState(false);
   const [newTaskUseWorktree, setNewTaskUseWorktree] = useState(true);
+  const [newTaskAgentProfileId, setNewTaskAgentProfileId] = useState("");
   const [editTaskTitle, setEditTaskTitle] = useState("");
   const [editTaskDesc, setEditTaskDesc] = useState("");
   const [editTaskPriority, setEditTaskPriority] = useState("");
@@ -64,6 +65,7 @@ export default function App() {
   const [editTaskAutoApprovePlan, setEditTaskAutoApprovePlan] = useState(false);
   const [editTaskAutoStart, setEditTaskAutoStart] = useState(false);
   const [editTaskUseWorktree, setEditTaskUseWorktree] = useState(true);
+  const [editTaskAgentProfileId, setEditTaskAgentProfileId] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [reviewComments, setReviewComments] = useState<ReviewComment[]>([]);
   const [reviewText, setReviewText] = useState("");
@@ -754,12 +756,14 @@ export default function App() {
           priority: newTaskPriority || undefined, requirePlan: newTaskRequirePlan,
           autoApprovePlan: newTaskAutoApprovePlan, autoStart: newTaskAutoStart,
           useWorktree: newTaskUseWorktree,
+          agentProfileId: newTaskAgentProfileId || undefined,
         }),
       });
       const payload = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
       setTasks(payload.tasks);
       setNewTaskTitle(""); setNewTaskDesc(""); setNewTaskPriority("");
       setNewTaskRequirePlan(true); setNewTaskAutoApprovePlan(false); setNewTaskAutoStart(false); setNewTaskUseWorktree(true);
+      setNewTaskAgentProfileId("");
       setCreateTaskModalOpen(false);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -773,6 +777,7 @@ export default function App() {
     setEditTaskAutoApprovePlan(selectedTask.auto_approve_plan);
     setEditTaskAutoStart(selectedTask.auto_start);
     setEditTaskUseWorktree(selectedTask.use_worktree);
+    setEditTaskAgentProfileId(selectedTask.agent_profile_id ?? "");
     setEditTaskModalOpen(true);
   }
 
@@ -787,6 +792,7 @@ export default function App() {
           priority: editTaskPriority || null, requirePlan: editTaskRequirePlan,
           autoApprovePlan: editTaskAutoApprovePlan, autoStart: editTaskAutoStart,
           useWorktree: editTaskUseWorktree,
+          agentProfileId: editTaskAgentProfileId || null,
         }),
       });
       setTasks((prev) => prev.map((t) => t.id === payload.task.id ? payload.task : t));
@@ -863,6 +869,7 @@ export default function App() {
           statusFromLane={statusFromLane}
           setTasks={setTasks}
           onError={setError}
+          agentProfiles={agentProfiles}
         />
       </main>
 
@@ -987,6 +994,8 @@ export default function App() {
         autoApprovePlan={newTaskAutoApprovePlan} setAutoApprovePlan={setNewTaskAutoApprovePlan}
         autoStart={newTaskAutoStart} setAutoStart={setNewTaskAutoStart}
         useWorktree={newTaskUseWorktree} setUseWorktree={setNewTaskUseWorktree}
+        agentProfileId={newTaskAgentProfileId} setAgentProfileId={setNewTaskAgentProfileId}
+        agentProfiles={agentProfiles}
         onCreate={createManualTask} repoName={selectedRepo?.name ?? "selected repo"}
       />
 
@@ -999,6 +1008,8 @@ export default function App() {
         autoApprovePlan={editTaskAutoApprovePlan} setAutoApprovePlan={setEditTaskAutoApprovePlan}
         autoStart={editTaskAutoStart} setAutoStart={setEditTaskAutoStart}
         useWorktree={editTaskUseWorktree} setUseWorktree={setEditTaskUseWorktree}
+        agentProfileId={editTaskAgentProfileId} setAgentProfileId={setEditTaskAgentProfileId}
+        agentProfiles={agentProfiles}
         onSave={saveTaskEdits}
       />
     </div>
