@@ -1,5 +1,5 @@
 import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage, ApplyToMainOptions, GitStatusInfo } from "../types";
-import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown } from "./icons";
+import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown, IconExpand } from "./icons";
 import { LogViewer } from "./LogViewer";
 import { ChatPanel } from "./ChatPanel";
 import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
@@ -38,6 +38,7 @@ export function DetailsSidebar({
   chatMessages, chatQueuedCount,
   onSendChat, onCancelQueuedChat,
   onExpandReview,
+  onExpandPlan,
   customBranchName, setCustomBranchName,
   agentProfiles,
   reviewProfileId, onReviewProfileChange,
@@ -91,6 +92,7 @@ export function DetailsSidebar({
   onRequeueAutostart: () => void;
   onClearTaskPipeline: () => void;
   onExpandReview?: () => void;
+  onExpandPlan?: () => void;
   customBranchName: string;
   setCustomBranchName: (v: string) => void;
   agentProfiles?: AgentProfile[];
@@ -255,24 +257,38 @@ export function DetailsSidebar({
           </div>
 
           <div className="flex border-b border-border-default px-3">
-            <button
-              onClick={() => setDetailsTab("plan")}
-              className={`relative px-3 py-2.5 text-sm font-medium transition ${
-                detailsTab === "plan" ? "text-brand" : "text-text-muted hover:text-text-secondary"
-              }`}
-            >
-              Plan
-              {detailsTab === "plan" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
-            </button>
-            <button
-              onClick={() => setDetailsTab("tasklist")}
-              className={`relative px-3 py-2.5 text-sm font-medium transition ${
-                detailsTab === "tasklist" ? "text-brand" : "text-text-muted hover:text-text-secondary"
-              }`}
-            >
-              Tasklist
-              {detailsTab === "tasklist" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
-            </button>
+            <div className="relative flex items-center">
+              <button
+                onClick={() => setDetailsTab("plan")}
+                className={`relative px-3 py-2.5 text-sm font-medium transition ${
+                  detailsTab === "plan" ? "text-brand" : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                Plan
+                {detailsTab === "plan" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
+              </button>
+              {detailsTab === "plan" && onExpandPlan && (
+                <button onClick={onExpandPlan} title="Expand" className="rounded-md p-0.5 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
+                  <IconExpand className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="relative flex items-center">
+              <button
+                onClick={() => setDetailsTab("tasklist")}
+                className={`relative px-3 py-2.5 text-sm font-medium transition ${
+                  detailsTab === "tasklist" ? "text-brand" : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                Tasklist
+                {detailsTab === "tasklist" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
+              </button>
+              {detailsTab === "tasklist" && onExpandPlan && (
+                <button onClick={onExpandPlan} title="Expand" className="rounded-md p-0.5 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
+                  <IconExpand className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setDetailsTab("run")}
               className={`relative px-3 py-2.5 text-sm font-medium transition ${

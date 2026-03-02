@@ -8,6 +8,7 @@ import { EditTaskModal } from "./components/EditTaskModal";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailsSidebar } from "./components/DetailsSidebar";
 import { DiffReviewModal } from "./components/DiffReviewModal";
+import { PlanExpandModal } from "./components/PlanExpandModal";
 import { initProviders } from "./providers/init";
 import { useEventStream } from "./hooks/useEventStream";
 import { useBootstrap } from "./hooks/useBootstrap";
@@ -29,6 +30,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [extensionsOpen, setExtensionsOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"plan" | "tasklist" | "run" | "review">("plan");
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
@@ -223,6 +225,7 @@ export default function App() {
           onRequeueAutostart={() => void task.requeueAutostart()}
           onClearTaskPipeline={() => void task.clearTaskPipeline()}
           onExpandReview={() => setReviewModalOpen(true)}
+          onExpandPlan={() => setPlanModalOpen(true)}
           customBranchName={run.customBranchName}
           setCustomBranchName={run.setCustomBranchName}
           agentProfiles={boot.agentProfiles}
@@ -265,6 +268,28 @@ export default function App() {
           agentProfiles={boot.agentProfiles}
           reviewProfileId={review.reviewProfileId}
           onReviewProfileChange={review.setReviewProfileId}
+        />
+      )}
+
+      {task.selectedTask && planModalOpen && (
+        <PlanExpandModal
+          open={planModalOpen}
+          onClose={() => setPlanModalOpen(false)}
+          selectedTask={task.selectedTask}
+          plans={plan.plans} selectedPlanId={plan.selectedPlanId} setSelectedPlanId={plan.setSelectedPlanId}
+          latestPlan={plan.latestPlan}
+          activePlanJob={plan.activePlanJob} planLogs={plan.planLogs} planFinished={plan.planFinished}
+          taskRequiresPlan={task.selectedTask.require_plan}
+          planComment={plan.planComment} setPlanComment={plan.setPlanComment}
+          manualPlanMarkdown={plan.manualPlanMarkdown} setManualPlanMarkdown={plan.setManualPlanMarkdown}
+          manualPlanJsonText={plan.manualPlanJsonText} setManualPlanJsonText={plan.setManualPlanJsonText}
+          manualTasklistJsonText={plan.manualTasklistJsonText} setManualTasklistJsonText={plan.setManualTasklistJsonText}
+          tasklistValidationError={plan.tasklistValidationError}
+          busy={busy}
+          onCreatePlan={() => void plan.createPlan()}
+          onPlanAction={(action) => void plan.planAction(action)}
+          onValidateTasklist={plan.onValidateTasklist}
+          onSaveManualRevision={() => void plan.saveManualRevision()}
         />
       )}
 
