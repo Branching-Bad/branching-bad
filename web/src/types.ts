@@ -22,7 +22,6 @@ export type Plan = {
   id: string; version: number;
   status: "drafted" | "revise_requested" | "approved" | "rejected";
   plan_markdown: string;
-  plan: unknown;
   tasklist: unknown;
   tasklist_schema_version: number;
   generation_mode: "manual" | "auto_pipeline" | "revise" | "direct_execution" | string;

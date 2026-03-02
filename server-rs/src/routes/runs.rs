@@ -103,12 +103,6 @@ pub(crate) async fn start_run(
                     .as_deref()
                     .unwrap_or("No description provided.")
             );
-            let direct_plan_json = json!({
-              "mode": "direct_execution",
-              "taskId": task.id,
-              "taskKey": task.jira_issue_key,
-              "note": "require_plan is disabled for this task"
-            });
             let direct_tasklist_json = json!({
               "schema_version": 1,
               "issue_key": task.jira_issue_key,
@@ -137,7 +131,6 @@ pub(crate) async fn start_run(
                     &task.id,
                     "approved",
                     &direct_plan_markdown,
-                    &direct_plan_json,
                     &direct_tasklist_json,
                     1,
                     "direct_execution",

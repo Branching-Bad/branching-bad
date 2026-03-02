@@ -25,10 +25,17 @@ export function usePlanState({
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [planComment, setPlanComment] = useState("");
   const [manualPlanMarkdown, setManualPlanMarkdown] = useState("");
-  const [manualPlanJsonText, setManualPlanJsonText] = useState("");
   const [manualTasklistJsonText, setManualTasklistJsonText] = useState("");
   const [tasklistValidationError, setTasklistValidationError] = useState("");
+  const [planActionInProgress, setPlanActionInProgress] = useState("");
   const [taskPlanStates, setTaskPlanStates] = useState<Record<string, TaskPlanState>>({});
+  const [aiFeedback, setAiFeedback] = useState("");
+  const [aiFeedbackParsed, setAiFeedbackParsed] = useState<{ verdict: string; comments: Array<{ category: string; severity: string; reason: string; suggestion: string }> } | null>(null);
+  const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
+  const [aiFeedbackStreamText, setAiFeedbackStreamText] = useState("");
+  const [aiFeedbackOpen, setAiFeedbackOpen] = useState(false);
+  const [selectedFeedbackIndices, setSelectedFeedbackIndices] = useState<Set<number>>(new Set());
+  const [reviewPlanProfileId, setReviewPlanProfileId] = useState("");
 
   const updateTaskPlanState = useCallback(
     (taskId: string, updater: (current: TaskPlanState) => TaskPlanState) => {
@@ -58,9 +65,12 @@ export function usePlanState({
 
   // Load plans + reviews + chat when task changes
   useEffect(() => {
+    // Always reset AI feedback when task changes
+    setAiFeedback(""); setAiFeedbackParsed(null); setAiFeedbackOpen(false); setSelectedFeedbackIndices(new Set());
+
     if (!selectedTaskId) {
       setPlans([]); setSelectedPlanId(""); setManualPlanMarkdown("");
-      setManualPlanJsonText(""); setManualTasklistJsonText("");
+      setManualTasklistJsonText("");
       setTasklistValidationError("");
       return;
     }
@@ -71,7 +81,6 @@ export function usePlanState({
         const latest = planPayload.plans[0] ?? null;
         setSelectedPlanId(latest?.id ?? "");
         setManualPlanMarkdown(latest?.plan_markdown ?? "");
-        setManualPlanJsonText(latest ? JSON.stringify(latest.plan ?? {}, null, 2) : "{}");
         setManualTasklistJsonText(latest ? JSON.stringify(latest.tasklist ?? {}, null, 2) : "{}");
         setTasklistValidationError("");
       } catch (e) { setError((e as Error).message); }
@@ -82,7 +91,6 @@ export function usePlanState({
   useEffect(() => {
     if (!selectedPlan) return;
     setManualPlanMarkdown(selectedPlan.plan_markdown ?? "");
-    setManualPlanJsonText(JSON.stringify(selectedPlan.plan ?? {}, null, 2));
     setManualTasklistJsonText(JSON.stringify(selectedPlan.tasklist ?? {}, null, 2));
     setTasklistValidationError("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +173,8 @@ export function usePlanState({
 
   const planAction = useCallback(async (action: "approve" | "reject" | "revise") => {
     if (!latestPlan) { setError("Generate a plan first."); return; }
-    setBusy(true); setError("");
+    const labels: Record<string, string> = { approve: "Approving plan…", reject: "Rejecting plan…", revise: "Generating revised plan…" };
+    setBusy(true); setError(""); setPlanActionInProgress(labels[action] ?? action);
     try {
       await api(`/api/plans/${latestPlan.id}/action`, { method: "POST", body: JSON.stringify({ action, comment: planComment || undefined }) });
       const payload = await api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(selectedTaskId)}`);
@@ -174,7 +183,6 @@ export function usePlanState({
       setSelectedPlanId(latest?.id ?? "");
       if (latest) {
         setManualPlanMarkdown(latest.plan_markdown ?? "");
-        setManualPlanJsonText(JSON.stringify(latest.plan ?? {}, null, 2));
         setManualTasklistJsonText(JSON.stringify(latest.tasklist ?? {}, null, 2));
       }
       if (selectedRepoId) {
@@ -183,19 +191,17 @@ export function usePlanState({
       }
       setInfo(`Plan action: ${action}`);
       if (action !== "revise") setPlanComment("");
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); setPlanActionInProgress(""); }
   }, [latestPlan, planComment, selectedTaskId, selectedRepoId, setTasks, setError, setInfo, setBusy]);
 
-  const validateTasklistDraft = useCallback((): { ok: true; planJson: unknown; tasklistJson: unknown } | { ok: false; error: string } => {
-    let planJson: unknown;
+  const validateTasklistDraft = useCallback((): { ok: true; tasklistJson: unknown } | { ok: false; error: string } => {
     let tasklistJson: unknown;
-    try { planJson = JSON.parse(manualPlanJsonText); } catch { return { ok: false, error: "Plan JSON is invalid." }; }
     try { tasklistJson = JSON.parse(manualTasklistJsonText); } catch { return { ok: false, error: "Tasklist JSON is invalid." }; }
     if (!tasklistJson || typeof tasklistJson !== "object") return { ok: false, error: "Tasklist JSON must be an object." };
     const phases = (tasklistJson as { phases?: unknown }).phases;
     if (!Array.isArray(phases)) return { ok: false, error: "Tasklist JSON must include `phases` array." };
-    return { ok: true, planJson, tasklistJson };
-  }, [manualPlanJsonText, manualTasklistJsonText]);
+    return { ok: true, tasklistJson };
+  }, [manualTasklistJsonText]);
 
   const onValidateTasklist = useCallback(() => {
     const result = validateTasklistDraft();
@@ -203,15 +209,101 @@ export function usePlanState({
     else { setTasklistValidationError(result.error); }
   }, [validateTasklistDraft, setInfo]);
 
+  const reviewPlan = useCallback(async (profileId: string) => {
+    if (!latestPlan) { setError("Generate a plan first."); return; }
+    if (!profileId) { setError("Select an agent profile for review."); return; }
+    setAiFeedbackLoading(true); setAiFeedbackStreamText(""); setError("");
+    try {
+      const resp = await fetch(`/api/plans/${latestPlan.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId }),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(errText || `HTTP ${resp.status}`);
+      }
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+      const decoder = new TextDecoder();
+      let feedbackResult = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr) continue;
+          try {
+            const evt = JSON.parse(jsonStr);
+            if (evt.type === "log") {
+              setAiFeedbackStreamText(evt.text ?? "");
+            } else if (evt.type === "done") {
+              feedbackResult = evt.feedback ?? "";
+            } else if (evt.type === "error") {
+              throw new Error(evt.message ?? "Agent review failed");
+            }
+          } catch (parseErr) {
+            if ((parseErr as Error).message?.includes("Agent review failed")) throw parseErr;
+          }
+        }
+      }
+
+      const raw = feedbackResult;
+      setAiFeedback(raw);
+      try {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.verdict && Array.isArray(parsed.comments)) {
+            setAiFeedbackParsed(parsed);
+          } else { setAiFeedbackParsed(null); }
+        } else { setAiFeedbackParsed(null); }
+      } catch { setAiFeedbackParsed(null); }
+      setAiFeedbackOpen(true);
+      setSelectedFeedbackIndices(new Set());
+    } catch (e) { setError((e as Error).message); } finally { setAiFeedbackLoading(false); setAiFeedbackStreamText(""); }
+  }, [latestPlan, setError]);
+
+  const toggleFeedbackIndex = useCallback((index: number) => {
+    setSelectedFeedbackIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  }, []);
+
+  const useAiFeedbackAsRevision = useCallback(() => {
+    if (aiFeedbackParsed && aiFeedbackParsed.comments.length > 0) {
+      const indices = selectedFeedbackIndices.size > 0
+        ? [...selectedFeedbackIndices].sort((a, b) => a - b)
+        : aiFeedbackParsed.comments.map((_, i) => i);
+      const lines = indices
+        .filter((i) => i < aiFeedbackParsed.comments.length)
+        .map((i, n) => {
+          const c = aiFeedbackParsed.comments[i];
+          return `${n + 1}. [${c.severity}/${c.category}] ${c.reason}\n   → ${c.suggestion}`;
+        });
+      setPlanComment(lines.join("\n\n"));
+    } else {
+      setPlanComment(aiFeedback);
+    }
+  }, [aiFeedback, aiFeedbackParsed, selectedFeedbackIndices]);
+
   const saveManualRevision = useCallback(async () => {
     if (!selectedPlan) { setError("Select a plan version first."); return; }
     const parsed = validateTasklistDraft();
     if (!parsed.ok) { setTasklistValidationError(parsed.error); return; }
-    setTasklistValidationError(""); setBusy(true); setError("");
+    setTasklistValidationError(""); setBusy(true); setError(""); setPlanActionInProgress("Saving manual revision…");
     try {
       await api<{ plan: Plan }>(`/api/plans/${selectedPlan.id}/manual-revision`, {
         method: "POST",
-        body: JSON.stringify({ planMarkdown: manualPlanMarkdown, planJson: parsed.planJson, tasklistJson: parsed.tasklistJson, comment: "Manual revision from UI" }),
+        body: JSON.stringify({ planMarkdown: manualPlanMarkdown, tasklistJson: parsed.tasklistJson, comment: "Manual revision from UI" }),
       });
       const payload = await api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(selectedTaskId)}`);
       setPlans(payload.plans);
@@ -219,11 +311,10 @@ export function usePlanState({
       setSelectedPlanId(latest?.id ?? "");
       if (latest) {
         setManualPlanMarkdown(latest.plan_markdown ?? "");
-        setManualPlanJsonText(JSON.stringify(latest.plan ?? {}, null, 2));
         setManualTasklistJsonText(JSON.stringify(latest.tasklist ?? {}, null, 2));
       }
       setInfo("Manual revision saved as a new plan version.");
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); setPlanActionInProgress(""); }
   }, [selectedPlan, manualPlanMarkdown, selectedTaskId, validateTasklistDraft, setError, setInfo, setBusy]);
 
   return {
@@ -231,12 +322,18 @@ export function usePlanState({
     selectedPlanId, setSelectedPlanId,
     planComment, setPlanComment,
     manualPlanMarkdown, setManualPlanMarkdown,
-    manualPlanJsonText, setManualPlanJsonText,
     manualTasklistJsonText, setManualTasklistJsonText,
     tasklistValidationError,
     taskPlanStates, updateTaskPlanState,
     latestPlan, selectedPlan, approvedPlan,
     activePlanJob, planLogs, planFinished,
+    planActionInProgress,
     createPlan, planAction, onValidateTasklist, saveManualRevision,
+    aiFeedback, setAiFeedback, aiFeedbackParsed,
+    aiFeedbackLoading, aiFeedbackStreamText,
+    aiFeedbackOpen, setAiFeedbackOpen,
+    reviewPlanProfileId, setReviewPlanProfileId,
+    selectedFeedbackIndices, toggleFeedbackIndex,
+    reviewPlan, useAiFeedbackAsRevision,
   };
 }

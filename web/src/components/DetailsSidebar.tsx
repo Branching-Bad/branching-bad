@@ -4,6 +4,7 @@ import { LogViewer } from "./LogViewer";
 import { ChatPanel } from "./ChatPanel";
 import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
 import { DiffReviewPanel } from "./DiffReviewPanel";
+import { AgentProfileSelect } from "./AgentProfileSelect";
 
 export function DetailsSidebar({
   selectedTask,
@@ -15,9 +16,8 @@ export function DetailsSidebar({
   taskRequiresPlan,
   selectedProfileId,
   detailsTab, setDetailsTab,
-  planComment, setPlanComment,
+  planComment, setPlanComment, planActionInProgress,
   manualPlanMarkdown, setManualPlanMarkdown,
-  manualPlanJsonText, setManualPlanJsonText,
   manualTasklistJsonText, setManualTasklistJsonText,
   tasklistValidationError,
   reviewComments, reviewText, setReviewText,
@@ -43,6 +43,11 @@ export function DetailsSidebar({
   agentProfiles,
   reviewProfileId, onReviewProfileChange,
   chatProfileId, onChatProfileChange,
+  aiFeedback, setAiFeedback, aiFeedbackParsed,
+  aiFeedbackLoading, aiFeedbackStreamText, aiFeedbackOpen, setAiFeedbackOpen,
+  reviewPlanProfileId, onReviewPlanProfileChange,
+  selectedFeedbackIndices, onToggleFeedbackIndex,
+  onReviewPlan, onUseAiFeedbackAsRevision,
 }: {
   selectedTask: Task;
   plans: Plan[]; selectedPlanId: string; setSelectedPlanId: (v: string) => void;
@@ -54,9 +59,8 @@ export function DetailsSidebar({
   selectedProfileId: string;
   detailsTab: "plan" | "tasklist" | "run" | "review";
   setDetailsTab: (v: "plan" | "tasklist" | "run" | "review") => void;
-  planComment: string; setPlanComment: (v: string) => void;
+  planComment: string; setPlanComment: (v: string) => void; planActionInProgress?: string;
   manualPlanMarkdown: string; setManualPlanMarkdown: (v: string) => void;
-  manualPlanJsonText: string; setManualPlanJsonText: (v: string) => void;
   manualTasklistJsonText: string; setManualTasklistJsonText: (v: string) => void;
   tasklistValidationError: string;
   reviewComments: ReviewComment[]; reviewText: string; setReviewText: (v: string) => void;
@@ -100,6 +104,19 @@ export function DetailsSidebar({
   onReviewProfileChange?: (v: string) => void;
   chatProfileId?: string;
   onChatProfileChange?: (v: string) => void;
+  aiFeedback?: string;
+  setAiFeedback?: (v: string) => void;
+  aiFeedbackParsed?: { verdict: string; comments: Array<{ category: string; severity: string; reason: string; suggestion: string }> } | null;
+  aiFeedbackLoading?: boolean;
+  aiFeedbackStreamText?: string;
+  aiFeedbackOpen?: boolean;
+  setAiFeedbackOpen?: (v: boolean) => void;
+  reviewPlanProfileId?: string;
+  onReviewPlanProfileChange?: (v: string) => void;
+  selectedFeedbackIndices?: Set<number>;
+  onToggleFeedbackIndex?: (index: number) => void;
+  onReviewPlan?: () => void;
+  onUseAiFeedbackAsRevision?: () => void;
 }) {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? latestPlan;
 
@@ -381,57 +398,7 @@ export function DetailsSidebar({
                   )}
                 </div>
 
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-text-secondary">Live Plan Output</h4>
-                    {activePlanJob && (
-                      <span className="text-[11px] text-text-muted">job {activePlanJob.id.slice(0, 8)}</span>
-                    )}
-                  </div>
-                  <LogViewer
-                    logs={planLogs}
-                    className="h-[480px]"
-                    emptyMessage={
-                      activePlanJob
-                        ? (planFinished ? "Plan output stream finished." : "Waiting for plan output...")
-                        : "No active plan job."
-                    }
-                  />
-                </div>
-
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Review Comment</label>
-                  <textarea
-                    value={planComment}
-                    onChange={(e) => setPlanComment(e.target.value)}
-                    className={`${inputClass} min-h-[84px] resize-y`}
-                    placeholder="Add approval/revision note..."
-                  />
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      onClick={() => onPlanAction("approve")}
-                      disabled={busy || !latestPlan}
-                      className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => onPlanAction("revise")}
-                      disabled={busy || !latestPlan}
-                      className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
-                    >
-                      Request Revision
-                    </button>
-                    <button
-                      onClick={() => onPlanAction("reject")}
-                      disabled={busy || !latestPlan}
-                      className="rounded-md border border-error-border bg-error-bg px-3 py-1.5 text-xs font-medium text-error-text transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </div>
-
+                {/* Plan Draft */}
                 <div className="rounded-xl border border-border-default bg-surface-200 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <h4 className="text-xs font-medium text-text-secondary">Plan Draft</h4>
@@ -452,28 +419,185 @@ export function DetailsSidebar({
                     </p>
                   )}
                 </div>
+
+                {/* AI Review trigger + Feedback */}
+                {agentProfiles && agentProfiles.length > 0 && (
+                  <div className="rounded-xl border border-border-default bg-surface-200 p-3">
+                    <div className="flex items-center gap-2">
+                      <AgentProfileSelect
+                        profiles={agentProfiles}
+                        value={reviewPlanProfileId ?? ""}
+                        onChange={(v) => onReviewPlanProfileChange?.(v)}
+                        className="flex-1 rounded-md border border-border-strong bg-surface-100 px-2 py-1.5 text-[11px] text-text-secondary focus:border-brand focus:outline-none"
+                      />
+                      <button
+                        onClick={onReviewPlan}
+                        disabled={busy || aiFeedbackLoading || !latestPlan || !reviewPlanProfileId}
+                        className={`${btnSecondary} !px-3 !py-1.5 text-xs whitespace-nowrap`}
+                      >
+                        {aiFeedbackLoading ? "Reviewing..." : "Review Plan"}
+                      </button>
+                    </div>
+                    {aiFeedbackLoading && (
+                      <div className="mt-2 flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-2">
+                        <span className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+                        <span className="min-w-0 truncate text-[11px] text-brand">
+                          {aiFeedbackStreamText
+                            ? (aiFeedbackStreamText.length > 50 ? aiFeedbackStreamText.slice(-50) : aiFeedbackStreamText)
+                            : "Starting AI review…"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(aiFeedback || aiFeedbackOpen) && (
+                  <div className={`rounded-xl border p-3 ${
+                    aiFeedbackParsed?.verdict === "passed"
+                      ? "border-green-500/30 bg-green-500/5"
+                      : aiFeedbackParsed?.verdict === "failed"
+                        ? "border-red-500/30 bg-red-500/5"
+                        : "border-purple-500/30 bg-purple-500/5"
+                  }`}>
+                    <div className="mb-2 flex items-center justify-between">
+                      <button
+                        onClick={() => setAiFeedbackOpen?.(!aiFeedbackOpen)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition"
+                      >
+                        <span className={`inline-block text-[10px] transition-transform ${aiFeedbackOpen ? "rotate-90" : ""}`}>&#9654;</span>
+                        AI Review
+                        {aiFeedbackParsed && (
+                          <span className={`ml-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                            aiFeedbackParsed.verdict === "passed"
+                              ? "border-green-500/40 bg-green-500/15 text-green-400"
+                              : "border-red-500/40 bg-red-500/15 text-red-400"
+                          }`}>
+                            {aiFeedbackParsed.verdict.toUpperCase()}
+                          </span>
+                        )}
+                      </button>
+                      {aiFeedbackOpen && aiFeedbackParsed?.verdict === "failed" && aiFeedbackParsed.comments.length > 0 && (
+                        <button
+                          onClick={onUseAiFeedbackAsRevision}
+                          className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-400 transition hover:bg-purple-500/20"
+                        >
+                          {selectedFeedbackIndices && selectedFeedbackIndices.size > 0
+                            ? `Revise with ${selectedFeedbackIndices.size} selected`
+                            : "Use All as Revision"}
+                        </button>
+                      )}
+                    </div>
+                    {aiFeedbackOpen && (
+                      aiFeedbackParsed ? (
+                        aiFeedbackParsed.verdict === "passed" ? (
+                          <p className="text-xs text-green-400">Plan looks good. No issues found.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {aiFeedbackParsed.comments.map((c, i) => (
+                              <div
+                                key={i}
+                                onClick={() => onToggleFeedbackIndex?.(i)}
+                                className={`cursor-pointer rounded-lg border px-3 py-2 transition ${
+                                  selectedFeedbackIndices?.has(i)
+                                    ? "border-purple-500/50 bg-purple-500/10"
+                                    : "border-border-strong bg-surface-100 hover:border-border-default"
+                                }`}
+                              >
+                                <div className="mb-1 flex items-center gap-2">
+                                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                                    selectedFeedbackIndices?.has(i)
+                                      ? "border-purple-500 bg-purple-500 text-white"
+                                      : "border-border-strong bg-surface-100 text-transparent"
+                                  }`}>✓</span>
+                                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                    c.severity === "critical" ? "bg-red-500/15 text-red-400"
+                                    : c.severity === "major" ? "bg-orange-500/15 text-orange-400"
+                                    : "bg-blue-500/15 text-blue-400"
+                                  }`}>{c.severity}</span>
+                                  <span className="rounded bg-surface-300 px-1.5 py-0.5 text-[10px] text-text-muted">{c.category}</span>
+                                </div>
+                                <p className="text-[11px] text-text-primary">{c.reason}</p>
+                                <p className="mt-1 text-[11px] text-text-secondary">→ {c.suggestion}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ) : (
+                        <textarea
+                          value={aiFeedback}
+                          onChange={(e) => setAiFeedback?.(e.target.value)}
+                          className={`${inputClass} min-h-[140px] resize-y font-mono text-[12px] leading-relaxed`}
+                          placeholder="AI feedback will appear here..."
+                        />
+                      )
+                    )}
+                  </div>
+                )}
+
+                {/* Review Comment + Actions */}
+                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Review Comment</label>
+                  <textarea
+                    value={planComment}
+                    onChange={(e) => setPlanComment(e.target.value)}
+                    className={`${inputClass} min-h-[72px] resize-y`}
+                    placeholder="Add approval/revision note..."
+                  />
+                  {planActionInProgress ? (
+                    <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2.5">
+                      <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+                      <span className="text-xs font-medium text-brand">{planActionInProgress}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => onPlanAction("approve")}
+                        disabled={busy || !latestPlan}
+                        className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => onPlanAction("revise")}
+                        disabled={busy || !latestPlan}
+                        className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
+                      >
+                        Request Revision
+                      </button>
+                      <button
+                        onClick={() => onPlanAction("reject")}
+                        disabled={busy || !latestPlan}
+                        className="rounded-md border border-error-border bg-error-bg px-3 py-1.5 text-xs font-medium text-error-text transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Live Plan Output */}
+                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-xs font-medium text-text-secondary">Live Plan Output</h4>
+                    {activePlanJob && (
+                      <span className="text-[11px] text-text-muted">job {activePlanJob.id.slice(0, 8)}</span>
+                    )}
+                  </div>
+                  <LogViewer
+                    logs={planLogs}
+                    className="h-[480px]"
+                    emptyMessage={
+                      activePlanJob
+                        ? (planFinished ? "Plan output stream finished." : "Waiting for plan output...")
+                        : "No active plan job."
+                    }
+                  />
+                </div>
               </>
             )}
 
             {detailsTab === "tasklist" && (
               <>
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-text-secondary">Plan JSON</h4>
-                    {selectedPlan && (
-                      <span className="text-[11px] text-text-muted">
-                        v{selectedPlan.version} · {selectedPlan.generation_mode}
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    value={manualPlanJsonText}
-                    onChange={(e) => setManualPlanJsonText(e.target.value)}
-                    className={`${inputClass} min-h-[180px] resize-y font-mono text-[12px]`}
-                    placeholder="{}"
-                  />
-                </div>
-
                 {/* Tasklist Summary */}
                 {(() => {
                   try {

@@ -10,8 +10,10 @@ use axum::{
     Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
+    response::sse::{Event, KeepAlive, Sse},
     routing::{get, post},
 };
+use futures::stream::{Stream, StreamExt};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -20,7 +22,7 @@ use crate::errors::ApiError;
 use crate::models::{PlanJob, TaskWithPayload};
 use crate::msg_store::{LogMsg, MsgStore};
 use crate::planner::{
-    generate_plan_and_tasklist_with_agent_strict, validate_plan_payload, validate_tasklist_payload,
+    generate_plan_and_tasklist_with_agent_strict, validate_tasklist_payload,
 };
 use super::shared::{
     StartRunPayload, TaskQuery,
@@ -40,6 +42,7 @@ pub(crate) fn plan_routes() -> Router<AppState> {
             "/api/plans/{plan_id}/manual-revision",
             post(create_manual_plan_revision),
         )
+        .route("/api/plans/{plan_id}/review", post(review_plan))
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,8 +75,6 @@ struct PlanActionPayload {
 struct ManualPlanRevisionPayload {
     #[serde(rename = "planMarkdown")]
     plan_markdown: String,
-    #[serde(rename = "planJson")]
-    plan_json: Value,
     #[serde(rename = "tasklistJson")]
     tasklist_json: Value,
     comment: Option<String>,
@@ -312,7 +313,6 @@ async fn plan_action(
                     &task.id,
                     "drafted",
                     &revised.markdown,
-                    &revised.plan_json,
                     &revised.tasklist_json,
                     1,
                     "revise",
@@ -384,8 +384,6 @@ async fn create_manual_plan_revision(
         .get_next_plan_version(&task.id)
         .map_err(ApiError::internal)?;
 
-    validate_plan_payload(&payload.plan_json, &payload.plan_markdown, &task.jira_issue_key)
-        .map_err(ApiError::bad_request_from)?;
     validate_tasklist_payload(&payload.tasklist_json, &task.jira_issue_key, target_version)
         .map_err(ApiError::bad_request_from)?;
 
@@ -395,7 +393,6 @@ async fn create_manual_plan_revision(
             &task.id,
             "drafted",
             &payload.plan_markdown,
-            &payload.plan_json,
             &payload.tasklist_json,
             1,
             "manual",
@@ -426,6 +423,125 @@ async fn create_manual_plan_revision(
         .ok_or_else(|| ApiError::not_found("Plan not found after manual revision."))?;
 
     Ok(Json(json!({ "plan": latest })))
+}
+
+// ── Review plan with AI ──
+
+#[derive(Debug, Deserialize)]
+struct ReviewPlanPayload {
+    #[serde(rename = "profileId")]
+    profile_id: String,
+}
+
+async fn review_plan(
+    State(state): State<AppState>,
+    Path(path): Path<PlanPath>,
+    Json(payload): Json<ReviewPlanPayload>,
+) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
+    let plan = state
+        .db
+        .get_plan_by_id(&path.plan_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Plan not found."))?;
+    let task = state
+        .db
+        .get_task_by_id(&plan.task_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("Task not found."))?;
+    let repo = state
+        .db
+        .get_repo_by_id(&task.repo_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::bad_request("Task repo not found."))?;
+    let profile = state
+        .db
+        .get_agent_profile_by_id(&payload.profile_id)
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::bad_request("Agent profile not found."))?;
+    let agent_command = super::shared::build_agent_command(&profile);
+
+    let prompt = format!(
+        "You are a senior software architect reviewing an implementation plan.\n\
+         IMPORTANT: You are ONLY providing feedback. Do NOT take any action, do NOT modify any files, \
+         do NOT execute any commands. Your ONLY job is to review and return a JSON verdict.\n\n\
+         ## Task\n\
+         **Key:** {issue_key}\n\
+         **Title:** {title}\n\
+         **Priority:** {priority}\n\
+         **Description:** {description}\n\n\
+         ## Task Payload (raw source data)\n\
+         ```json\n{task_payload}\n```\n\n\
+         ## Plan\n\
+         {plan_md}\n\n\
+         ## Tasklist (JSON)\n\
+         ```json\n{tasklist_json}\n```\n\n\
+         Review this plan for completeness, risks, architecture, scope, and task ordering.\n\n\
+         Return ONLY a valid JSON object in this exact format, nothing else:\n\
+         ```json\n\
+         {{\n\
+           \"verdict\": \"passed\" or \"failed\",\n\
+           \"comments\": [\n\
+             // If verdict is \"passed\": leave empty array []\n\
+             // If verdict is \"failed\": include objects like below\n\
+             {{\n\
+               \"category\": \"completeness\" | \"risk\" | \"architecture\" | \"scope\" | \"ordering\",\n\
+               \"severity\": \"critical\" | \"major\" | \"minor\",\n\
+               \"reason\": \"Why this is a problem\",\n\
+               \"suggestion\": \"What should be changed or improved\"\n\
+             }}\n\
+           ]\n\
+         }}\n\
+         ```\n\n\
+         Rules:\n\
+         - If the plan adequately covers the task requirements, return verdict \"passed\" with empty comments.\n\
+         - If there are issues, return verdict \"failed\" with comments explaining each problem.\n\
+         - Each comment MUST include: category, severity, reason, and suggestion.\n\
+         - Be concise and actionable. Focus on real problems, not style preferences.\n\
+         - Return ONLY the JSON. No markdown fences, no extra text.",
+        issue_key = task.jira_issue_key,
+        title = task.title,
+        priority = task.priority.as_deref().unwrap_or("unset"),
+        description = task.description.as_deref().unwrap_or("(no description)"),
+        task_payload = serde_json::to_string_pretty(&task.payload).unwrap_or_default(),
+        plan_md = if plan.plan_markdown.is_empty() { "(empty)" } else { &plan.plan_markdown },
+        tasklist_json = serde_json::to_string_pretty(&plan.tasklist).unwrap_or_default(),
+    );
+
+    let repo_path = repo.path.clone();
+    let cmd = agent_command.clone();
+
+    let (tx, rx) = tokio::sync::mpsc::channel::<String>(256);
+
+    tokio::task::spawn_blocking(move || {
+        let tx_progress = tx.clone();
+        let progress_cb = move |msg: LogMsg| {
+            let text = match &msg {
+                LogMsg::AgentText(s) | LogMsg::Thinking(s) | LogMsg::Stdout(s) => s.clone(),
+                LogMsg::Stderr(s) => s.clone(),
+                LogMsg::ToolUse { tool, .. } => format!("[tool: {}]", tool),
+                LogMsg::ToolResult { tool, .. } => format!("[result: {}]", tool),
+                LogMsg::Finished { status, .. } => format!("[finished: {}]", status),
+                _ => return,
+            };
+            let _ = tx_progress.blocking_send(json!({ "type": "log", "text": text }).to_string());
+        };
+
+        let result = crate::planner::invoke_agent_cli(&cmd, &prompt, &repo_path, Some(&progress_cb), None);
+        match result {
+            Ok(output) => {
+                let _ = tx.blocking_send(json!({ "type": "done", "feedback": output.text }).to_string());
+            }
+            Err(e) => {
+                let _ = tx.blocking_send(json!({ "type": "error", "message": e.to_string() }).to_string());
+            }
+        }
+    });
+
+    let stream = tokio_stream::wrappers::ReceiverStream::new(rx).map(|data| {
+        Ok(Event::default().data(data))
+    });
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 // ── Plan generation helpers ──
@@ -659,7 +775,6 @@ pub(crate) fn spawn_plan_generation_job(
             &task.id,
             "drafted",
             &generated.markdown,
-            &generated.plan_json,
             &generated.tasklist_json,
             1,
             &generation_mode,

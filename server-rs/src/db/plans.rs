@@ -14,7 +14,6 @@ impl Db {
         task_id: &str,
         status: &str,
         plan_markdown: &str,
-        plan_json: &Value,
         tasklist_json: &Value,
         tasklist_schema_version: i64,
         generation_mode: &str,
@@ -40,7 +39,7 @@ impl Db {
                 version,
                 status,
                 plan_markdown,
-                plan_json.to_string(),
+                "{}",
                 tasklist_json.to_string(),
                 tasklist_schema_version,
                 generation_mode,
@@ -58,7 +57,6 @@ impl Db {
                 version: p.version,
                 status: p.status,
                 plan_markdown: p.plan_markdown,
-                plan_json: p.plan.to_string(),
                 tasklist_json: p.tasklist.to_string(),
                 tasklist_schema_version: p.tasklist_schema_version,
                 generation_mode: p.generation_mode,
@@ -84,27 +82,25 @@ impl Db {
     pub fn list_plans_by_task(&self, task_id: &str) -> Result<Vec<PlanWithParsed>> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
-            "SELECT id, task_id, version, status, plan_markdown, plan_json, tasklist_json, tasklist_schema_version, generation_mode, validation_errors_json, created_by, created_at, updated_at FROM plans WHERE task_id = ?1 ORDER BY version DESC",
+            "SELECT id, task_id, version, status, plan_markdown, tasklist_json, tasklist_schema_version, generation_mode, validation_errors_json, created_by, created_at, updated_at FROM plans WHERE task_id = ?1 ORDER BY version DESC",
         )?;
         let rows = stmt.query_map([task_id], |row| {
-            let plan_raw: String = row.get(5)?;
-            let tasklist_raw: String = row.get(6)?;
-            let validation_errors_raw: Option<String> = row.get(9)?;
+            let tasklist_raw: String = row.get(5)?;
+            let validation_errors_raw: Option<String> = row.get(8)?;
             Ok(PlanWithParsed {
                 id: row.get(0)?,
                 task_id: row.get(1)?,
                 version: row.get(2)?,
                 status: row.get(3)?,
                 plan_markdown: row.get(4)?,
-                plan: serde_json::from_str(&plan_raw).unwrap_or(Value::Null),
                 tasklist: serde_json::from_str(&tasklist_raw).unwrap_or(Value::Null),
-                tasklist_schema_version: row.get(7)?,
-                generation_mode: row.get(8)?,
+                tasklist_schema_version: row.get(6)?,
+                generation_mode: row.get(7)?,
                 validation_errors: validation_errors_raw
                     .and_then(|raw| serde_json::from_str(&raw).ok()),
-                created_by: row.get(10)?,
-                created_at: row.get(11)?,
-                updated_at: row.get(12)?,
+                created_by: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
@@ -114,27 +110,25 @@ impl Db {
     pub fn get_plan_by_id(&self, plan_id: &str) -> Result<Option<PlanWithParsed>> {
         let conn = self.connect()?;
         conn.query_row(
-            "SELECT id, task_id, version, status, plan_markdown, plan_json, tasklist_json, tasklist_schema_version, generation_mode, validation_errors_json, created_by, created_at, updated_at FROM plans WHERE id = ?1",
+            "SELECT id, task_id, version, status, plan_markdown, tasklist_json, tasklist_schema_version, generation_mode, validation_errors_json, created_by, created_at, updated_at FROM plans WHERE id = ?1",
             [plan_id],
             |row| {
-                let plan_raw: String = row.get(5)?;
-                let tasklist_raw: String = row.get(6)?;
-                let validation_errors_raw: Option<String> = row.get(9)?;
+                let tasklist_raw: String = row.get(5)?;
+                let validation_errors_raw: Option<String> = row.get(8)?;
                 Ok(PlanWithParsed {
                     id: row.get(0)?,
                     task_id: row.get(1)?,
                     version: row.get(2)?,
                     status: row.get(3)?,
                     plan_markdown: row.get(4)?,
-                    plan: serde_json::from_str(&plan_raw).unwrap_or(Value::Null),
                     tasklist: serde_json::from_str(&tasklist_raw).unwrap_or(Value::Null),
-                    tasklist_schema_version: row.get(7)?,
-                    generation_mode: row.get(8)?,
+                    tasklist_schema_version: row.get(6)?,
+                    generation_mode: row.get(7)?,
                     validation_errors: validation_errors_raw
                         .and_then(|raw| serde_json::from_str(&raw).ok()),
-                    created_by: row.get(10)?,
-                    created_at: row.get(11)?,
-                    updated_at: row.get(12)?,
+                    created_by: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             },
         )

@@ -189,9 +189,8 @@ export default function App() {
           taskRequiresPlan={task.selectedTask.require_plan}
           selectedProfileId={repo.selectedProfileId}
           detailsTab={detailsTab} setDetailsTab={setDetailsTab}
-          planComment={plan.planComment} setPlanComment={plan.setPlanComment}
+          planComment={plan.planComment} setPlanComment={plan.setPlanComment} planActionInProgress={plan.planActionInProgress}
           manualPlanMarkdown={plan.manualPlanMarkdown} setManualPlanMarkdown={plan.setManualPlanMarkdown}
-          manualPlanJsonText={plan.manualPlanJsonText} setManualPlanJsonText={plan.setManualPlanJsonText}
           manualTasklistJsonText={plan.manualTasklistJsonText} setManualTasklistJsonText={plan.setManualTasklistJsonText}
           tasklistValidationError={plan.tasklistValidationError}
           reviewComments={review.reviewComments} reviewText={review.reviewText} setReviewText={review.setReviewText}
@@ -233,6 +232,19 @@ export default function App() {
           onReviewProfileChange={review.setReviewProfileId}
           chatProfileId={chat.chatProfileId}
           onChatProfileChange={chat.setChatProfileId}
+          aiFeedback={plan.aiFeedback}
+          setAiFeedback={plan.setAiFeedback}
+          aiFeedbackParsed={plan.aiFeedbackParsed}
+          aiFeedbackLoading={plan.aiFeedbackLoading}
+          aiFeedbackStreamText={plan.aiFeedbackStreamText}
+          aiFeedbackOpen={plan.aiFeedbackOpen}
+          setAiFeedbackOpen={plan.setAiFeedbackOpen}
+          reviewPlanProfileId={plan.reviewPlanProfileId}
+          onReviewPlanProfileChange={plan.setReviewPlanProfileId}
+          selectedFeedbackIndices={plan.selectedFeedbackIndices}
+          onToggleFeedbackIndex={plan.toggleFeedbackIndex}
+          onReviewPlan={() => void plan.reviewPlan(plan.reviewPlanProfileId)}
+          onUseAiFeedbackAsRevision={plan.useAiFeedbackAsRevision}
         />
       )}
 
@@ -282,7 +294,6 @@ export default function App() {
           taskRequiresPlan={task.selectedTask.require_plan}
           planComment={plan.planComment} setPlanComment={plan.setPlanComment}
           manualPlanMarkdown={plan.manualPlanMarkdown} setManualPlanMarkdown={plan.setManualPlanMarkdown}
-          manualPlanJsonText={plan.manualPlanJsonText} setManualPlanJsonText={plan.setManualPlanJsonText}
           manualTasklistJsonText={plan.manualTasklistJsonText} setManualTasklistJsonText={plan.setManualTasklistJsonText}
           tasklistValidationError={plan.tasklistValidationError}
           busy={busy}
@@ -290,6 +301,21 @@ export default function App() {
           onPlanAction={(action) => void plan.planAction(action)}
           onValidateTasklist={plan.onValidateTasklist}
           onSaveManualRevision={() => void plan.saveManualRevision()}
+          agentProfiles={boot.agentProfiles}
+          aiFeedback={plan.aiFeedback}
+          setAiFeedback={plan.setAiFeedback}
+          aiFeedbackParsed={plan.aiFeedbackParsed}
+          aiFeedbackLoading={plan.aiFeedbackLoading}
+          aiFeedbackStreamText={plan.aiFeedbackStreamText}
+          aiFeedbackOpen={plan.aiFeedbackOpen}
+          setAiFeedbackOpen={plan.setAiFeedbackOpen}
+          reviewPlanProfileId={plan.reviewPlanProfileId}
+          onReviewPlanProfileChange={plan.setReviewPlanProfileId}
+          selectedFeedbackIndices={plan.selectedFeedbackIndices}
+          onToggleFeedbackIndex={plan.toggleFeedbackIndex}
+          onReviewPlan={() => void plan.reviewPlan(plan.reviewPlanProfileId)}
+          onUseAiFeedbackAsRevision={plan.useAiFeedbackAsRevision}
+          planActionInProgress={plan.planActionInProgress}
         />
       )}
 

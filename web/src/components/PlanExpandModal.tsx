@@ -1,7 +1,8 @@
-import { useEffect } from "react";
-import type { Task, Plan, PlanJob, RunLogEntry } from "../types";
+import { useEffect, useState } from "react";
+import type { Task, Plan, PlanJob, RunLogEntry, AgentProfile } from "../types";
 import { IconX } from "./icons";
 import { LogViewer } from "./LogViewer";
+import { AgentProfileSelect } from "./AgentProfileSelect";
 import { formatDate, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor } from "./shared";
 
 export function PlanExpandModal({
@@ -14,7 +15,6 @@ export function PlanExpandModal({
   taskRequiresPlan,
   planComment, setPlanComment,
   manualPlanMarkdown, setManualPlanMarkdown,
-  manualPlanJsonText, setManualPlanJsonText,
   manualTasklistJsonText, setManualTasklistJsonText,
   tasklistValidationError,
   busy,
@@ -22,6 +22,13 @@ export function PlanExpandModal({
   onPlanAction,
   onValidateTasklist,
   onSaveManualRevision,
+  agentProfiles,
+  aiFeedback, setAiFeedback, aiFeedbackParsed,
+  aiFeedbackLoading, aiFeedbackStreamText, aiFeedbackOpen, setAiFeedbackOpen,
+  reviewPlanProfileId, onReviewPlanProfileChange,
+  selectedFeedbackIndices, onToggleFeedbackIndex,
+  onReviewPlan, onUseAiFeedbackAsRevision,
+  planActionInProgress,
 }: {
   open: boolean;
   onClose: () => void;
@@ -32,7 +39,6 @@ export function PlanExpandModal({
   taskRequiresPlan: boolean;
   planComment: string; setPlanComment: (v: string) => void;
   manualPlanMarkdown: string; setManualPlanMarkdown: (v: string) => void;
-  manualPlanJsonText: string; setManualPlanJsonText: (v: string) => void;
   manualTasklistJsonText: string; setManualTasklistJsonText: (v: string) => void;
   tasklistValidationError: string;
   busy: boolean;
@@ -40,8 +46,25 @@ export function PlanExpandModal({
   onPlanAction: (action: "approve" | "reject" | "revise") => void;
   onValidateTasklist: () => void;
   onSaveManualRevision: () => void;
+  agentProfiles?: AgentProfile[];
+  aiFeedback?: string;
+  setAiFeedback?: (v: string) => void;
+  aiFeedbackParsed?: { verdict: string; comments: Array<{ category: string; severity: string; reason: string; suggestion: string }> } | null;
+  aiFeedbackLoading?: boolean;
+  aiFeedbackStreamText?: string;
+  aiFeedbackOpen?: boolean;
+  setAiFeedbackOpen?: (v: boolean) => void;
+  reviewPlanProfileId?: string;
+  onReviewPlanProfileChange?: (v: string) => void;
+  selectedFeedbackIndices?: Set<number>;
+  onToggleFeedbackIndex?: (index: number) => void;
+  onReviewPlan?: () => void;
+  onUseAiFeedbackAsRevision?: () => void;
+  planActionInProgress?: string;
 }) {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? latestPlan;
+  const [tasklistJsonOpen, setTasklistJsonOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
 
   // Close on Escape
   useEffect(() => {
@@ -128,8 +151,8 @@ export function PlanExpandModal({
 
         {/* Body — two columns */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left sidebar */}
-          <div className="w-56 shrink-0 overflow-y-auto border-r border-border-default bg-surface-200 p-3 space-y-4">
+          {/* Left sidebar — compact controls */}
+          <div className="w-52 shrink-0 overflow-y-auto border-r border-border-default bg-surface-200 p-3 space-y-4">
             {/* Plan status */}
             <div className="space-y-2">
               <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Status</h3>
@@ -168,44 +191,6 @@ export function PlanExpandModal({
 
             <div className="border-t border-border-default" />
 
-            {/* Comment */}
-            <div className="space-y-1.5">
-              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Comment</h3>
-              <textarea
-                value={planComment}
-                onChange={(e) => setPlanComment(e.target.value)}
-                className={`${inputClass} min-h-[80px] resize-y text-xs`}
-                placeholder="Add approval/revision note..."
-              />
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => onPlanAction("approve")}
-                disabled={busy || !latestPlan}
-                className={`${btnPrimary} !py-1.5 text-xs w-full`}
-              >
-                Approve
-              </button>
-              <button
-                onClick={() => onPlanAction("revise")}
-                disabled={busy || !latestPlan}
-                className={`${btnSecondary} !py-1.5 text-xs w-full`}
-              >
-                Request Revision
-              </button>
-              <button
-                onClick={() => onPlanAction("reject")}
-                disabled={busy || !latestPlan}
-                className="w-full rounded-md border border-error-border bg-error-bg py-1.5 text-xs font-medium text-error-text transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Reject
-              </button>
-            </div>
-
-            <div className="border-t border-border-default" />
-
             {/* Generate */}
             <button
               onClick={onCreatePlan}
@@ -231,9 +216,42 @@ export function PlanExpandModal({
                 <span className="text-text-muted">{activePlanJob.mode}</span>
               </div>
             )}
+
+            {/* AI Review trigger */}
+            {agentProfiles && agentProfiles.length > 0 && (
+              <>
+                <div className="border-t border-border-default" />
+                <div className="space-y-2">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">AI Review</h3>
+                  <AgentProfileSelect
+                    profiles={agentProfiles}
+                    value={reviewPlanProfileId ?? ""}
+                    onChange={(v) => onReviewPlanProfileChange?.(v)}
+                    className="w-full rounded-md border border-border-strong bg-surface-100 px-2 py-1.5 text-[11px] text-text-secondary focus:border-brand focus:outline-none"
+                  />
+                  <button
+                    onClick={onReviewPlan}
+                    disabled={busy || aiFeedbackLoading || !latestPlan || !reviewPlanProfileId}
+                    className={`${btnSecondary} !py-1.5 text-xs w-full`}
+                  >
+                    {aiFeedbackLoading ? "Reviewing..." : "Review Plan"}
+                  </button>
+                  {aiFeedbackLoading && (
+                    <div className="flex items-center gap-1.5 rounded-md border border-brand/30 bg-brand/5 px-2 py-1.5">
+                      <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+                      <span className="min-w-0 truncate text-[10px] text-brand">
+                        {aiFeedbackStreamText
+                          ? (aiFeedbackStreamText.length > 30 ? aiFeedbackStreamText.slice(-30) : aiFeedbackStreamText)
+                          : "Starting…"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Right panel — scrollable */}
+          {/* Right panel — content + contextual actions */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {/* Plan Draft */}
             <div className="rounded-xl border border-border-default bg-surface-200 p-3">
@@ -257,82 +275,209 @@ export function PlanExpandModal({
               )}
             </div>
 
-            {/* Plan JSON */}
-            <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-xs font-medium text-text-secondary">Plan JSON</h4>
-                {selectedPlan && (
-                  <span className="text-[11px] text-text-muted">
-                    v{selectedPlan.version} · {selectedPlan.generation_mode}
-                  </span>
+            {/* AI Feedback — wide prominent section */}
+            {(aiFeedback || aiFeedbackOpen) && (
+              <div className={`rounded-xl border p-3 ${
+                aiFeedbackParsed?.verdict === "passed"
+                  ? "border-green-500/30 bg-green-500/5"
+                  : aiFeedbackParsed?.verdict === "failed"
+                    ? "border-red-500/30 bg-red-500/5"
+                    : "border-purple-500/30 bg-purple-500/5"
+              }`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <button
+                    onClick={() => setAiFeedbackOpen?.(!aiFeedbackOpen)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition"
+                  >
+                    <span className={`inline-block text-[10px] transition-transform ${aiFeedbackOpen ? "rotate-90" : ""}`}>&#9654;</span>
+                    AI Review
+                    {aiFeedbackParsed && (
+                      <span className={`ml-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                        aiFeedbackParsed.verdict === "passed"
+                          ? "border-green-500/40 bg-green-500/15 text-green-400"
+                          : "border-red-500/40 bg-red-500/15 text-red-400"
+                      }`}>
+                        {aiFeedbackParsed.verdict.toUpperCase()}
+                      </span>
+                    )}
+                  </button>
+                  {aiFeedbackOpen && aiFeedbackParsed?.verdict === "failed" && aiFeedbackParsed.comments.length > 0 && (
+                    <button
+                      onClick={onUseAiFeedbackAsRevision}
+                      className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-400 transition hover:bg-purple-500/20"
+                    >
+                      {selectedFeedbackIndices && selectedFeedbackIndices.size > 0
+                        ? `Revise with ${selectedFeedbackIndices.size} selected`
+                        : "Use All as Revision"}
+                    </button>
+                  )}
+                </div>
+                {aiFeedbackOpen && (
+                  aiFeedbackParsed ? (
+                    aiFeedbackParsed.verdict === "passed" ? (
+                      <p className="text-xs text-green-400">Plan looks good. No issues found.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {aiFeedbackParsed.comments.map((c, i) => (
+                          <div
+                            key={i}
+                            onClick={() => onToggleFeedbackIndex?.(i)}
+                            className={`cursor-pointer rounded-lg border px-3 py-2 transition ${
+                              selectedFeedbackIndices?.has(i)
+                                ? "border-purple-500/50 bg-purple-500/10"
+                                : "border-border-strong bg-surface-100 hover:border-border-default"
+                            }`}
+                          >
+                            <div className="mb-1 flex items-center gap-2">
+                              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                                selectedFeedbackIndices?.has(i)
+                                  ? "border-purple-500 bg-purple-500 text-white"
+                                  : "border-border-strong bg-surface-100 text-transparent"
+                              }`}>✓</span>
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                c.severity === "critical" ? "bg-red-500/15 text-red-400"
+                                : c.severity === "major" ? "bg-orange-500/15 text-orange-400"
+                                : "bg-blue-500/15 text-blue-400"
+                              }`}>{c.severity}</span>
+                              <span className="rounded bg-surface-300 px-1.5 py-0.5 text-[10px] text-text-muted">{c.category}</span>
+                            </div>
+                            <p className="text-[11px] text-text-primary">{c.reason}</p>
+                            <p className="mt-1 text-[11px] text-text-secondary">→ {c.suggestion}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    <textarea
+                      value={aiFeedback}
+                      onChange={(e) => setAiFeedback?.(e.target.value)}
+                      className={`${inputClass} min-h-[160px] resize-y font-mono text-[12px] leading-relaxed`}
+                      placeholder="AI feedback will appear here..."
+                    />
+                  )
                 )}
               </div>
+            )}
+
+            {/* Review Comment + Actions */}
+            <div className="rounded-xl border border-border-default bg-surface-200 p-3">
+              <label className="mb-1.5 block text-xs font-medium text-text-muted">Review Comment</label>
               <textarea
-                value={manualPlanJsonText}
-                onChange={(e) => setManualPlanJsonText(e.target.value)}
-                className={`${inputClass} min-h-[200px] resize-y font-mono text-[12px]`}
-                placeholder="{}"
+                value={planComment}
+                onChange={(e) => setPlanComment(e.target.value)}
+                className={`${inputClass} min-h-[72px] resize-y text-xs`}
+                placeholder="Add approval/revision note..."
               />
+              {planActionInProgress ? (
+                <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2.5">
+                  <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+                  <span className="text-xs font-medium text-brand">{planActionInProgress}</span>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => onPlanAction("approve")}
+                    disabled={busy || !latestPlan}
+                    className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => onPlanAction("revise")}
+                    disabled={busy || !latestPlan}
+                    className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
+                  >
+                    Request Revision
+                  </button>
+                  <button
+                    onClick={() => onPlanAction("reject")}
+                    disabled={busy || !latestPlan}
+                    className="rounded-md border border-error-border bg-error-bg px-3 py-1.5 text-xs font-medium text-error-text transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Tasklist Overview */}
             {tasklistOverview}
 
-            {/* Tasklist JSON */}
+            {/* Tasklist JSON (collapsible) */}
             <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-xs font-medium text-text-secondary">Tasklist JSON</h4>
+              <button
+                onClick={() => setTasklistJsonOpen(!tasklistJsonOpen)}
+                className="flex w-full items-center justify-between"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={`inline-block text-[10px] text-text-muted transition-transform ${tasklistJsonOpen ? "rotate-90" : ""}`}>&#9654;</span>
+                  <h4 className="text-xs font-medium text-text-secondary">Tasklist JSON</h4>
+                </div>
                 {selectedPlan && (
                   <span className="text-[11px] text-text-muted">
                     schema v{selectedPlan.tasklist_schema_version}
                   </span>
                 )}
-              </div>
-              <textarea
-                value={manualTasklistJsonText}
-                onChange={(e) => setManualTasklistJsonText(e.target.value)}
-                className={`${inputClass} min-h-[260px] resize-y font-mono text-[12px]`}
-                placeholder="{}"
-              />
-              {tasklistValidationError && (
-                <div className="mt-3 rounded-lg border border-error-border bg-error-bg px-3 py-2 text-xs text-error-text">
-                  {tasklistValidationError}
-                </div>
+              </button>
+              {tasklistJsonOpen && (
+                <>
+                  <textarea
+                    value={manualTasklistJsonText}
+                    onChange={(e) => setManualTasklistJsonText(e.target.value)}
+                    className={`${inputClass} mt-2 min-h-[260px] resize-y font-mono text-[12px]`}
+                    placeholder="{}"
+                  />
+                  {tasklistValidationError && (
+                    <div className="mt-3 rounded-lg border border-error-border bg-error-bg px-3 py-2 text-xs text-error-text">
+                      {tasklistValidationError}
+                    </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={onValidateTasklist}
+                      className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
+                    >
+                      Validate
+                    </button>
+                    <button
+                      onClick={onSaveManualRevision}
+                      disabled={busy || !selectedPlan}
+                      className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
+                    >
+                      Save as New Version
+                    </button>
+                  </div>
+                </>
               )}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  onClick={onValidateTasklist}
-                  className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
-                >
-                  Validate
-                </button>
-                <button
-                  onClick={onSaveManualRevision}
-                  disabled={busy || !selectedPlan}
-                  className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
-                >
-                  Save as New Version
-                </button>
-              </div>
             </div>
 
-            {/* Live Plan Output */}
+            {/* Live Plan Output (collapsible) */}
             <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-xs font-medium text-text-secondary">Live Plan Output</h4>
+              <button
+                onClick={() => setLogsOpen(!logsOpen)}
+                className="flex w-full items-center justify-between"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={`inline-block text-[10px] text-text-muted transition-transform ${logsOpen ? "rotate-90" : ""}`}>&#9654;</span>
+                  <h4 className="text-xs font-medium text-text-secondary">Live Plan Output</h4>
+                </div>
                 {activePlanJob && (
                   <span className="text-[11px] text-text-muted">job {activePlanJob.id.slice(0, 8)}</span>
                 )}
-              </div>
-              <LogViewer
-                logs={planLogs}
-                className="h-[300px]"
-                emptyMessage={
-                  activePlanJob
-                    ? (planFinished ? "Plan output stream finished." : "Waiting for plan output...")
-                    : "No active plan job."
-                }
-              />
+              </button>
+              {logsOpen && (
+                <div className="mt-2">
+                  <LogViewer
+                    logs={planLogs}
+                    className="h-[300px]"
+                    emptyMessage={
+                      activePlanJob
+                        ? (planFinished ? "Plan output stream finished." : "Waiting for plan output...")
+                        : "No active plan job."
+                    }
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

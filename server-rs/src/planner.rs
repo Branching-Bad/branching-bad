@@ -15,12 +15,10 @@ use crate::msg_store::LogMsg;
 
 pub struct GeneratedPlan {
     pub markdown: String,
-    pub plan_json: Value,
 }
 
 pub struct GeneratedPlanTasklist {
     pub markdown: String,
-    pub plan_json: Value,
     pub tasklist_json: Value,
     pub agent_session_id: Option<String>,
 }
@@ -38,33 +36,9 @@ const GENERATION_MAX_ATTEMPTS: usize = 2;
 const DEFAULT_AGENT_TIMEOUT_SECS: u64 = 60 * 60;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct PlanRisk {
-    risk: String,
-    mitigation: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct StrictPlanJson {
-    schema_version: i64,
-    issue_key: String,
-    goal: String,
-    summary: String,
-    scope: Vec<String>,
-    risks: Vec<PlanRisk>,
-    test_strategy: Vec<String>,
-    acceptance_criteria: Vec<String>,
-    #[serde(default)]
-    notes: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 struct PlanGenerationEnvelope {
     schema_version: i64,
     plan_markdown: String,
-    plan_json: StrictPlanJson,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -131,12 +105,11 @@ pub fn generate_plan_and_tasklist_with_agent_strict(
         progress,
         resume_session_id,
     )?;
-    emit_progress_text(progress, "Strict plan JSON validated. Generating strict tasklist...".to_string());
+    emit_progress_text(progress, "Plan validated. Generating strict tasklist...".to_string());
     let tasklist = generate_tasklist_from_plan_strict(
         repo_path,
         task,
         agent_command,
-        &plan.plan_json,
         &plan.markdown,
         target_plan_version,
         progress,
@@ -146,7 +119,6 @@ pub fn generate_plan_and_tasklist_with_agent_strict(
 
     Ok(GeneratedPlanTasklist {
         markdown: plan.markdown,
-        plan_json: plan.plan_json,
         tasklist_json: tasklist,
         agent_session_id,
     })
@@ -197,21 +169,10 @@ pub fn generate_plan_with_agent_strict(
 
 Return JSON only. No markdown fences. No extra text.
 
-Output schema (exact keys, no extra keys, no null values):
+Output schema (exact keys, no extra keys):
 {{
   "schema_version": 1,
-  "plan_markdown": "string",
-  "plan_json": {{
-    "schema_version": 1,
-    "issue_key": "string",
-    "goal": "string",
-    "summary": "string",
-    "scope": ["string"],
-    "risks": [{{ "risk": "string", "mitigation": "string" }}],
-    "test_strategy": ["string"],
-    "acceptance_criteria": ["string"],
-    "notes": ["string"]
-  }}
+  "plan_markdown": "string"
 }}
 
 Task:
@@ -226,9 +187,8 @@ Likely affected files:
 {file_list}
 
 Constraints:
-- `plan_json.issue_key` must be exactly `{issue_key}`.
 - `plan_markdown` must be concise, actionable, and <= 64KB.
-- Every list field must contain at least 1 item.
+- Include sections for: Goal, Summary, Scope, Risks, Test Strategy, Acceptance Criteria.
 - Never output keys outside the schema.
 "#,
         issue_key = task.jira_issue_key,
@@ -271,13 +231,10 @@ pub fn generate_tasklist_from_plan_strict(
     repo_path: &str,
     task: &TaskWithPayload,
     agent_command: &str,
-    plan_json: &Value,
     plan_markdown: &str,
     target_plan_version: i64,
     progress: Option<ProgressCallback<'_>>,
 ) -> Result<Value> {
-    let plan_json_pretty = serde_json::to_string_pretty(plan_json)
-        .unwrap_or_else(|_| "{}".to_string());
     let prompt = format!(
         r#"You are decomposing an approved implementation plan into a strict tasklist.
 
@@ -321,9 +278,6 @@ Task context:
 - title: {title}
 - description: {description}
 
-Plan JSON:
-{plan_json}
-
 Plan markdown:
 {plan_markdown}
 
@@ -345,7 +299,6 @@ Constraints:
         plan_version = target_plan_version,
         title = task.title,
         description = task.description.as_deref().unwrap_or("No description provided."),
-        plan_json = plan_json_pretty,
         plan_markdown = plan_markdown,
     );
 
@@ -379,7 +332,7 @@ Constraints:
     )
 }
 
-fn parse_strict_plan_response(raw: &str, task: &TaskWithPayload) -> Result<GeneratedPlan> {
+fn parse_strict_plan_response(raw: &str, _task: &TaskWithPayload) -> Result<GeneratedPlan> {
     let json_value = extract_json_payload(raw)?;
     let envelope: PlanGenerationEnvelope = serde_json::from_value(json_value)
         .context("invalid strict plan envelope json")?;
@@ -387,7 +340,6 @@ fn parse_strict_plan_response(raw: &str, task: &TaskWithPayload) -> Result<Gener
     if envelope.schema_version != 1 {
         bail!("plan envelope schema_version must be 1");
     }
-    validate_plan_json(&envelope.plan_json, &task.jira_issue_key)?;
 
     let markdown = envelope.plan_markdown.trim().to_string();
     if markdown.is_empty() {
@@ -400,11 +352,7 @@ fn parse_strict_plan_response(raw: &str, task: &TaskWithPayload) -> Result<Gener
         );
     }
 
-    Ok(GeneratedPlan {
-        markdown,
-        plan_json: serde_json::to_value(envelope.plan_json)
-            .context("failed to serialize strict plan json")?,
-    })
+    Ok(GeneratedPlan { markdown })
 }
 
 fn parse_strict_tasklist_response(
@@ -429,76 +377,6 @@ fn parse_strict_tasklist_response(
         bail!("tasklist json exceeds {} bytes limit", TASKLIST_JSON_MAX_BYTES);
     }
     Ok(json_value)
-}
-
-fn validate_plan_json(plan: &StrictPlanJson, expected_issue_key: &str) -> Result<()> {
-    if plan.schema_version != 1 {
-        bail!("plan_json.schema_version must be 1");
-    }
-    if plan.issue_key != expected_issue_key {
-        bail!(
-            "plan_json.issue_key must equal task issue key (expected {}, got {})",
-            expected_issue_key,
-            plan.issue_key
-        );
-    }
-    if plan.goal.trim().is_empty() {
-        bail!("plan_json.goal is required");
-    }
-    if plan.summary.trim().is_empty() {
-        bail!("plan_json.summary is required");
-    }
-    if plan.scope.is_empty() || plan.scope.iter().any(|item| item.trim().is_empty()) {
-        bail!("plan_json.scope must contain non-empty entries");
-    }
-    if plan.risks.is_empty()
-        || plan
-            .risks
-            .iter()
-            .any(|risk| risk.risk.trim().is_empty() || risk.mitigation.trim().is_empty())
-    {
-        bail!("plan_json.risks must contain non-empty risk and mitigation");
-    }
-    if plan.test_strategy.is_empty()
-        || plan
-            .test_strategy
-            .iter()
-            .any(|item| item.trim().is_empty())
-    {
-        bail!("plan_json.test_strategy must contain non-empty entries");
-    }
-    if plan.acceptance_criteria.is_empty()
-        || plan
-            .acceptance_criteria
-            .iter()
-            .any(|item| item.trim().is_empty())
-    {
-        bail!("plan_json.acceptance_criteria must contain non-empty entries");
-    }
-    if plan.notes.iter().any(|item| item.trim().is_empty()) {
-        bail!("plan_json.notes cannot include empty items");
-    }
-    Ok(())
-}
-
-pub fn validate_plan_payload(
-    plan_json: &Value,
-    plan_markdown: &str,
-    expected_issue_key: &str,
-) -> Result<()> {
-    let parsed: StrictPlanJson = serde_json::from_value(plan_json.clone())
-        .context("invalid plan_json payload")?;
-    validate_plan_json(&parsed, expected_issue_key)?;
-    if plan_markdown.trim().is_empty() {
-        bail!("plan_markdown must not be empty");
-    }
-    if plan_markdown.as_bytes().len() > PLAN_MARKDOWN_MAX_BYTES {
-        bail!(
-            "plan_markdown exceeds {} bytes limit",
-            PLAN_MARKDOWN_MAX_BYTES
-        );
-    }
-    Ok(())
 }
 
 fn validate_tasklist_json(
