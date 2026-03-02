@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
 use crate::db::Db;
-use crate::executor::capture_diff;
+use crate::executor::{capture_diff_with_base, git_commit_all};
 use crate::msg_store::MsgStore;
 
 pub struct ProcessManager {
@@ -97,6 +97,7 @@ impl ProcessManager {
         task_id: String,
         _repo_path: String,
         working_dir: String,
+        base_sha: Option<String>,
         db: Arc<Db>,
     ) {
         let pm = self.clone();
@@ -126,8 +127,11 @@ impl ProcessManager {
 
             let exit_code = exit_status.and_then(|s| s.code());
 
-            // Capture diff from the agent's working directory
-            let diff = capture_diff(&working_dir).unwrap_or_default();
+            // Commit any uncommitted changes to the worktree branch
+            let _ = git_commit_all(&working_dir, "agent: apply changes");
+
+            // Capture diff: unstaged/staged, or committed since base_sha
+            let diff = capture_diff_with_base(&working_dir, base_sha.as_deref()).unwrap_or_default();
             if !diff.is_empty() {
                 let _ = db.save_run_diff(&run_id, &diff);
             }

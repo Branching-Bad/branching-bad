@@ -167,6 +167,8 @@ pub fn generate_plan_with_agent_strict(
     let prompt = format!(
         r#"You are planning implementation for a coding task.
 
+CRITICAL: This is a READ-ONLY planning task. Do NOT modify, edit, create, or delete any files. Do NOT run any commands that change state. Do NOT take any action to implement the plan. Your ONLY job is to analyze the codebase and produce a plan document. Nothing else.
+
 Return JSON only. No markdown fences. No extra text.
 
 Output schema (exact keys, no extra keys):
@@ -294,6 +296,8 @@ Constraints:
   - "haiku": low complexity tasks (exploration, simple edits, lookups)
   - "sonnet": medium complexity tasks (standard feature work, multi-file changes)
   - "opus": high complexity tasks (architecture, complex logic, critical code)
+
+CRITICAL: This is a READ-ONLY planning task. Do NOT modify, edit, create, or delete any files. Do NOT run any commands that change state. Do NOT take any action to implement the plan. Your ONLY job is to decompose the plan into a structured tasklist. Nothing else.
 "#,
         issue_key = task.jira_issue_key,
         plan_version = target_plan_version,
@@ -361,13 +365,13 @@ fn parse_strict_tasklist_response(
     target_plan_version: i64,
 ) -> Result<Value> {
     let json_value = extract_json_payload(raw)?;
-    let envelope: TasklistEnvelope = serde_json::from_value(json_value)
+    let mut envelope: TasklistEnvelope = serde_json::from_value(json_value)
         .context("invalid strict tasklist envelope json")?;
     if envelope.schema_version != 1 {
         bail!("tasklist envelope schema_version must be 1");
     }
     validate_tasklist_json(
-        &envelope.tasklist_json,
+        &mut envelope.tasklist_json,
         &task.jira_issue_key,
         target_plan_version,
     )?;
@@ -380,7 +384,7 @@ fn parse_strict_tasklist_response(
 }
 
 fn validate_tasklist_json(
-    tasklist: &StrictTasklistJson,
+    tasklist: &mut StrictTasklistJson,
     expected_issue_key: &str,
     expected_plan_version: i64,
 ) -> Result<()> {
@@ -459,18 +463,11 @@ fn validate_tasklist_json(
         }
     }
 
-    for phase in &tasklist.phases {
-        for task in &phase.tasks {
-            for dep in &task.blocked_by {
-                if !all_task_ids.contains(dep) {
-                    bail!("task {} blocked_by references unknown id {}", task.id, dep);
-                }
-            }
-            for dep in &task.blocks {
-                if !all_task_ids.contains(dep) {
-                    bail!("task {} blocks references unknown id {}", task.id, dep);
-                }
-            }
+    // Auto-fix: remove invalid dependency references instead of failing
+    for phase in &mut tasklist.phases {
+        for task in &mut phase.tasks {
+            task.blocked_by.retain(|dep| all_task_ids.contains(dep));
+            task.blocks.retain(|dep| all_task_ids.contains(dep));
         }
     }
 
@@ -482,9 +479,9 @@ pub fn validate_tasklist_payload(
     expected_issue_key: &str,
     expected_plan_version: i64,
 ) -> Result<()> {
-    let parsed: StrictTasklistJson = serde_json::from_value(tasklist_json.clone())
+    let mut parsed: StrictTasklistJson = serde_json::from_value(tasklist_json.clone())
         .context("invalid tasklist_json payload")?;
-    validate_tasklist_json(&parsed, expected_issue_key, expected_plan_version)?;
+    validate_tasklist_json(&mut parsed, expected_issue_key, expected_plan_version)?;
     if tasklist_json.to_string().as_bytes().len() > TASKLIST_JSON_MAX_BYTES {
         bail!("tasklist json exceeds {} bytes limit", TASKLIST_JSON_MAX_BYTES);
     }
@@ -789,6 +786,12 @@ pub fn invoke_agent_cli(
                     }
                 }
             }
+            // Fallback: extract text content from stream-json lines
+            // (avoids returning raw JSON lines with rate_limit_event etc.)
+            let extracted = extract_text_from_claude_stream(&stdout);
+            if !extracted.trim().is_empty() {
+                return Ok(AgentOutput { text: extracted, session_id: captured_session_id });
+            }
         }
         Ok(AgentOutput { text: stdout, session_id: captured_session_id })
     } else {
@@ -797,6 +800,57 @@ pub fn invoke_agent_cli(
         }
         anyhow::bail!("Agent command failed: {}", stderr)
     }
+}
+
+/// Extract text content from raw Claude stream-json stdout.
+/// Picks up text from "assistant" messages and "result" events,
+/// filtering out rate_limit_event, system, ping, etc.
+fn extract_text_from_claude_stream(raw: &str) -> String {
+    let mut text_parts: Vec<String> = Vec::new();
+
+    for line in raw.lines() {
+        let Ok(v) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let Some(msg_type) = v.get("type").and_then(Value::as_str) else {
+            continue;
+        };
+        match msg_type {
+            "assistant" => {
+                if let Some(content) = v
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(Value::as_array)
+                {
+                    for block in content {
+                        if block.get("type").and_then(Value::as_str) == Some("text") {
+                            if let Some(t) = block.get("text").and_then(Value::as_str) {
+                                text_parts.push(t.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            "result" => {
+                if let Some(output) = v.get("result") {
+                    if let Some(s) = output.as_str() {
+                        text_parts.push(s.to_string());
+                    } else if let Some(arr) = output.as_array() {
+                        for block in arr {
+                            if block.get("type").and_then(Value::as_str) == Some("text") {
+                                if let Some(t) = block.get("text").and_then(Value::as_str) {
+                                    text_parts.push(t.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    text_parts.join("\n")
 }
 
 fn emit_progress(progress: Option<ProgressCallback<'_>>, msg: LogMsg) {
@@ -992,9 +1046,9 @@ fn parse_claude_stream_line(line: &str) -> (Vec<LogMsg>, Option<String>, Option<
                 session_id = Some(sid.to_string());
             }
         }
-        // Skip noisy lifecycle events — they don't add value for the user
+        // Skip noisy lifecycle/metadata events — they don't add value for the user
         "system" | "message_start" | "message_delta" | "message_stop" | "ping"
-        | "content_block_stop" => {}
+        | "content_block_stop" | "rate_limit_event" | "error_event" | "usage_event" => {}
         _ => {
             messages.push(LogMsg::Stdout(truncate_progress_line(line)));
         }

@@ -89,12 +89,13 @@ async fn send_chat_message(
 
     let agent_command = build_agent_command(&profile);
 
-    let (plan_id, branch_name, session_id, worktree_path) = match &latest_run {
+    let (plan_id, branch_name, session_id, worktree_path, base_sha) = match &latest_run {
         Some(run) => (
             run.plan_id.clone(),
             run.branch_name.clone(),
             run.agent_session_id.clone(),
             run.worktree_path.clone(),
+            run.base_sha.clone(),
         ),
         None => {
             return Err(ApiError::bad_request(
@@ -112,6 +113,7 @@ async fn send_chat_message(
             &branch_name,
             Some(&profile.id),
             worktree_path.as_deref(),
+            base_sha.as_deref(),
         )
         .map_err(ApiError::internal)?;
 
@@ -156,6 +158,7 @@ async fn send_chat_message(
             run_id,
             task_id,
             repo_path,
+            base_sha,
             db,
             pm,
             store,
@@ -257,6 +260,7 @@ async fn dispatch_next_queued_chat(
     let branch_name = latest_run.branch_name.clone();
     let session_id = latest_run.agent_session_id.clone();
     let worktree_path = latest_run.worktree_path.clone();
+    let base_sha = latest_run.base_sha.clone();
 
     let run = state
         .db
@@ -267,6 +271,7 @@ async fn dispatch_next_queued_chat(
             &branch_name,
             Some(&profile.id),
             worktree_path.as_deref(),
+            base_sha.as_deref(),
         )
         .map_err(ApiError::internal)?;
 
@@ -307,6 +312,7 @@ async fn dispatch_next_queued_chat(
             run_id,
             task_id,
             repo_path,
+            base_sha,
             db,
             pm,
             store,

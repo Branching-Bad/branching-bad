@@ -1,16 +1,16 @@
 use std::collections::HashMap;
-use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
-use super::aws_client::AwsClient;
+use serde_json::Value;
+use super::es_client::EsClient;
 use crate::planner::invoke_agent_cli;
 use crate::provider::utils::{parse_json_from_agent, truncate};
 
 #[derive(Debug, Clone)]
 pub struct InvestigationRequest {
     pub question: String,
-    pub log_group: String,
+    pub index_pattern: String,
     pub time_range_minutes: i64,
     pub repo_path: String,
     pub agent_command: String,
@@ -18,7 +18,7 @@ pub struct InvestigationRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvestigationResult {
-    pub phase1_query: String,
+    pub phase1_query: Value,
     pub phase1_reasoning: String,
     pub relevant_files: Vec<String>,
     pub correlation_id_field: String,
@@ -33,7 +33,29 @@ pub struct InvestigationResult {
 pub struct LogEntry {
     pub timestamp: String,
     pub message: String,
-    pub log_stream: String,
+    pub source: Value,
+}
+
+impl LogEntry {
+    /// Construct a LogEntry from an ES search hit (the `_source` object).
+    pub fn from_hit(hit: &Value) -> Self {
+        let source = &hit["_source"];
+        let timestamp = source["@timestamp"]
+            .as_str()
+            .or_else(|| source["timestamp"].as_str())
+            .unwrap_or_default()
+            .to_string();
+        let message = source["message"]
+            .as_str()
+            .or_else(|| source["msg"].as_str())
+            .unwrap_or_default()
+            .to_string();
+        Self {
+            timestamp,
+            message,
+            source: source.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,42 +68,42 @@ pub struct AnalysisResult {
 
 #[derive(Debug, Deserialize)]
 struct Phase1Response {
-    query: String,
+    query: Value,
     reasoning: String,
     relevant_files: Vec<String>,
     correlation_id_field: Option<String>,
 }
 
-/// Phase 1: Agent generates CW Insights query + runs it
+/// Phase 1: Agent generates ES query DSL + runs it
 pub async fn run_phase1(
     req: &InvestigationRequest,
-    aws: &AwsClient,
+    es: &EsClient,
 ) -> Result<InvestigationResult> {
-    // Ask agent to generate a CW Insights query
     let prompt = format!(
-        r#"You are a CloudWatch Logs investigator. The user reported this problem:
+        r#"You are an Elasticsearch logs investigator. The user reported this problem:
 "{question}"
 
-Target log group: {log_group}
+Target index: {index}
 Time range: last {time_range} minutes
 
 Your tasks:
 1. Analyze this codebase to find the relevant endpoint/service/function
 2. Understand the logging patterns (what fields exist, how errors are logged)
-3. Generate a CloudWatch Insights query that will find ERROR/EXCEPTION logs related to this issue
-4. The query MUST be narrow and targeted — do not fetch thousands of irrelevant logs
+3. Generate an Elasticsearch query DSL (JSON) that will find ERROR/EXCEPTION logs related to this issue
+4. The query MUST use a time range filter on @timestamp for the last {time_range} minutes
+5. The query MUST be narrow and targeted — do not fetch thousands of irrelevant logs
 
 CRITICAL: This is a READ-ONLY investigation task. Do NOT modify, edit, create, or delete any files. Do NOT take any action to fix the issue. Do NOT run any commands that change state. Your ONLY job is to analyze the codebase, understand the logging patterns, and generate a search query. Nothing else.
 
 IMPORTANT: Respond ONLY with this JSON (no other text):
 {{
-  "query": "fields @timestamp, @message, @logStream | filter ...",
+  "query": {{ <ES query DSL object — this goes directly into the "query" field of _search> }},
   "reasoning": "Brief explanation of what you found in the codebase",
   "relevant_files": ["path/to/file1.ts", "path/to/file2.ts"],
-  "correlation_id_field": "the field name used for request correlation (e.g. correlationId, requestId, traceId) or null if not found"
+  "correlation_id_field": "the field name used for request correlation (e.g. traceId, requestId, correlationId) or null if not found"
 }}"#,
         question = req.question,
-        log_group = req.log_group,
+        index = req.index_pattern,
         time_range = req.time_range_minutes,
     );
 
@@ -96,41 +118,21 @@ IMPORTANT: Respond ONLY with this JSON (no other text):
     let phase1: Phase1Response = parse_json_from_agent(&agent_output.text)
         .map_err(|e| anyhow!("Failed to parse agent Phase 1 response: {}. Raw: {}", e, truncate(&agent_output.text, 500)))?;
 
-    // Execute the CW Insights query
-    let now = chrono::Utc::now().timestamp();
-    let start = now - (req.time_range_minutes * 60);
-
-    let query_id = aws
-        .start_query(&req.log_group, &phase1.query, start, now)
-        .await?;
-
-    // Poll until complete
-    let result = poll_query_results(aws, &query_id).await?;
+    // Execute the ES search
+    let result = es.search(&req.index_pattern, &phase1.query, 200).await?;
 
     let correlation_id_field = phase1.correlation_id_field.unwrap_or_default();
 
-    // Parse results into LogEntry structs
+    // Parse hits into LogEntry structs
     let mut error_logs = Vec::new();
     let mut correlation_ids = Vec::new();
 
-    for row in &result.results {
-        let mut entry = LogEntry {
-            timestamp: String::new(),
-            message: String::new(),
-            log_stream: String::new(),
-        };
-        for field in row {
-            match field.field.as_str() {
-                "@timestamp" => entry.timestamp = field.value.clone(),
-                "@message" => entry.message = field.value.clone(),
-                "@logStream" => entry.log_stream = field.value.clone(),
-                _ => {}
-            }
-        }
+    for hit in &result.hits {
+        let entry = LogEntry::from_hit(hit);
 
-        // Extract correlation ID from message if field is known
+        // Extract correlation ID from source fields
         if !correlation_id_field.is_empty() {
-            if let Some(cid) = extract_correlation_id(&entry.message, &correlation_id_field) {
+            if let Some(cid) = extract_correlation_id(&entry.source, &correlation_id_field) {
                 if !correlation_ids.contains(&cid) {
                     correlation_ids.push(cid);
                 }
@@ -143,39 +145,30 @@ IMPORTANT: Respond ONLY with this JSON (no other text):
     // Phase 1.5: Fetch trace logs for each unique correlation ID
     let mut trace_logs: HashMap<String, Vec<LogEntry>> = HashMap::new();
 
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let start_ms = now_ms - (req.time_range_minutes * 60 * 1000);
+
     for cid in &correlation_ids {
-        let trace_query = format!(
-            r#"fields @timestamp, @message, @logStream | filter @message like /{}/ | sort @timestamp asc | limit 100"#,
-            cid
-        );
-        match aws.start_query(&req.log_group, &trace_query, start, now).await {
-            Ok(tid) => {
-                if let Ok(trace_result) = poll_query_results(aws, &tid).await {
-                    let entries: Vec<LogEntry> = trace_result
-                        .results
-                        .iter()
-                        .map(|row| {
-                            let mut entry = LogEntry {
-                                timestamp: String::new(),
-                                message: String::new(),
-                                log_stream: String::new(),
-                            };
-                            for field in row {
-                                match field.field.as_str() {
-                                    "@timestamp" => entry.timestamp = field.value.clone(),
-                                    "@message" => entry.message = field.value.clone(),
-                                    "@logStream" => entry.log_stream = field.value.clone(),
-                                    _ => {}
-                                }
-                            }
-                            entry
-                        })
-                        .collect();
-                    trace_logs.insert(cid.clone(), entries);
-                }
+        let trace_query = serde_json::json!({
+            "bool": {
+                "must": [
+                    { "term": { correlation_id_field.clone(): cid } },
+                    { "range": { "@timestamp": { "gte": start_ms, "lte": now_ms, "format": "epoch_millis" } } }
+                ]
+            }
+        });
+
+        match es.search(&req.index_pattern, &trace_query, 100).await {
+            Ok(trace_result) => {
+                let entries: Vec<LogEntry> = trace_result
+                    .hits
+                    .iter()
+                    .map(LogEntry::from_hit)
+                    .collect();
+                trace_logs.insert(cid.clone(), entries);
             }
             Err(e) => {
-                eprintln!("CloudWatch: trace query for {} failed: {}", cid, e);
+                eprintln!("Elasticsearch: trace query for {} failed: {}", cid, e);
             }
         }
     }
@@ -192,7 +185,7 @@ IMPORTANT: Respond ONLY with this JSON (no other text):
     })
 }
 
-/// Phase 2 (Aşama 3): Agent analyzes the collected logs
+/// Phase 2: Agent analyzes the collected logs
 pub fn run_analysis(
     question: &str,
     result: &InvestigationResult,
@@ -224,7 +217,7 @@ pub fn run_analysis(
         .join("\n\n");
 
     let prompt = format!(
-        r#"You are analyzing CloudWatch logs for this user question:
+        r#"You are analyzing Elasticsearch logs for this user question:
 "{question}"
 
 Error logs found:
@@ -266,7 +259,7 @@ Analyze these logs and respond ONLY with this JSON:
 
 /// Build a task description from investigation results
 pub fn build_task_description(question: &str, result: &InvestigationResult) -> String {
-    let mut desc = format!("## CloudWatch Investigation\n\n**Question:** {}\n\n", question);
+    let mut desc = format!("## Elasticsearch Investigation\n\n**Question:** {}\n\n", question);
 
     if let Some(ref analysis) = result.analysis {
         desc.push_str(&format!(
@@ -295,8 +288,8 @@ pub fn build_task_description(question: &str, result: &InvestigationResult) -> S
     }
 
     desc.push_str(&format!(
-        "### CW Insights Query\n```\n{}\n```\n",
-        result.phase1_query
+        "### ES Query DSL\n```json\n{}\n```\n",
+        serde_json::to_string_pretty(&result.phase1_query).unwrap_or_default()
     ));
 
     desc
@@ -304,32 +297,33 @@ pub fn build_task_description(question: &str, result: &InvestigationResult) -> S
 
 // ── Helpers ──
 
-async fn poll_query_results(
-    aws: &AwsClient,
-    query_id: &str,
-) -> Result<super::aws_client::QueryResult> {
-    let max_wait = Duration::from_secs(120);
-    let start = std::time::Instant::now();
+fn extract_correlation_id(source: &Value, field_name: &str) -> Option<String> {
+    // Try direct field access (supports nested dot notation too)
+    if let Some(val) = source.get(field_name).and_then(|v| v.as_str()) {
+        if !val.is_empty() && val.len() < 128 {
+            return Some(val.to_string());
+        }
+    }
 
-    loop {
-        let result = aws.get_query_results(query_id).await?;
-        match result.status.as_str() {
-            "Complete" => return Ok(result),
-            "Failed" | "Cancelled" | "Timeout" => {
-                return Err(anyhow!("CW query status: {}", result.status));
+    // Try nested path (e.g. "trace.id" → source["trace"]["id"])
+    let parts: Vec<&str> = field_name.split('.').collect();
+    if parts.len() > 1 {
+        let mut current = source;
+        for part in &parts {
+            match current.get(part) {
+                Some(v) => current = v,
+                None => return None,
             }
-            _ => {
-                if start.elapsed() > max_wait {
-                    return Err(anyhow!("CW query timed out after {:?}", max_wait));
-                }
-                tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+        if let Some(val) = current.as_str() {
+            if !val.is_empty() && val.len() < 128 {
+                return Some(val.to_string());
             }
         }
     }
-}
 
-fn extract_correlation_id(message: &str, field_name: &str) -> Option<String> {
-    // Try JSON-style: "correlationId":"value" or "correlationId": "value"
+    // Fallback: try extracting from message field
+    let message = source["message"].as_str().unwrap_or_default();
     let patterns = [
         format!("\"{}\":\"", field_name),
         format!("\"{}\": \"", field_name),
@@ -340,7 +334,6 @@ fn extract_correlation_id(message: &str, field_name: &str) -> Option<String> {
         if let Some(start) = message.find(pattern.as_str()) {
             let val_start = start + pattern.len();
             let rest = &message[val_start..];
-            // Find end of value
             let end = rest
                 .find(|c: char| c == '"' || c == ',' || c == ' ' || c == '}')
                 .unwrap_or(rest.len());
@@ -352,4 +345,3 @@ fn extract_correlation_id(message: &str, field_name: &str) -> Option<String> {
     }
     None
 }
-

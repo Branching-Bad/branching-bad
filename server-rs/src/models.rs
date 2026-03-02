@@ -155,6 +155,7 @@ pub struct Run {
     pub review_comment_id: Option<String>,
     pub chat_message_id: Option<String>,
     pub worktree_path: Option<String>,
+    pub base_sha: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
     pub created_at: String,

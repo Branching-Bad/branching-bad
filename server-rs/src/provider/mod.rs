@@ -1,9 +1,11 @@
 pub mod cloudwatch;
+pub mod elasticsearch;
 pub mod jira;
 pub mod postgres;
 pub mod routes;
 pub mod sentry;
 pub mod sonarqube;
+pub mod utils;
 
 pub fn register_all(registry: &mut ProviderRegistry) {
     jira::register(registry);
@@ -11,6 +13,7 @@ pub fn register_all(registry: &mut ProviderRegistry) {
     postgres::register(registry);
     cloudwatch::register(registry);
     sonarqube::register(registry);
+    elasticsearch::register(registry);
 }
 
 use anyhow::Result;

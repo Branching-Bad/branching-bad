@@ -1,6 +1,7 @@
 mod agents;
 mod autostart;
 pub mod chat;
+pub mod es_investigations;
 pub mod investigations;
 mod maintenance;
 mod plan_jobs;

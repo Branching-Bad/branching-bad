@@ -109,15 +109,59 @@ pub fn save_plan_artifact(
     Ok(file_path.to_string_lossy().to_string())
 }
 
-pub fn capture_diff(repo_path: &str) -> Result<String> {
-    let output = Command::new("git")
-        .args(["-C", repo_path, "diff", "--", "."])
-        .output()
-        .context("failed to run git diff")?;
-    if !output.status.success() {
-        return Ok(String::new());
+/// Capture all changes in a working directory: unstaged, staged, and committed.
+/// `base_sha` is the commit the branch was forked from — if provided,
+/// committed changes (base_sha..HEAD) are also captured.
+pub fn capture_diff_with_base(repo_path: &str, base_sha: Option<&str>) -> Result<String> {
+    // 1. Unstaged changes (agent didn't stage/commit)
+    let unstaged = git_output(repo_path, &["diff", "--", "."]).unwrap_or_default();
+    if !unstaged.trim().is_empty() {
+        return Ok(unstaged);
     }
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+
+    // 2. Staged but uncommitted
+    let staged = git_output(repo_path, &["diff", "--cached"]).unwrap_or_default();
+    if !staged.trim().is_empty() {
+        return Ok(staged);
+    }
+
+    // 3. Committed changes since base (agent committed its work, e.g. Claude Code)
+    if let Some(base) = base_sha {
+        let committed = git_output(repo_path, &["diff", base, "HEAD"]).unwrap_or_default();
+        if !committed.trim().is_empty() {
+            return Ok(committed);
+        }
+    }
+
+    Ok(String::new())
+}
+
+fn git_output(repo_path: &str, args: &[&str]) -> Result<String> {
+    let mut cmd_args = vec!["-C", repo_path];
+    cmd_args.extend_from_slice(args);
+    let output = Command::new("git")
+        .args(&cmd_args)
+        .output()
+        .context("failed to run git command")?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Ok(String::new())
+    }
+}
+
+/// Get the current HEAD commit SHA of a repository.
+pub fn get_head_sha(repo_path: &str) -> Option<String> {
+    let output = Command::new("git")
+        .args(["-C", repo_path, "rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if output.status.success() {
+        let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !sha.is_empty() { Some(sha) } else { None }
+    } else {
+        None
+    }
 }
 
 /// Detect which agent binary we're running from the command string.
@@ -458,8 +502,9 @@ fn parse_claude_stream_json(line: &str) -> Option<(LogMsg, Option<String>)> {
             }, session_id))
         }
 
-        // System init message — skip
-        "system" => None,
+        // Skip lifecycle/metadata events
+        "system" | "message_start" | "message_delta" | "message_stop" | "ping"
+        | "content_block_stop" | "rate_limit_event" | "error_event" | "usage_event" => None,
 
         _ => None,
     }

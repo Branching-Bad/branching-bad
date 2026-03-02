@@ -80,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::fs::fs_routes())
         .merge(provider::routes::provider_routes())
         .merge(provider::cloudwatch::routes::cloudwatch_routes())
+        .merge(provider::elasticsearch::routes::elasticsearch_routes())
         .merge(provider::sonarqube::routes::sonarqube_routes())
         .layer(
             CorsLayer::new()

@@ -217,6 +217,9 @@ pub(crate) async fn start_run(
         String::new()
     };
 
+    // Capture HEAD SHA before worktree creation — this is the fork point for diffs
+    let base_sha = crate::executor::get_head_sha(&repo.path);
+
     let run = state
         .db
         .create_run(
@@ -226,6 +229,7 @@ pub(crate) async fn start_run(
             &branch_name,
             Some(&profile.id),
             None,
+            base_sha.as_deref(),
         )
         .map_err(ApiError::internal)?;
     state
@@ -418,7 +422,7 @@ pub(crate) async fn start_run(
                 );
 
                 pm.attach_child(&run_id, child).await;
-                pm.spawn_exit_monitor(run_id, task_id, repo_path, agent_working_dir, db)
+                pm.spawn_exit_monitor(run_id, task_id, repo_path, agent_working_dir, base_sha, db)
                     .await;
             }
             Err(e) => {
@@ -697,6 +701,7 @@ pub(crate) async fn spawn_resume_run(
     run_id: String,
     task_id: String,
     repo_path: String,
+    base_sha: Option<String>,
     db: Arc<Db>,
     pm: Arc<ProcessManager>,
     store: Arc<MsgStore>,
@@ -778,7 +783,7 @@ pub(crate) async fn spawn_resume_run(
             }
             let _ = db.add_run_event(&run_id, "agent_spawned", &event_meta);
             pm.attach_child(&run_id, child).await;
-            pm.spawn_exit_monitor(run_id, task_id, repo_path, agent_working_dir, db)
+            pm.spawn_exit_monitor(run_id, task_id, repo_path, agent_working_dir, base_sha, db)
                 .await;
         }
         Err(e) => {

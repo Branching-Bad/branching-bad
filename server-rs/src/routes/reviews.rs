@@ -178,6 +178,7 @@ async fn submit_review(
             &latest_run.branch_name,
             Some(&profile.id),
             latest_run.worktree_path.as_deref(),
+            latest_run.base_sha.as_deref(),
         )
         .map_err(ApiError::internal)?;
     state
@@ -211,6 +212,7 @@ async fn submit_review(
         .clone()
         .unwrap_or_else(|| repo.path.clone());
     let session_id = latest_run.agent_session_id.clone();
+    let base_sha = latest_run.base_sha.clone();
     let db = state.db.clone();
     let pm = state.process_manager.clone();
     let store = MsgStore::new();
@@ -256,6 +258,7 @@ async fn submit_review(
             run_id,
             task_id,
             repo_path,
+            base_sha,
             db,
             pm,
             store,
