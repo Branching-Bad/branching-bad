@@ -546,17 +546,17 @@ pub fn invoke_agent_cli(
     progress: Option<ProgressCallback<'_>>,
     resume_session_id: Option<&str>,
 ) -> Result<AgentOutput> {
-    let parts: Vec<&str> = agent_command.split_whitespace().collect();
+    let parts = crate::executor::split_command(agent_command)?;
     if parts.is_empty() {
         anyhow::bail!("Empty agent command");
     }
 
-    let binary = parts[0];
+    let binary = &parts[0];
     let binary_lower = binary.to_lowercase();
     let is_claude = binary_lower.contains("claude");
     let is_codex = binary_lower.contains("codex");
     let extra_args = &parts[1..];
-    let codex_explicit_exec = extra_args.first().copied() == Some("exec");
+    let codex_explicit_exec = extra_args.first().map(|s| s.as_str()) == Some("exec");
 
     let mut cmd = Command::new(binary);
     cmd.current_dir(working_dir);

@@ -77,10 +77,14 @@ pub(crate) fn sanitize_branch_segment(input: &str) -> String {
 }
 
 pub(crate) fn home_dir() -> std::path::PathBuf {
-    env::var("HOME")
-        .or_else(|_| env::var("USERPROFILE"))
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::PathBuf::from("/"))
+    directories::BaseDirs::new()
+        .map(|d| d.home_dir().to_path_buf())
+        .unwrap_or_else(|| {
+            env::var("HOME")
+                .or_else(|_| env::var("USERPROFILE"))
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| env::temp_dir())
+        })
 }
 
 /// Look up the agent command for a repo's preferred agent profile.

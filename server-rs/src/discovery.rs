@@ -109,9 +109,13 @@ pub fn discover_agent_profiles() -> Vec<DiscoveredProfile> {
 }
 
 fn home_path(relative: &str) -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+    directories::BaseDirs::new()
+        .map(|d| d.home_dir().to_path_buf())
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+        })
         .map(|home| home.join(relative))
 }
 

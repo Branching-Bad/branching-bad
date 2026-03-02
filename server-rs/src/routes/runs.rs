@@ -715,10 +715,26 @@ pub(crate) async fn spawn_resume_run(
 
     let spawn_result = if agent_kind == "claude" && session_id.is_some() {
         let sid = session_id.unwrap();
-        let parts: Vec<&str> = agent_command.split_whitespace().collect();
-        let (bin, extra_args) = parts.split_first().unwrap();
+        let parts = match crate::executor::split_command(&agent_command) {
+            Ok(p) => p,
+            Err(e) => return {
+                store.push_stderr(format!("Invalid agent command: {}", e)).await;
+                store.push_finished(None, "failed").await;
+                let _ = db.add_run_event(&run_id, "run_failed", &json!({ "error": e.to_string() }));
+                let _ = db.update_run_status(&run_id, "failed", true);
+            },
+        };
+        let (bin, extra_args) = match parts.split_first() {
+            Some(p) => p,
+            None => return {
+                store.push_stderr("Empty agent command".to_string()).await;
+                store.push_finished(None, "failed").await;
+                let _ = db.add_run_event(&run_id, "run_failed", &json!({ "error": "empty agent command" }));
+                let _ = db.update_run_status(&run_id, "failed", true);
+            },
+        };
         let mut cmd = tokio::process::Command::new(bin);
-        cmd.args(extra_args.iter().copied());
+        cmd.args(extra_args);
         cmd.current_dir(&agent_working_dir);
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());

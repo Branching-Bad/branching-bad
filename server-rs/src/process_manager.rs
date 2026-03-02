@@ -40,7 +40,8 @@ impl ProcessManager {
         self.stores.read().await.get(run_id).cloned()
     }
 
-    /// Escalating kill: SIGINT → 2s → SIGTERM → 2s → SIGKILL
+    /// Escalating kill: SIGINT → 2s → SIGTERM → 2s → SIGKILL (Unix)
+    /// On Windows: falls back to child.kill()
     pub async fn kill_process(&self, run_id: &str) -> bool {
         let child_arc = {
             let children = self.children.read().await;
@@ -50,40 +51,49 @@ impl ProcessManager {
             }
         };
 
-        let pid = {
-            let child = child_arc.read().await;
-            child.id()
-        };
+        #[cfg(unix)]
+        {
+            let pid = {
+                let child = child_arc.read().await;
+                child.id()
+            };
 
-        if let Some(pid) = pid {
-            let pgid = nix::unistd::Pid::from_raw(pid as i32);
+            if let Some(pid) = pid {
+                let pgid = nix::unistd::Pid::from_raw(pid as i32);
 
-            // SIGINT first
-            let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGINT);
-            tokio::time::sleep(Duration::from_secs(2)).await;
+                // SIGINT first
+                let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGINT);
+                tokio::time::sleep(Duration::from_secs(2)).await;
 
-            // Check if still alive
-            {
-                let mut child = child_arc.write().await;
-                if child.try_wait().ok().flatten().is_some() {
-                    return true;
+                // Check if still alive
+                {
+                    let mut child = child_arc.write().await;
+                    if child.try_wait().ok().flatten().is_some() {
+                        return true;
+                    }
                 }
-            }
 
-            // SIGTERM
-            let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGTERM);
-            tokio::time::sleep(Duration::from_secs(2)).await;
+                // SIGTERM
+                let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGTERM);
+                tokio::time::sleep(Duration::from_secs(2)).await;
 
-            // Check again
-            {
-                let mut child = child_arc.write().await;
-                if child.try_wait().ok().flatten().is_some() {
-                    return true;
+                // Check again
+                {
+                    let mut child = child_arc.write().await;
+                    if child.try_wait().ok().flatten().is_some() {
+                        return true;
+                    }
                 }
-            }
 
-            // SIGKILL
-            let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGKILL);
+                // SIGKILL
+                let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGKILL);
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            let mut child = child_arc.write().await;
+            let _ = child.kill();
         }
 
         true

@@ -13,6 +13,19 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use crate::msg_store::{LogMsg, MsgStore};
 
+/// Platform-aware command string splitting.
+/// Unix: uses shlex (handles quotes, escapes). Windows: uses winsplit.
+pub fn split_command(input: &str) -> Result<Vec<String>> {
+    #[cfg(windows)]
+    {
+        Ok(winsplit::split(input))
+    }
+    #[cfg(not(windows))]
+    {
+        shlex::split(input).ok_or_else(|| anyhow!("invalid shell command: mismatched quotes"))
+    }
+}
+
 pub fn assert_git_repo(repo_path: &str) -> Result<()> {
     let output = Command::new("git")
         .args(["-C", repo_path, "rev-parse", "--is-inside-work-tree"])
@@ -188,13 +201,13 @@ pub async fn spawn_agent(
     working_dir: &str,
     store: Arc<MsgStore>,
 ) -> Result<AsyncGroupChild> {
-    let parts: Vec<&str> = agent_command.split_whitespace().collect();
+    let parts = split_command(agent_command)?;
     let (bin, extra_args) = parts
         .split_first()
         .ok_or_else(|| anyhow!("empty agent command"))?;
 
     let agent_kind = detect_agent_kind(agent_command);
-    let codex_explicit_exec = extra_args.first().copied() == Some("exec");
+    let codex_explicit_exec = extra_args.first().map(|s| s.as_str()) == Some("exec");
 
     let mut cmd = tokio::process::Command::new(bin);
     cmd.args(extra_args);

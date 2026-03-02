@@ -59,6 +59,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "shlex",
  "tokio",
  "tokio-postgres",
  "tokio-stream",
@@ -66,6 +67,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "which",
+ "winsplit",
 ]
 
 [[package]]
@@ -2688,6 +2690,12 @@ name = "winsafe"
 version = "0.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
+
+[[package]]
+name = "winsplit"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab703352da6a72f35c39a533526393725640575bb211f61987a2748323ad956"
 
 [[package]]
 name = "wit-bindgen"
