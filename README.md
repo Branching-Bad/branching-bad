@@ -1,62 +1,91 @@
 # Branching Bad
 
-Local-first, approval-first coding agent with a pluggable provider system. Connects to external services via a unified provider interface, syncs tasks, generates implementation plans requiring human approval, then launches a git branch and executes.
+Local-first, approval-first coding agent with a pluggable provider system. Create tasks locally or sync from external services, generate AI implementation plans, review and approve before any code is written, then let the agent execute in an isolated git worktree while you keep working.
 
 ![Kanban Board](docs/screenshots/kanban-board.png)
 
 ## Features
 
-- **Kanban Board** — Visual task management with drag-and-drop
-- **Plan Generation** — AI-powered implementation plans from task descriptions
-- **Human Approval** — Plans require explicit approval before execution
-- **Code Review** — Inline diff review with comments, merge strategies, push & PR creation
-- **Chat** — Follow-up messages to running agents
-- **Provider System** — Pluggable integrations for external services
-- **Agent Profiles** — Configurable AI agent selection per task, repo, or action
-- **Git Workflow** — Branch creation, worktrees, merge strategies, push, PR via `gh` CLI
+- **Local Task Management** — Create tasks directly from the kanban board, no external service required
+- **External Integrations** — Sync tasks from Jira, import Sentry errors, analyze PostgreSQL performance, scan code with SonarQube
+- **AI Plan Generation** — Turn task descriptions into structured implementation plans with file-level detail
+- **AI Plan Review** — Have a different AI agent review the generated plan before approval
+- **Structured Tasklist** — Plans include phased subtasks with dependency graphs, complexity estimates, and suggested model tiers
+- **Human Approval Gate** — Nothing executes without your explicit approval (or opt into auto-approve)
+- **Multi-Agent Support** — Choose between Claude Code, Codex, Gemini CLI, OpenCode, or Cursor per task
+- **Isolated Execution** — Agent runs in a git worktree, your main branch stays clean
+- **Live Streaming** — Watch agent thinking, tool calls, and results in real-time
+- **Code Review** — Inline diff viewer with file tree, inline comments, and batch review
+- **Review Feedback Loop** — Submit feedback, agent fixes, review again — iterate until satisfied
+- **Merge Controls** — Squash merge, merge commit, or rebase strategies with push and PR creation via `gh` CLI
+- **Follow-up Chat** — Send messages to running or completed agents with session resume support
 
 ## How It Works
 
-### 1. Plan & Approve
+### 1. Create Tasks
 
-Select a task, generate an AI implementation plan with a structured tasklist, review it, and approve — or request revisions.
+Create tasks directly on the kanban board — just a title and description. Or sync from Jira, import from Sentry errors, or generate from SonarQube code quality issues. Each task can be configured independently:
+
+- **Require Plan** — Generate and approve a plan before execution (default: on)
+- **Auto Approve** — Skip manual approval, plan goes straight to execution
+- **Auto Start** — Agent starts automatically after plan approval
+- **Use Worktree** — Run in an isolated git worktree (default: on)
+- **Agent Override** — Select a different AI agent per task
+
+### 2. Generate & Review Plans
+
+The AI analyzes your codebase — walks the file tree, scores files by keyword relevance — and generates a structured implementation plan with markdown and a machine-readable tasklist.
 
 ![Plan Review](docs/screenshots/plan-review.png)
 
-Expand the plan modal for a detailed view with tasklist breakdown, complexity estimates, and suggested models per subtask.
+Each plan includes phased subtasks with:
+- Dependency graphs (blocked_by / blocks)
+- Affected files list
+- Acceptance criteria
+- Complexity rating and suggested model tier per subtask
+
+You can also have a separate AI agent **review the plan** before approving — catch issues before any code is written.
 
 ![Plan Modal](docs/screenshots/plan-review-modal.png)
 
-### 2. Execute
+Three actions: **Approve**, **Request Revision** (with comments — AI regenerates), or **Reject**.
 
-The agent runs in an isolated git worktree, streaming live logs — thinking, tool calls, and results — while you continue working on the main branch.
+### 3. Execute
+
+Once approved, the agent spawns in an isolated git worktree and streams output in real-time. You see thinking blocks, tool calls, file edits, and results as they happen. The main branch stays untouched — keep editing in your IDE.
 
 ![Run Output](docs/screenshots/run-output.png)
 
-### 3. Review & Iterate
+Follow-up chat lets you send messages to the running agent or resume a completed session with context.
 
-Review the generated code with inline diff, file tree, and merge controls. Submit feedback to trigger another agent run, or apply changes to main.
+### 4. Review & Iterate
+
+When the agent finishes, the task moves to **In Review**. Review the diff with file tree navigation, apply to main with your preferred merge strategy, push, and create a PR — all from the UI.
 
 ![Code Review](docs/screenshots/review-git.png)
 
-Expand the review modal for full-screen diff with inline commenting.
+Submit feedback to trigger another agent run on the same worktree — the agent picks up where it left off. Iterate until the code is right.
+
+Expand the review modal for full-screen diff with inline commenting on specific lines.
 
 ![Review Modal](docs/screenshots/review-git-modal.png)
 
 ## Providers
 
-Connect external services to sync tasks, import issues, analyze databases, and scan code quality — all from the extensions panel.
+Connect external services to sync tasks, import issues, analyze databases, and scan code quality — all from the extensions panel. No provider is required — you can use Branching Bad purely with local tasks.
 
 ![Extensions Panel](docs/screenshots/extensions-panel.png)
 
 | Provider | Description |
 |----------|-------------|
-| **Jira** | Sync Jira issues as tasks |
-| **Sentry** | Import Sentry issues for investigation |
-| **PostgreSQL** | Query databases, analyze performance issues |
-| **CloudWatch** | AWS CloudWatch log analysis |
-| **SonarQube** | Sync issues from corporate servers, or run local Docker-based scans |
-| **Elasticsearch** | Connect to Elasticsearch clusters |
+| **Jira** | Sync Jira board issues as kanban tasks |
+| **Sentry** | Import unresolved errors, one-click "Fix" creates a task and starts plan generation |
+| **PostgreSQL** | Connect to databases, analyze slow queries, import schema and performance issues |
+| **CloudWatch** | AWS CloudWatch log group analysis |
+| **SonarQube** | Sync issues from corporate servers, or run local Docker-based scans with quality gate management |
+| **Elasticsearch** | Connect to Elasticsearch clusters for log and index analysis |
+
+Each provider has a settings modal for connection configuration and a drawer section for quick actions like sync, scan, and issue browsing.
 
 ![SonarQube Issues](docs/screenshots/extension-modal.png)
 
@@ -64,7 +93,7 @@ Connect external services to sync tasks, import issues, analyze databases, and s
 
 Monorepo with two main parts:
 
-- **server-rs/** — Rust backend (Axum + rusqlite). Single-binary HTTP server with SQLite persistence.
+- **server-rs/** — Rust backend (Axum + rusqlite). Single-binary HTTP server with SQLite persistence. Cross-platform (macOS, Linux, Windows).
 - **web/** — React frontend (React 19, Vite 7, Tailwind CSS v4). Two-column layout with kanban board and detail sidebar.
 
 ## Getting Started
@@ -87,7 +116,7 @@ cd web && npm install && cd ..
 npm run dev
 ```
 
-Backend: http://localhost:4310 — Frontend: http://localhost:5173 (proxies `/api` to backend)
+Open http://localhost:5173 — backend runs on http://localhost:4310 (frontend proxies `/api` automatically).
 
 ### Commands
 
@@ -119,5 +148,3 @@ TODO → PLAN_GENERATING → PLAN_DRAFTED → PLAN_APPROVED → IN_PROGRESS → 
                                 ↓              ↑
                      PLAN_REVISE_REQUESTED ─────┘
 ```
-
-Optional **auto-approve** skips the manual approval step — plans are approved and execution starts automatically. Tasks can also be `PAUSED_FOR_REAPPROVAL` or `CANCELLED`.
