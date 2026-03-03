@@ -11,7 +11,7 @@ Local-first, approval-first coding agent with a pluggable provider system. Creat
 - **AI Plan Generation** — Turn task descriptions into structured implementation plans with file-level detail
 - **AI Plan Review** — Have a different AI agent review the generated plan before approval
 - **Structured Tasklist** — Plans include phased subtasks with dependency graphs, complexity estimates, and suggested model tiers
-- **Human Approval Gate** — Nothing executes without your explicit approval (or opt into auto-approve)
+- **Human Approval Gate** — Plans require your approval before the agent starts (or opt into auto-approve)
 - **Multi-Agent Support** — Choose between Claude Code, Codex, Gemini CLI, OpenCode, or Cursor per task
 - **Isolated Execution** — Agent runs in a git worktree, your main branch stays clean
 - **Live Streaming** — Watch agent thinking, tool calls, and results in real-time
