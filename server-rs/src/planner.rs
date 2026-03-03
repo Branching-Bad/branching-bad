@@ -95,6 +95,7 @@ pub fn generate_plan_and_tasklist_with_agent_strict(
     target_plan_version: i64,
     progress: Option<ProgressCallback<'_>>,
     resume_session_id: Option<&str>,
+    rules_section: &str,
 ) -> Result<GeneratedPlanTasklist> {
     emit_progress_text(progress, "Starting strict plan generation...".to_string());
     let (plan, agent_session_id) = generate_plan_with_agent_strict(
@@ -104,6 +105,7 @@ pub fn generate_plan_and_tasklist_with_agent_strict(
         revision_comment,
         progress,
         resume_session_id,
+        rules_section,
     )?;
     emit_progress_text(progress, "Plan validated. Generating strict tasklist...".to_string());
     let tasklist = generate_tasklist_from_plan_strict(
@@ -131,6 +133,7 @@ pub fn generate_plan_with_agent_strict(
     revision_comment: Option<&str>,
     progress: Option<ProgressCallback<'_>>,
     resume_session_id: Option<&str>,
+    rules_section: &str,
 ) -> Result<(GeneratedPlan, Option<String>)> {
     let context = collect_repo_context(repo_path, task);
     let file_list = context
@@ -181,7 +184,7 @@ Task:
 - issue_key: {issue_key}
 - title: {title}
 - description: {description}
-{revision_section}{sentry_section}
+{revision_section}{sentry_section}{rules_section}
 Repository context:
 {repo_structure}
 

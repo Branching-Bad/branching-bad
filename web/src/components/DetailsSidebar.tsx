@@ -42,6 +42,7 @@ export function DetailsSidebar({
   customBranchName, setCustomBranchName,
   agentProfiles,
   reviewProfileId, onReviewProfileChange,
+  onPinAsRule,
   chatProfileId, onChatProfileChange,
   aiFeedback, setAiFeedback, aiFeedbackParsed,
   aiFeedbackLoading, aiFeedbackStreamText, aiFeedbackOpen, setAiFeedbackOpen,
@@ -102,6 +103,7 @@ export function DetailsSidebar({
   agentProfiles?: AgentProfile[];
   reviewProfileId?: string;
   onReviewProfileChange?: (v: string) => void;
+  onPinAsRule?: (commentId: string) => void;
   chatProfileId?: string;
   onChatProfileChange?: (v: string) => void;
   aiFeedback?: string;
@@ -838,6 +840,7 @@ export function DetailsSidebar({
                 agentProfiles={agentProfiles}
                 reviewProfileId={reviewProfileId}
                 onReviewProfileChange={onReviewProfileChange}
+                onPinAsRule={onPinAsRule}
               />
             )}
           </div>

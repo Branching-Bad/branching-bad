@@ -9,3 +9,4 @@ pub(crate) mod agents;
 pub(crate) mod autostart;
 pub(crate) mod chat;
 pub(crate) mod fs;
+pub(crate) mod rules;

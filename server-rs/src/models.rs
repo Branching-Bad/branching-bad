@@ -247,6 +247,19 @@ pub struct ChatMessage {
     pub created_at: String,
 }
 
+// ── Repository Rules ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepositoryRule {
+    pub id: String,
+    pub repo_id: Option<String>,
+    pub content: String,
+    pub source: String,
+    pub source_comment_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 // ── Generic Provider Row Structs ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

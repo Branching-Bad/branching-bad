@@ -26,7 +26,7 @@ use crate::planner::{
 };
 use super::shared::{
     StartRunPayload, TaskQuery,
-    enqueue_autostart_if_enabled, plan_store_key, resolve_agent_command,
+    enqueue_autostart_if_enabled, load_rules_section, plan_store_key, resolve_agent_command,
 };
 use super::runs::start_run;
 
@@ -278,10 +278,12 @@ async fn plan_action(
                 .get_latest_completed_plan_job_session(&task.id)
                 .ok()
                 .flatten();
+            let rules_section = load_rules_section(&state.db, &task.repo_id);
             let revised = {
                 let repo_path = repo.path.clone();
                 let task_clone = task.clone();
                 let command = agent_command.clone();
+                let rules_sec = rules_section.clone();
                 tokio::task::spawn_blocking(move || {
                     generate_plan_and_tasklist_with_agent_strict(
                         &repo_path,
@@ -291,6 +293,7 @@ async fn plan_action(
                         target_version,
                         None,
                         previous_session_id.as_deref(),
+                        &rules_sec,
                     )
                 })
                 .await
@@ -679,6 +682,7 @@ pub(crate) fn spawn_plan_generation_job(
             }
         };
 
+        let rules_section = load_rules_section(&state.db, &task.repo_id);
         let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel::<LogMsg>();
         let task_for_gen = task.clone();
         let repo_for_gen = repo_path.clone();
@@ -693,6 +697,7 @@ pub(crate) fn spawn_plan_generation_job(
         } else {
             None
         };
+        let rules_sec = rules_section.clone();
         let mut generation = tokio::task::spawn_blocking(move || {
             let progress_cb = |msg: LogMsg| {
                 let _ = progress_tx.send(msg);
@@ -705,6 +710,7 @@ pub(crate) fn spawn_plan_generation_job(
                 target_version,
                 Some(&progress_cb),
                 previous_session_id.as_deref(),
+                &rules_sec,
             )
         });
 

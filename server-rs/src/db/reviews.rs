@@ -6,6 +6,25 @@ use crate::models::ReviewComment;
 
 use super::{Db, now_iso};
 
+fn map_review_comment_row(row: &rusqlite::Row) -> rusqlite::Result<ReviewComment> {
+    Ok(ReviewComment {
+        id: row.get(0)?,
+        task_id: row.get(1)?,
+        run_id: row.get(2)?,
+        comment: row.get(3)?,
+        status: row.get(4)?,
+        result_run_id: row.get(5)?,
+        addressed_at: row.get(6)?,
+        created_at: row.get(7)?,
+        file_path: row.get(8)?,
+        line_start: row.get(9)?,
+        line_end: row.get(10)?,
+        diff_hunk: row.get(11)?,
+        review_mode: row.get::<_, Option<String>>(12)?.unwrap_or_else(|| "instant".to_string()),
+        batch_id: row.get(13)?,
+    })
+}
+
 impl Db {
     pub fn add_review_comment_full(
         &self,
@@ -49,26 +68,20 @@ impl Db {
         let mut stmt = conn.prepare(
             "SELECT id, task_id, run_id, comment, status, result_run_id, addressed_at, created_at, file_path, line_start, line_end, diff_hunk, review_mode, batch_id FROM review_comments WHERE task_id = ?1 ORDER BY created_at ASC",
         )?;
-        let rows = stmt.query_map([task_id], |row| {
-            Ok(ReviewComment {
-                id: row.get(0)?,
-                task_id: row.get(1)?,
-                run_id: row.get(2)?,
-                comment: row.get(3)?,
-                status: row.get(4)?,
-                result_run_id: row.get(5)?,
-                addressed_at: row.get(6)?,
-                created_at: row.get(7)?,
-                file_path: row.get(8)?,
-                line_start: row.get(9)?,
-                line_end: row.get(10)?,
-                diff_hunk: row.get(11)?,
-                review_mode: row.get::<_, Option<String>>(12)?.unwrap_or_else(|| "instant".to_string()),
-                batch_id: row.get(13)?,
-            })
-        })?;
+        let rows = stmt.query_map([task_id], |row| map_review_comment_row(row))?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(anyhow::Error::from)
+    }
+
+    pub fn get_review_comment_by_id(&self, id: &str) -> Result<Option<ReviewComment>> {
+        let conn = self.connect()?;
+        conn.query_row(
+            "SELECT id, task_id, run_id, comment, status, result_run_id, addressed_at, created_at, file_path, line_start, line_end, diff_hunk, review_mode, batch_id FROM review_comments WHERE id = ?1",
+            [id],
+            |row| map_review_comment_row(row),
+        )
+        .optional()
+        .map_err(anyhow::Error::from)
     }
 
     pub fn update_review_comment_status(

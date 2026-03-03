@@ -3,6 +3,7 @@ use std::env;
 use serde::Deserialize;
 
 use crate::AppState;
+use crate::db::Db;
 use crate::errors::ApiError;
 use crate::models::{AgentProfile, TaskWithPayload};
 
@@ -177,4 +178,10 @@ pub(crate) fn enqueue_autostart_if_enabled(
 
 pub(crate) fn plan_store_key(job_id: &str) -> String {
     format!("plan-job:{job_id}")
+}
+
+/// Load rules for a repo and format as a prompt section.
+pub(crate) fn load_rules_section(db: &Db, repo_id: &str) -> String {
+    let rules = db.list_rules_for_prompt(repo_id).unwrap_or_default();
+    crate::routes::rules::format_rules_prompt_section(&rules)
 }

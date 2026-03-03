@@ -392,15 +392,17 @@ pub(crate) async fn start_run(
             }
         }
 
+        let rules_section = super::shared::load_rules_section(&db, &task.repo_id);
         let tasklist_pretty = serde_json::to_string_pretty(&plan_tasklist_json)
             .unwrap_or_else(|_| "{}".to_string());
         let prompt = format!(
-            "You are working on issue {}.\n\nTask: {}\n\nDescription: {}\n\nExecution Plan:\n{}\n\nTasklist JSON:\n{}\n\nExecution constraints:\n- Follow phase order and respect blocked_by dependencies between tasks.\n- Report progress using task IDs from tasklist.\n- Each task has a `complexity` (low/medium/high) and `suggested_model` field. When delegating subtasks to subagents, use the suggested model tier or an equivalent capability level available to you. Low complexity tasks should use the fastest/cheapest model, high complexity tasks should use the most capable model.\n- If useful, use subagents/tools for parallelizable subtasks while preserving dependencies.",
+            "You are working on issue {}.\n\nTask: {}\n\nDescription: {}\n\nExecution Plan:\n{}\n\nTasklist JSON:\n{}\n\nExecution constraints:\n- Follow phase order and respect blocked_by dependencies between tasks.\n- Report progress using task IDs from tasklist.\n- Each task has a `complexity` (low/medium/high) and `suggested_model` field. When delegating subtasks to subagents, use the suggested model tier or an equivalent capability level available to you. Low complexity tasks should use the fastest/cheapest model, high complexity tasks should use the most capable model.\n- If useful, use subagents/tools for parallelizable subtasks while preserving dependencies.{}",
             issue_key,
             task.title,
             task.description.as_deref().unwrap_or("No description"),
             plan_markdown,
-            tasklist_pretty
+            tasklist_pretty,
+            rules_section
         );
 
         store

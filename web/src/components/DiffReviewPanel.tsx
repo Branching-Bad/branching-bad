@@ -1,7 +1,7 @@
 import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo, AgentProfile } from "../types";
 import { AgentProfileSelect } from "./AgentProfileSelect";
 import { DiffViewer } from "./DiffViewer";
-import { IconExpand } from "./icons";
+import { IconBookmark, IconExpand } from "./icons";
 import { MergeOptionsBar } from "./MergeOptionsBar";
 import { formatDate } from "./shared";
 
@@ -43,6 +43,7 @@ export function DiffReviewPanel({
   agentProfiles,
   reviewProfileId,
   onReviewProfileChange,
+  onPinAsRule,
 }: {
   selectedTask: Task;
   reviewComments: ReviewComment[];
@@ -73,6 +74,7 @@ export function DiffReviewPanel({
   agentProfiles?: AgentProfile[];
   reviewProfileId?: string;
   onReviewProfileChange?: (v: string) => void;
+  onPinAsRule?: (commentId: string) => void;
 }) {
   return (
     <div className="rounded-xl border border-border-default bg-surface-200 p-3">
@@ -256,6 +258,15 @@ export function DiffReviewPanel({
                   </span>
                 )}
                 <span className="text-[10px] text-text-muted">{formatDate(rc.created_at)}</span>
+                {onPinAsRule && (
+                  <button
+                    onClick={() => onPinAsRule(rc.id)}
+                    className="ml-auto rounded-md p-0.5 text-text-muted transition hover:text-brand"
+                    title="Save as repository rule"
+                  >
+                    <IconBookmark className="h-3 w-3" />
+                  </button>
+                )}
               </div>
               <p className="text-[11px] text-text-secondary">{rc.comment}</p>
             </div>

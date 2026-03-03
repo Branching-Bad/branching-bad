@@ -5,7 +5,7 @@ import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInf
 import { AgentProfileSelect } from "./AgentProfileSelect";
 import { DiffViewer } from "./DiffViewer";
 import { MergeOptionsBar } from "./MergeOptionsBar";
-import { IconX } from "./icons";
+import { IconBookmark, IconX } from "./icons";
 import { formatDate } from "./shared";
 
 type Selection = {
@@ -194,6 +194,7 @@ export function DiffReviewModal({
   agentProfiles,
   reviewProfileId,
   onReviewProfileChange,
+  onPinAsRule,
 }: {
   open: boolean;
   onClose: () => void;
@@ -225,6 +226,7 @@ export function DiffReviewModal({
   agentProfiles?: AgentProfile[];
   reviewProfileId?: string;
   onReviewProfileChange?: (v: string) => void;
+  onPinAsRule?: (commentId: string) => void;
 }) {
   const files = useMemo(() => {
     if (!runDiff) return [];
@@ -465,6 +467,15 @@ export function DiffReviewModal({
                         </span>
                       )}
                       <span className="text-[10px] text-text-muted">{formatDate(rc.created_at)}</span>
+                      {onPinAsRule && (
+                        <button
+                          onClick={() => onPinAsRule(rc.id)}
+                          className="ml-auto rounded-md p-0.5 text-text-muted transition hover:text-brand"
+                          title="Save as repository rule"
+                        >
+                          <IconBookmark className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                     <p className="text-[11px] text-text-secondary">{rc.comment}</p>
                   </div>

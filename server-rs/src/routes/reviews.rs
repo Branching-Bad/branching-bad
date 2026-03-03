@@ -19,7 +19,7 @@ use crate::executor::{
 };
 use crate::models::{TaskWithPayload, Run, Repo};
 use crate::msg_store::{LogMsg, MsgStore};
-use super::shared::{TaskPath, build_agent_command, resolve_agent_profile};
+use super::shared::{TaskPath, build_agent_command, load_rules_section, resolve_agent_profile};
 use super::runs::spawn_resume_run;
 
 pub(crate) fn review_routes() -> Router<AppState> {
@@ -218,6 +218,8 @@ async fn submit_review(
     let store = MsgStore::new();
     pm.register_store(&run_id, store.clone()).await;
 
+    let rules_section = load_rules_section(&state.db, &task.repo_id);
+
     let prompt = {
         let mut parts = Vec::new();
         parts.push("Review feedback on previous work:\n".to_string());
@@ -241,6 +243,9 @@ async fn submit_review(
         }
 
         parts.push("\nPlease address this feedback and make the necessary changes.".to_string());
+        if !rules_section.is_empty() {
+            parts.push(rules_section);
+        }
         parts.join("\n")
     };
 

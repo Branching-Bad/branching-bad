@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use crate::AppState;
 use crate::errors::ApiError;
 use crate::msg_store::{LogMsg, MsgStore};
-use super::shared::{TaskPath, build_agent_command, resolve_agent_profile};
+use super::shared::{TaskPath, build_agent_command, load_rules_section, resolve_agent_profile};
 use super::runs::spawn_resume_run;
 
 pub(crate) fn chat_routes() -> Router<AppState> {
@@ -133,6 +133,8 @@ async fn send_chat_message(
 
     let run_response = json!({ "id": run.id, "status": run.status, "branch_name": run.branch_name });
 
+    let rules_section = load_rules_section(&state.db, &task.repo_id);
+
     let run_id = run.id.clone();
     let task_id = task.id.clone();
     let repo_path = repo.path.clone();
@@ -142,6 +144,8 @@ async fn send_chat_message(
     let store = MsgStore::new();
     pm.register_store(&run_id, store.clone()).await;
 
+    let mut prompt_with_rules = content.clone();
+    prompt_with_rules.push_str(&rules_section);
     tokio::spawn(async move {
         store.push(LogMsg::TurnSeparator).await;
         store.push(LogMsg::UserMessage(content.clone())).await;
@@ -152,7 +156,7 @@ async fn send_chat_message(
             .await;
         spawn_resume_run(
             agent_command.clone(),
-            content,
+            prompt_with_rules,
             agent_working_dir,
             session_id,
             run_id,
@@ -285,6 +289,8 @@ async fn dispatch_next_queued_chat(
         .map_err(ApiError::internal)?;
     let _ = state.db.update_task_status(&task.id, "IN_PROGRESS");
 
+    let rules_section = load_rules_section(&state.db, &task.repo_id);
+
     let run_response = json!({ "id": run.id, "status": run.status, "branch_name": run.branch_name });
 
     let run_id = run.id.clone();
@@ -296,6 +302,8 @@ async fn dispatch_next_queued_chat(
     let store = MsgStore::new();
     pm.register_store(&run_id, store.clone()).await;
 
+    let mut prompt_with_rules = content.clone();
+    prompt_with_rules.push_str(&rules_section);
     tokio::spawn(async move {
         store.push(LogMsg::TurnSeparator).await;
         store.push(LogMsg::UserMessage(content.clone())).await;
@@ -306,7 +314,7 @@ async fn dispatch_next_queued_chat(
             .await;
         spawn_resume_run(
             agent_command.clone(),
-            content,
+            prompt_with_rules,
             agent_working_dir,
             session_id,
             run_id,

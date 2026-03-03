@@ -9,6 +9,7 @@ mod plans;
 mod providers;
 mod repos;
 mod reviews;
+mod rules;
 mod runs;
 mod sonar_scans;
 mod tasks;

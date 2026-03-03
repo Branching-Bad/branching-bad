@@ -112,6 +112,16 @@ export type ChatMessage = {
   status: "sent" | "queued" | "dispatched";
   created_at: string;
 };
+export type RepositoryRule = {
+  id: string;
+  repo_id: string | null;
+  content: string;
+  source: "manual" | "review_comment";
+  source_comment_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type LaneKey = "todo" | "inprogress" | "inreview" | "done" | "archived";
 export type MergeStrategy = "squash" | "merge" | "rebase";
 export type ApplyToMainOptions = {

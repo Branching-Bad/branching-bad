@@ -77,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::reviews::review_routes())
         .merge(routes::agents::agent_routes())
         .merge(routes::chat::chat_routes())
+        .merge(routes::rules::rules_routes())
         .merge(routes::fs::fs_routes())
         .merge(provider::routes::provider_routes())
         .merge(provider::cloudwatch::routes::cloudwatch_routes())

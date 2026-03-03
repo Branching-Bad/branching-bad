@@ -18,6 +18,7 @@ import { usePlanState } from "./hooks/usePlanState";
 import { useRunState } from "./hooks/useRunState";
 import { useReviewState } from "./hooks/useReviewState";
 import { useChatState } from "./hooks/useChatState";
+import { useRulesState } from "./hooks/useRulesState";
 import type { StreamFunctions } from "./hooks/streamTypes";
 
 initProviders();
@@ -66,6 +67,7 @@ export default function App() {
     streamRef, updateTaskRunState: run.updateTaskRunState,
     setTasks: task.setTasks, setError, setInfo, setBusy, setDetailsTab,
   });
+  const rulesState = useRulesState();
   const chat = useChatState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     streamRef, updateTaskRunState: run.updateTaskRunState, setError,
@@ -87,6 +89,9 @@ export default function App() {
   // ── Auto-select first repo on bootstrap ──
   useEffect(() => { repo.initRepoId(boot.repos); }, [boot.repos, repo.initRepoId]);
 
+  // ── Load rules when repo changes ──
+  useEffect(() => { void rulesState.loadRules(repo.selectedRepoId || undefined); }, [repo.selectedRepoId, rulesState.loadRules]);
+
   // ── Details panel effects ──
   useEffect(() => { if (!task.selectedTask) setDetailsOpen(false); }, [task.selectedTask]);
 
@@ -106,6 +111,13 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [detailsOpen]);
+
+  const handlePinAsRule = async (commentId: string) => {
+    try {
+      await rulesState.pinCommentAsRule(commentId, repo.selectedRepoId || undefined);
+      void rulesState.loadRules(repo.selectedRepoId || undefined);
+    } catch { /* silent */ }
+  };
 
   const totalProviderItemCount = Object.values(boot.providerItemCounts).reduce((a, b) => a + b, 0);
 
@@ -230,6 +242,7 @@ export default function App() {
           agentProfiles={boot.agentProfiles}
           reviewProfileId={review.reviewProfileId}
           onReviewProfileChange={review.setReviewProfileId}
+          onPinAsRule={(commentId) => void handlePinAsRule(commentId)}
           chatProfileId={chat.chatProfileId}
           onChatProfileChange={chat.setChatProfileId}
           aiFeedback={plan.aiFeedback}
@@ -280,6 +293,7 @@ export default function App() {
           agentProfiles={boot.agentProfiles}
           reviewProfileId={review.reviewProfileId}
           onReviewProfileChange={review.setReviewProfileId}
+          onPinAsRule={(commentId) => void handlePinAsRule(commentId)}
         />
       )}
 
@@ -345,6 +359,14 @@ export default function App() {
         repoPath={repo.repoPath} setRepoPath={repo.setRepoPath}
         repoName={repo.repoName} setRepoName={repo.setRepoName}
         onReposChange={boot.bootstrap}
+        globalRules={rulesState.globalRules}
+        repoRules={rulesState.repoRules}
+        onAddRule={rulesState.addRule}
+        onUpdateRule={rulesState.updateRule}
+        onDeleteRule={rulesState.deleteRule}
+        onOptimizeRules={rulesState.optimizeRules}
+        onBulkReplaceRules={rulesState.bulkReplaceRules}
+        onRulesRefresh={() => void rulesState.loadRules(repo.selectedRepoId || undefined)}
       />
 
       <CreateTaskModal
