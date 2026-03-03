@@ -48,6 +48,8 @@ You can also have a separate AI agent **review the plan** before approving — c
 
 ![Plan Modal](docs/screenshots/plan-review-modal.png)
 
+You can also have a different AI agent **review the plan** before approving — select an agent from the dropdown and hit "Review Plan" to get a second opinion.
+
 Three actions: **Approve**, **Request Revision** (with comments — AI regenerates), or **Reject**.
 
 ### 3. Execute
