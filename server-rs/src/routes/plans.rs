@@ -585,7 +585,7 @@ fn open_plan_debug_log_file(
     };
 
     let log_dir = PathBuf::from(repo_path)
-        .join(".local-agent")
+        .join(".branching-bad")
         .join("plan-logs");
     if let Err(error) = fs::create_dir_all(&log_dir) {
         eprintln!(

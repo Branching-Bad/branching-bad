@@ -1,4 +1,4 @@
-# idIA Manager
+# Branching Bad
 
 Local-first, approval-first coding agent with a pluggable provider system. Connects to external services via a unified provider interface, syncs tasks, generates implementation plans requiring human approval, then launches a git branch and executes.
 
@@ -68,9 +68,9 @@ npm run check:server     # cargo check on backend
 | `APP_DATA_DIR` | SQLite database directory | OS app data dir |
 
 Database location:
-- macOS: `~/Library/Application Support/jira-approval-local-agent/agent.db`
-- Linux: `~/.local/share/jira-approval-local-agent/agent.db`
-- Windows: `%APPDATA%\jira-approval-local-agent\agent.db`
+- macOS: `~/Library/Application Support/branching-bad/agent.db`
+- Linux: `~/.local/share/branching-bad/agent.db`
+- Windows: `%APPDATA%\branching-bad\agent.db`
 
 ## Task Lifecycle
 

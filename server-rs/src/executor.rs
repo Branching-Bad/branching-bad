@@ -49,7 +49,7 @@ pub struct WorktreeInfo {
 pub fn create_worktree(repo_path: &str, branch_name: &str) -> Result<WorktreeInfo> {
     assert_git_repo(repo_path)?;
     let worktree_dir = Path::new(repo_path)
-        .join(".local-agent")
+        .join(".branching-bad")
         .join("worktrees")
         .join(branch_name);
     let worktree_path = worktree_dir.to_string_lossy().to_string();
@@ -115,7 +115,7 @@ pub fn save_plan_artifact(
     version: i64,
     markdown: &str,
 ) -> Result<String> {
-    let artifact_dir: PathBuf = Path::new(repo_path).join(".local-agent").join(issue_key);
+    let artifact_dir: PathBuf = Path::new(repo_path).join(".branching-bad").join(issue_key);
     fs::create_dir_all(&artifact_dir).context("failed to create artifact directory")?;
     let file_path = artifact_dir.join(format!("approved-plan-v{version}.md"));
     fs::write(&file_path, markdown).context("failed to write plan artifact")?;

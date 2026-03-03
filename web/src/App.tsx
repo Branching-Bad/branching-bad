@@ -117,10 +117,10 @@ export default function App() {
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-5">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-dark border border-brand-glow">
-              <span className="text-sm font-bold text-brand">A</span>
+              <span className="text-sm font-bold text-brand">B</span>
             </div>
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-semibold text-text-primary">Local Agent</h1>
+              <h1 className="text-sm font-semibold text-text-primary">Branching Bad</h1>
               {repo.selectedRepo && (
                 <>
                   <span className="text-text-muted">/</span>

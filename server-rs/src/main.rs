@@ -96,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(4310);
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    println!("Rust local agent API running on http://{}", addr);
+    println!("Branching Bad server running on http://{}", addr);
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -105,7 +105,7 @@ fn resolve_db_path() -> anyhow::Result<PathBuf> {
     if let Ok(override_dir) = env::var("APP_DATA_DIR") {
         return Ok(PathBuf::from(override_dir).join("agent.db"));
     }
-    let project_dirs = ProjectDirs::from("", "", "jira-approval-local-agent")
+    let project_dirs = ProjectDirs::from("", "", "branching-bad")
         .context("unable to resolve app data directory")?;
     Ok(project_dirs.data_dir().join("agent.db"))
 }

@@ -126,4 +126,4 @@ All under `/api/`. Key groups: `/api/repos`, `/api/tasks/*`, `/api/plans/*`, `/a
 
 Tables: `repos`, `tasks`, `plans`, `plan_actions`, `plan_jobs`, `autostart_jobs`, `runs`, `events`, `agent_profiles`, `repo_agent_preferences`, `review_comments`, `chat_messages`, `provider_accounts`, `provider_resources`, `provider_bindings`, `provider_items`
 
-DB location: macOS `~/Library/Application Support/jira-approval-local-agent/agent.db`, Linux `~/.local/share/jira-approval-local-agent/agent.db`
+DB location: macOS `~/Library/Application Support/branching-bad/agent.db`, Linux `~/.local/share/branching-bad/agent.db`

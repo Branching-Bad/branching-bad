@@ -63,7 +63,7 @@ pub const DEFAULT_EXCLUSIONS: &[&str] = &[
     "**/.git/**",
     "**/dist/**",
     "**/build/**",
-    "**/.local-agent/**",
+    "**/.branching-bad/**",
     "**/bin/Debug/**",
     "**/bin/Release/**",
     "**/obj/**",

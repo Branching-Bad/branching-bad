@@ -1,6 +1,6 @@
-# Local Agent — Quickstart
+# Branching Bad — Quickstart
 
-Local Agent, Jira ve Sentry gibi servislerden aldigi tasklari yapay zeka ile cozen, onay tabanli bir kodlama ajansidir. Plan olusturur, onayinizi bekler, kodu yazar, siz review edersiniz.
+Branching Bad, Jira ve Sentry gibi servislerden aldigi tasklari yapay zeka ile cozen, onay tabanli bir kodlama ajansidir. Plan olusturur, onayinizi bekler, kodu yazar, siz review edersiniz.
 
 ---
 
@@ -130,7 +130,7 @@ Task olustururken veya duzenlerken dort onemli secenek vardir:
 4. Canli loglar terminal kutusunda akar
 5. Bitince task otomatik olarak **In Review** durumuna gecer
 
-> **Worktree modu:** Agent izole bir worktree dizininde calisir (ornek: `.local-agent/worktrees/agent/claude-PROJ-42-1706123456/`). Ana reponuz main branch'te kalir — ayni anda editorde calismaya devam edebilirsiniz.
+> **Worktree modu:** Agent izole bir worktree dizininde calisir (ornek: `.branching-bad/worktrees/agent/claude-PROJ-42-1706123456/`). Ana reponuz main branch'te kalir — ayni anda editorde calismaya devam edebilirsiniz.
 >
 > **Direct modu:** Agent direkt mevcut branch uzerinde calisir. Branch acilmaz, degisiklikler aninda gorunur.
 

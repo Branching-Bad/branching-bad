@@ -39,38 +39,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "approval-agent-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "base64",
- "chrono",
- "command-group",
- "directories",
- "futures",
- "hex",
- "hmac",
- "nix 0.29.0",
- "refinery",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "shlex",
- "tokio",
- "tokio-postgres",
- "tokio-stream",
- "tower-http",
- "uuid",
- "walkdir",
- "which",
- "winsplit",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -179,6 +147,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "branching-bad-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64",
+ "chrono",
+ "command-group",
+ "directories",
+ "futures",
+ "hex",
+ "hmac",
+ "nix 0.29.0",
+ "refinery",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shlex",
+ "tokio",
+ "tokio-postgres",
+ "tokio-stream",
+ "tower-http",
+ "uuid",
+ "walkdir",
+ "which",
+ "winsplit",
 ]
 
 [[package]]
