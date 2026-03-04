@@ -106,6 +106,7 @@ Monorepo with two main parts:
 - [Node.js](https://nodejs.org/) (v18+)
 - At least one AI agent CLI installed: `claude`, `codex`, `gemini`, `opencode`, or `cursor`
 - [Docker](https://www.docker.com/) (optional, for SonarQube local scanning)
+- **Windows only**: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++" workload (required for Rust compilation)
 
 ### Install & Run
 
@@ -115,6 +116,20 @@ npm install
 cd web && npm install && cd ..
 
 # Development (runs backend + frontend concurrently)
+npm run dev
+```
+
+**Windows (cmd):**
+
+```cmd
+REM Install Visual Studio Build Tools (if not already installed)
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive"
+
+REM Install dependencies
+npm install
+cd web && npm install && cd ..
+
+REM Development
 npm run dev
 ```
 
