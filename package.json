@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Local-first, approval-first coding agent with pluggable provider system",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "dev": "npx concurrently \"npm run dev:server\" \"npm run dev:web\"",
     "dev:server": "cargo run --manifest-path server-rs/Cargo.toml",
     "dev:web": "npm --prefix web run dev",
     "build": "npm --prefix web run build && cargo build --manifest-path server-rs/Cargo.toml",

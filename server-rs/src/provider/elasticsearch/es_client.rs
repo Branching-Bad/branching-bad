@@ -34,7 +34,7 @@ pub struct IndexInfo {
 
 #[derive(Debug, Clone)]
 pub struct SearchResult {
-    pub total: u64,
+    pub _total: u64,
     pub hits: Vec<Value>,
 }
 
@@ -135,6 +135,6 @@ impl EsClient {
             .map(|arr| arr.to_vec())
             .unwrap_or_default();
 
-        Ok(SearchResult { total, hits })
+        Ok(SearchResult { _total: total, hits })
     }
 }
