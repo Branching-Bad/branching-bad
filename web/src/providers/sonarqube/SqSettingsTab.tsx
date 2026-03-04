@@ -140,7 +140,7 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
     try {
       const body = { ...formValues, mode: sqMode };
       await api(`/api/providers/${PROVIDER_ID}/connect`, { method: "POST", body: JSON.stringify(body) });
-      onInfo(`${meta.display_name} connected.`);
+      onInfo(`${meta.displayName} connected.`);
       await loadInitial();
       onBootstrapRefresh();
     } catch (e) { onError((e as Error).message); } finally { onBusyChange(false); }
@@ -248,7 +248,7 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
 
   if (!meta) return <p className="text-sm text-text-muted">Loading…</p>;
 
-  const connectFields = meta.connect_fields.filter((f) => f.key !== "mode");
+  const connectFields = meta.connectFields.filter((f) => f.key !== "mode");
   const hasLocalAccount = accounts.some(a => a.config?.mode === "local");
 
   return (
@@ -373,7 +373,7 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
       {/* Online Connect form */}
       <div className="rounded-xl border border-border-default bg-surface-200 p-4">
         <h3 className="mb-3 text-sm font-medium text-text-secondary">
-          {selectedAccountId ? `Update ${meta.display_name}` : `Connect ${meta.display_name}`}
+          {selectedAccountId ? `Update ${meta.displayName}` : `Connect ${meta.displayName}`}
         </h3>
         <form onSubmit={(e) => { e.preventDefault(); void handleConnect(); }} className="space-y-3">
           {connectFields.map((field) => (
@@ -382,7 +382,7 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
               <input
                 className={inputClass}
                 placeholder={field.placeholder}
-                type={field.field_type === "password" ? "password" : "text"}
+                type={field.fieldType === "password" ? "password" : "text"}
                 value={formValues[field.key] ?? ""}
                 onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
               />
@@ -432,21 +432,21 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
 
       {/* Resource selector */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">{meta.resource_label}</label>
+        <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">{meta.resourceLabel}</label>
         <div className="flex gap-2">
           <select className={`${selectClass} flex-1`} value={selectedResourceId} onChange={(e) => setSelectedResourceId(e.target.value)}>
-            <option value="">Select {meta.resource_label.toLowerCase()}</option>
+            <option value="">Select {meta.resourceLabel.toLowerCase()}</option>
             {resources.map((r) => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
-          <button onClick={() => void handleRefreshResources()} disabled={busy || !selectedAccountId} className={btnSecondary} title={`Refresh ${meta.resource_label}s`}>
+          <button onClick={() => void handleRefreshResources()} disabled={busy || !selectedAccountId} className={btnSecondary} title={`Refresh ${meta.resourceLabel}s`}>
             ↻
           </button>
         </div>
       </div>
       <button onClick={() => void handleBind()} disabled={busy || !selectedRepoId || !selectedAccountId || !selectedResourceId} className={btnPrimary}>
-        Bind Repo to {meta.resource_label}
+        Bind Repo to {meta.resourceLabel}
       </button>
 
       {/* Scan Configuration Panel — shown when binding exists */}

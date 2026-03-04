@@ -367,6 +367,10 @@ export default function App() {
         onOptimizeRules={rulesState.optimizeRules}
         onBulkReplaceRules={rulesState.bulkReplaceRules}
         onRulesRefresh={() => void rulesState.loadRules(repo.selectedRepoId || undefined)}
+        onClearOutputs={async () => {
+          await api("/api/outputs", { method: "DELETE" });
+          setInfo("All output logs cleared.");
+        }}
       />
 
       <CreateTaskModal

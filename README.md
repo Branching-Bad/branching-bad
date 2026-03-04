@@ -95,41 +95,26 @@ Each provider has a settings modal for connection configuration and a drawer sec
 
 Monorepo with two main parts:
 
-- **server-rs/** — Rust backend (Axum + rusqlite). Single-binary HTTP server with SQLite persistence. Cross-platform (macOS, Linux, Windows).
+- **server-ts/** — TypeScript backend (Express + ws + better-sqlite3). HTTP server with WebSocket support, SQLite persistence. Cross-platform (macOS, Linux, Windows).
 - **web/** — React frontend (React 19, Vite 7, Tailwind CSS v4). Two-column layout with kanban board and detail sidebar.
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Rust](https://rustup.rs/) (stable)
 - [Node.js](https://nodejs.org/) (v18+)
 - At least one AI agent CLI installed: `claude`, `codex`, `gemini`, `opencode`, or `cursor`
 - [Docker](https://www.docker.com/) (optional, for SonarQube local scanning)
-- **Windows only**: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++" workload (required for Rust compilation)
 
 ### Install & Run
 
 ```bash
 # Install dependencies
 npm install
+cd server-ts && npm install && cd ..
 cd web && npm install && cd ..
 
 # Development (runs backend + frontend concurrently)
-npm run dev
-```
-
-**Windows (cmd):**
-
-```cmd
-REM Install Visual Studio Build Tools (if not already installed)
-winget install Microsoft.VisualStudio.2022.BuildTools --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive"
-
-REM Install dependencies
-npm install
-cd web && npm install && cd ..
-
-REM Development
 npm run dev
 ```
 
@@ -139,11 +124,11 @@ Open http://localhost:5173 — backend runs on http://localhost:4310 (frontend p
 
 ```bash
 npm run dev              # Run backend + frontend concurrently
-npm run dev:server       # Rust backend only
+npm run dev:server       # TypeScript backend only (tsx watch)
 npm run dev:web          # Vite frontend only
-npm run build            # Production build (web + cargo)
+npm run build            # Production build (web + tsc)
 npm run typecheck        # Frontend type checking
-npm run check:server     # cargo check on backend
+npm run check:server     # tsc --noEmit on server-ts
 ```
 
 ## Configuration

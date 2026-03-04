@@ -87,6 +87,25 @@ export function usePlanState({
     })();
   }, [selectedTaskId, setError]);
 
+  // Load persisted outputs when task changes
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    void (async () => {
+      try {
+        const res = await api<{ outputs: { type: string; data: string }[] }>(
+          `/api/tasks/${encodeURIComponent(selectedTaskId)}/outputs`,
+        );
+        if (res.outputs.length > 0) {
+          updateTaskPlanState(selectedTaskId, (prev) => {
+            // Only seed if no live logs yet
+            if (prev.planLogs.length > 0) return prev;
+            return { ...prev, planLogs: res.outputs.map((o) => ({ type: o.type, data: o.data })) };
+          });
+        }
+      } catch { /* best-effort */ }
+    })();
+  }, [selectedTaskId, updateTaskPlanState]);
+
   // Sync manual fields when selected plan changes
   useEffect(() => {
     if (!selectedPlan) return;
@@ -176,23 +195,39 @@ export function usePlanState({
     const labels: Record<string, string> = { approve: "Approving plan…", reject: "Rejecting plan…", revise: "Generating revised plan…" };
     setBusy(true); setError(""); setPlanActionInProgress(labels[action] ?? action);
     try {
-      await api(`/api/plans/${latestPlan.id}/action`, { method: "POST", body: JSON.stringify({ action, comment: planComment || undefined }) });
-      const payload = await api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(selectedTaskId)}`);
-      setPlans(payload.plans);
-      const latest = payload.plans[0] ?? null;
-      setSelectedPlanId(latest?.id ?? "");
-      if (latest) {
-        setManualPlanMarkdown(latest.plan_markdown ?? "");
-        setManualTasklistJsonText(JSON.stringify(latest.tasklist ?? {}, null, 2));
+      const result = await api<{ status: string; job?: PlanJob }>(`/api/plans/${latestPlan.id}/action`, { method: "POST", body: JSON.stringify({ action, comment: planComment || undefined }) });
+
+      if (action === "revise" && result.job) {
+        // Revision is now async via plan job — stream live output
+        const job = result.job;
+        updateTaskPlanState(selectedTaskId, (prev) => ({
+          activeJob: job,
+          planLogs: prev.activeJob?.id === job.id ? prev.planLogs : [],
+          planFinished: job.status !== "running" && job.status !== "pending",
+        }));
+        setInfo("Plan revision started. Live output is streaming.");
+        if (job.status === "running" || job.status === "pending") {
+          streamRef.current?.attachPlanLogStream(job.id, selectedTaskId, selectedRepoId);
+        }
+        setPlanComment("");
+      } else {
+        const payload = await api<{ plans: Plan[] }>(`/api/plans?taskId=${encodeURIComponent(selectedTaskId)}`);
+        setPlans(payload.plans);
+        const latest = payload.plans[0] ?? null;
+        setSelectedPlanId(latest?.id ?? "");
+        if (latest) {
+          setManualPlanMarkdown(latest.plan_markdown ?? "");
+          setManualTasklistJsonText(JSON.stringify(latest.tasklist ?? {}, null, 2));
+        }
+        if (selectedRepoId) {
+          const t = await api<{ tasks: import("../types").Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
+          setTasks(t.tasks);
+        }
+        setInfo(`Plan action: ${action}`);
+        setPlanComment("");
       }
-      if (selectedRepoId) {
-        const t = await api<{ tasks: import("../types").Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-        setTasks(t.tasks);
-      }
-      setInfo(`Plan action: ${action}`);
-      if (action !== "revise") setPlanComment("");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); setPlanActionInProgress(""); }
-  }, [latestPlan, planComment, selectedTaskId, selectedRepoId, setTasks, setError, setInfo, setBusy]);
+  }, [latestPlan, planComment, selectedTaskId, selectedRepoId, setTasks, updateTaskPlanState, streamRef, setError, setInfo, setBusy]);
 
   const validateTasklistDraft = useCallback((): { ok: true; tasklistJson: unknown } | { ok: false; error: string } => {
     let tasklistJson: unknown;

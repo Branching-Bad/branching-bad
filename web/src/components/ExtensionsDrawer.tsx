@@ -62,7 +62,7 @@ export function ExtensionsDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {providers.map(([id, ui]) => {
             const meta = providerMetas.find((m) => m.id === id);
-            const displayName = meta?.display_name ?? id;
+            const displayName = meta?.displayName ?? id;
             const count = providerItemCounts[id] ?? 0;
             const isExpanded = expanded[id] ?? true;
             const Section = ui.drawerSection;

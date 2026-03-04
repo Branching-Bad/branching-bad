@@ -140,16 +140,16 @@ export type GitStatusInfo = {
 export type ConnectField = {
   key: string;
   label: string;
-  field_type: "text" | "password";
+  fieldType: "text" | "password";
   required: boolean;
   placeholder: string;
 };
 export type ProviderMeta = {
   id: string;
-  display_name: string;
-  connect_fields: ConnectField[];
-  resource_label: string;
-  has_items_panel: boolean;
+  displayName: string;
+  connectFields: ConnectField[];
+  resourceLabel: string;
+  hasItemsPanel: boolean;
 };
 export type ProviderAccount = {
   id: string;

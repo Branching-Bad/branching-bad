@@ -4,13 +4,15 @@ import { IconFolder, IconChevronUp, IconX } from "./icons";
 import { btnPrimary } from "./shared";
 
 type FsDir = { name: string; path: string; isGit: boolean };
-type FsListResponse = { path: string; parent: string | null; dirs: FsDir[] };
+type FsDrive = { letter: string; path: string };
+type FsListResponse = { path: string; parent: string | null; dirs: FsDir[]; drives?: FsDrive[] };
 
 export function FolderPicker({ value, onChange }: { value: string; onChange: (path: string) => void }) {
   const [open, setOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState("");
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [dirs, setDirs] = useState<FsDir[]>([]);
+  const [drives, setDrives] = useState<FsDrive[]>([]);
   const [loading, setLoading] = useState(false);
   const [fsError, setFsError] = useState("");
 
@@ -23,6 +25,7 @@ export function FolderPicker({ value, onChange }: { value: string; onChange: (pa
       setCurrentPath(res.path);
       setParentPath(res.parent);
       setDirs(res.dirs);
+      setDrives(res.drives ?? []);
     } catch (e) {
       setFsError((e as Error).message);
     } finally {
@@ -86,6 +89,25 @@ export function FolderPicker({ value, onChange }: { value: string; onChange: (pa
 
             {/* Dir listing */}
             <div className="max-h-[320px] overflow-y-auto px-2 py-2">
+              {/* Windows drives */}
+              {drives.length > 0 && (
+                <div className="mb-1 flex flex-wrap gap-1 px-2 pb-2 border-b border-border-default">
+                  {drives.map((d) => (
+                    <button
+                      key={d.letter}
+                      onClick={() => void loadDir(d.path)}
+                      className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                        currentPath.toUpperCase().startsWith(d.letter.toUpperCase())
+                          ? "border-brand bg-brand-tint text-brand"
+                          : "border-border-default bg-surface-200 text-text-secondary hover:bg-surface-300"
+                      }`}
+                    >
+                      {d.letter}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Go up */}
               {parentPath && (
                 <button

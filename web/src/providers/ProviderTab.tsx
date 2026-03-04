@@ -105,7 +105,7 @@ export function createProviderSettingsTab(providerId: string) {
       onError(""); onInfo(""); onBusyChange(true);
       try {
         await api(`/api/providers/${providerId}/connect`, { method: "POST", body: JSON.stringify(formValues) });
-        onInfo(`${meta.display_name} connected.`);
+        onInfo(`${meta.displayName} connected.`);
         await loadInitial();
         onBootstrapRefresh();
       } catch (e) { onError((e as Error).message); } finally { onBusyChange(false); }
@@ -146,16 +146,16 @@ export function createProviderSettingsTab(providerId: string) {
         {/* Connect / Update form */}
         <div className="rounded-xl border border-border-default bg-surface-200 p-4">
           <h3 className="mb-3 text-sm font-medium text-text-secondary">
-            {selectedAccountId ? `Update ${meta.display_name}` : `Connect ${meta.display_name}`}
+            {selectedAccountId ? `Update ${meta.displayName}` : `Connect ${meta.displayName}`}
           </h3>
           <form onSubmit={(e) => { e.preventDefault(); void handleConnect(); }} className="space-y-3">
-            {meta.connect_fields.map((field) => (
+            {meta.connectFields.map((field) => (
               <div key={field.key}>
                 <label className="mb-1 block text-xs text-text-muted">{field.label}</label>
                 <input
                   className={inputClass}
                   placeholder={field.placeholder}
-                  type={field.field_type === "password" ? "password" : "text"}
+                  type={field.fieldType === "password" ? "password" : "text"}
                   value={formValues[field.key] ?? ""}
                   onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
                 />
@@ -169,21 +169,21 @@ export function createProviderSettingsTab(providerId: string) {
 
         {/* Resource selector */}
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">{meta.resource_label}</label>
+          <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">{meta.resourceLabel}</label>
           <div className="flex gap-2">
             <select className={`${selectClass} flex-1`} value={selectedResourceId} onChange={(e) => setSelectedResourceId(e.target.value)}>
-              <option value="">Select {meta.resource_label.toLowerCase()}</option>
+              <option value="">Select {meta.resourceLabel.toLowerCase()}</option>
               {resources.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </select>
-            <button onClick={() => void handleRefreshResources()} disabled={busy || !selectedAccountId} className={btnSecondary} title={`Refresh ${meta.resource_label}s`}>
+            <button onClick={() => void handleRefreshResources()} disabled={busy || !selectedAccountId} className={btnSecondary} title={`Refresh ${meta.resourceLabel}s`}>
               ↻
             </button>
           </div>
         </div>
         <button onClick={() => void handleBind()} disabled={busy || !selectedRepoId || !selectedAccountId || !selectedResourceId} className={btnPrimary}>
-          Bind Repo to {meta.resource_label}
+          Bind Repo to {meta.resourceLabel}
         </button>
       </div>
     );
