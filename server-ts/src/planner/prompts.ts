@@ -11,6 +11,7 @@ export function buildPlanPrompt(
   task: TaskWithPayload,
   revisionComment: string | null,
   rulesSection: string,
+  memoriesSection = '',
 ): string {
   const context = collectRepoContext(repoPath, task);
   const fileList = context.candidateFiles.map((f) => `- ${f}`).join('\n');
@@ -59,7 +60,7 @@ Constraints:
 - NO TEST WRITING: Do NOT include tasks for writing unit tests, integration tests, or test files unless the user explicitly requested tests in the task description. The executor will only verify the build compiles successfully.
 - Verification section should focus on build verification (\`npm run build\`, \`tsc --noEmit\`, etc.), not on writing new tests.
 - Never output keys outside the schema.
-`;
+${memoriesSection}`;
 }
 
 export function buildTasklistPrompt(

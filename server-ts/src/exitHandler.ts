@@ -1,6 +1,8 @@
 import type { Db } from './db/index.js';
 import { captureDiffWithBase, gitCommitAll } from './executor/index.js';
 import type { MsgStore } from './msgStore.js';
+import { createMemoryFromRun } from './services/memoryService.js';
+import { buildAgentCommand } from './routes/shared.js';
 
 /**
  * Handle post-exit cleanup for a child agent process:
@@ -123,10 +125,38 @@ export function handleChildExit(
     // Ignore
   }
 
+  // Create memory from successful runs (async, fire-and-forget)
+  if (runStatus === 'done') {
+    scheduleMemoryCreation(db, taskId, runId);
+  }
+
   // Push finished to message stream
   if (store) {
     store.pushFinished(exitCode, runStatus);
   }
+}
+
+function scheduleMemoryCreation(db: Db, taskId: string, runId: string): void {
+  setImmediate(async () => {
+    try {
+      const run = db.getRunById(runId);
+      if (!run?.agent_profile_id) return;
+
+      const profile = db.getAgentProfileById(run.agent_profile_id);
+      if (!profile) return;
+
+      const task = db.getTaskById(taskId);
+      if (!task) return;
+
+      const repo = db.getRepoById(task.repo_id);
+      if (!repo) return;
+
+      const agentCommand = buildAgentCommand(profile);
+      await createMemoryFromRun(db, taskId, runId, agentCommand, repo.path);
+    } catch {
+      // Ignore — memory creation is best-effort
+    }
+  });
 }
 
 /** Mark any runs left in 'running' state from a previous crash as failed. */

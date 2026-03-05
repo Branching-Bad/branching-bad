@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { api } from "./api";
 import { btnSecondary } from "./components/shared";
 import { IconSettings, IconExtensions } from "./components/icons";
 import { SettingsModal } from "./components/SettingsModal";
@@ -19,6 +20,7 @@ import { useRunState } from "./hooks/useRunState";
 import { useReviewState } from "./hooks/useReviewState";
 import { useChatState } from "./hooks/useChatState";
 import { useRulesState } from "./hooks/useRulesState";
+import { useMemoryState } from "./hooks/useMemoryState";
 import type { StreamFunctions } from "./hooks/streamTypes";
 
 initProviders();
@@ -68,6 +70,7 @@ export default function App() {
     setTasks: task.setTasks, setError, setInfo, setBusy, setDetailsTab,
   });
   const rulesState = useRulesState();
+  const memoryState = useMemoryState();
   const chat = useChatState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     streamRef, updateTaskRunState: run.updateTaskRunState, setError,
@@ -91,6 +94,9 @@ export default function App() {
 
   // ── Load rules when repo changes ──
   useEffect(() => { void rulesState.loadRules(repo.selectedRepoId || undefined); }, [repo.selectedRepoId, rulesState.loadRules]);
+
+  // ── Load memories when repo changes ──
+  useEffect(() => { if (repo.selectedRepoId) void memoryState.loadMemories(repo.selectedRepoId); }, [repo.selectedRepoId, memoryState.loadMemories]);
 
   // ── Details panel effects ──
   useEffect(() => { if (!task.selectedTask) setDetailsOpen(false); }, [task.selectedTask]);
@@ -367,6 +373,15 @@ export default function App() {
         onOptimizeRules={rulesState.optimizeRules}
         onBulkReplaceRules={rulesState.bulkReplaceRules}
         onRulesRefresh={() => void rulesState.loadRules(repo.selectedRepoId || undefined)}
+        memories={memoryState.memories}
+        memoryTotal={memoryState.total}
+        memoryPage={memoryState.page}
+        memoryTotalPages={memoryState.totalPages}
+        memoryLoading={memoryState.loading}
+        memorySearchQuery={memoryState.searchQuery}
+        onMemorySearchChange={memoryState.setSearchQuery}
+        onLoadMemories={memoryState.loadMemories}
+        onDeleteMemory={memoryState.deleteMemory}
         onClearOutputs={async () => {
           await api("/api/outputs", { method: "DELETE" });
           setInfo("All output logs cleared.");

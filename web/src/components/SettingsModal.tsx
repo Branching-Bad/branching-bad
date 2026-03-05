@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { FormEvent } from "react";
 import type { Repo, AgentProfile, RepositoryRule } from "../types";
+import type { TaskMemory } from "../hooks/useMemoryState";
 import { api } from "../api";
 import { IconX, IconRefresh, IconFolder } from "./icons";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
@@ -145,10 +146,19 @@ function IconRules({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function IconMemory({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+    </svg>
+  );
+}
+
 const navItems = [
   { key: "repo", label: "Repository", icon: IconFolder },
   { key: "agent", label: "AI Agent", icon: IconAgent },
   { key: "rules", label: "Rules", icon: IconRules },
+  { key: "memory", label: "Memories", icon: IconMemory },
   { key: "data", label: "Data", icon: IconData },
 ] as const;
 
@@ -161,6 +171,9 @@ export function SettingsModal({
   onReposChange,
   globalRules, repoRules, onAddRule, onUpdateRule, onDeleteRule, onOptimizeRules, onBulkReplaceRules, onRulesRefresh,
   onClearOutputs,
+  memories, memoryTotal, memoryPage, memoryTotalPages, memoryLoading,
+  memorySearchQuery, onMemorySearchChange,
+  onLoadMemories, onDeleteMemory,
 }: {
   open: boolean; onClose: () => void;
   repos: Repo[]; agentProfiles: AgentProfile[];
@@ -184,6 +197,15 @@ export function SettingsModal({
   onBulkReplaceRules?: (repoId: string | null, contents: string[]) => Promise<void>;
   onRulesRefresh?: () => void;
   onClearOutputs?: () => Promise<void>;
+  memories?: TaskMemory[];
+  memoryTotal?: number;
+  memoryPage?: number;
+  memoryTotalPages?: number;
+  memoryLoading?: boolean;
+  memorySearchQuery?: string;
+  onMemorySearchChange?: (q: string) => void;
+  onLoadMemories?: (repoId: string, query?: string, page?: number) => Promise<void>;
+  onDeleteMemory?: (id: string, repoId: string, query?: string, page?: number) => Promise<void>;
 }) {
   const [tab, setTab] = useState("repo");
   const [branches, setBranches] = useState<string[]>([]);
@@ -465,6 +487,88 @@ export function SettingsModal({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {tab === "memory" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={memorySearchQuery ?? ""}
+                    onChange={(e) => onMemorySearchChange?.(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void onLoadMemories?.(selectedRepoId, memorySearchQuery, 1);
+                    }}
+                    placeholder="Search memories..."
+                    className={`${inputClass} flex-1 !py-1.5 !text-xs`}
+                  />
+                  <button
+                    onClick={() => void onLoadMemories?.(selectedRepoId, memorySearchQuery, 1)}
+                    disabled={memoryLoading || !selectedRepoId}
+                    className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-[11px] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    {memoryLoading ? "Loading..." : "Search"}
+                  </button>
+                </div>
+
+                {!selectedRepoId && (
+                  <p className="text-[11px] text-text-muted italic">Select a repository to view memories.</p>
+                )}
+
+                {selectedRepoId && (memories ?? []).length === 0 && !memoryLoading && (
+                  <p className="text-[11px] text-text-muted italic">No memories found.</p>
+                )}
+
+                <div className="space-y-2">
+                  {(memories ?? []).map((m) => (
+                    <div key={m.id} className="group rounded-lg border border-border-default bg-surface-200 px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h5 className="text-xs font-medium text-text-primary leading-snug">{m.title}</h5>
+                        <button
+                          onClick={() => void onDeleteMemory?.(m.id, selectedRepoId, memorySearchQuery, memoryPage)}
+                          className="shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-400"
+                          title="Delete memory"
+                        >
+                          <IconX className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-text-secondary leading-relaxed whitespace-pre-wrap">{m.summary}</p>
+                      {m.files_changed.length > 0 && (
+                        <p className="text-[10px] text-text-muted">
+                          Files: {m.files_changed.slice(0, 5).join(", ")}
+                          {m.files_changed.length > 5 && ` (+${m.files_changed.length - 5} more)`}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-text-muted">{new Date(m.created_at).toLocaleDateString()}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {(memoryTotalPages ?? 1) > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-[11px] text-text-muted">
+                      {memoryTotal ?? 0} memories &middot; Page {memoryPage ?? 1} of {memoryTotalPages ?? 1}
+                    </span>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => void onLoadMemories?.(selectedRepoId, memorySearchQuery, (memoryPage ?? 1) - 1)}
+                        disabled={(memoryPage ?? 1) <= 1 || memoryLoading}
+                        className="rounded-md bg-surface-300 px-2.5 py-1 text-[10px] font-medium text-text-muted hover:text-text-primary disabled:opacity-40"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={() => void onLoadMemories?.(selectedRepoId, memorySearchQuery, (memoryPage ?? 1) + 1)}
+                        disabled={(memoryPage ?? 1) >= (memoryTotalPages ?? 1) || memoryLoading}
+                        className="rounded-md bg-surface-300 px-2.5 py-1 text-[10px] font-medium text-text-muted hover:text-text-primary disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

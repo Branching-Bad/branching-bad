@@ -24,6 +24,7 @@ import './provider/elasticsearch/db.js';
 import './provider/elasticsearch/db-saved-queries.js';
 import './provider/sonarqube/db.js';
 import './db/taskOutputs.js';
+import './db/memories.js';
 
 import { ProcessManager, recoverOrphans } from './processManager.js';
 import { ProviderRegistry, registerAll } from './provider/index.js';

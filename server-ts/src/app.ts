@@ -21,6 +21,7 @@ import { providerRoutes } from './provider/routes.js';
 import { cloudwatchRoutes } from './provider/cloudwatch/routes.js';
 import { elasticsearchRoutes } from './provider/elasticsearch/routes.js';
 import { sonarqubeRoutes } from './provider/sonarqube/routes.js';
+import { memoryRoutes } from './routes/memories.js';
 
 export function createApp(state: AppState): express.Express {
   const app = express();
@@ -52,6 +53,7 @@ export function createApp(state: AppState): express.Express {
   app.use(cloudwatchRoutes());
   app.use(elasticsearchRoutes());
   app.use(sonarqubeRoutes());
+  app.use(memoryRoutes());
 
   // Global error handler — catches unhandled sync throws and async rejections
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

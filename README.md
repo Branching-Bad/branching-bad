@@ -19,6 +19,7 @@ Local-first, approval-first coding agent with a pluggable provider system. Creat
 - **Review Feedback Loop** — Submit feedback, agent fixes, review again — iterate until satisfied
 - **Merge Controls** — Squash merge, merge commit, or rebase strategies with push and PR creation via `gh` CLI
 - **Follow-up Chat** — Send messages to running or completed agents with session resume support
+- **Task Memory** — Automatically learns from completed tasks using FTS5/BM25 search, injecting relevant past experience into future plans
 
 ## How It Works
 
@@ -69,6 +70,17 @@ When the agent finishes, the task moves to **In Review**. Review the diff with f
 Submit feedback to trigger another agent run on the same worktree — the agent picks up where it left off. Iterate until the code is right.
 
 Expand the review modal for full-screen diff with inline commenting on specific lines.
+
+### 5. Learn from Past Tasks
+
+When a task completes successfully, Branching Bad automatically generates a concise summary of what was done — which files changed, what approach was taken, and key decisions made. These summaries are stored with full-text search (SQLite FTS5 with BM25 ranking).
+
+When generating plans for new tasks, the system searches for relevant past memories and injects them into the planning prompt. The agent learns from your project's history — similar problems get better solutions over time.
+
+- Summaries generated via agent CLI (Haiku-tier) with deterministic fallback
+- FTS5 full-text search with BM25 relevance ranking
+- Scoped per repository — memories don't leak across projects
+- Viewable and deletable via API (`GET /api/memories`, `DELETE /api/memories/:id`)
 
 ![Review Modal](docs/screenshots/review-git-modal.png)
 
