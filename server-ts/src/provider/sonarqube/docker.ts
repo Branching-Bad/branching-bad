@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 
 const CONTAINER_NAME = 'idea-sonarqube';
 const VOLUME_NAME = 'idea-sonarqube-data';
+const NETWORK_NAME = 'idea-sonarqube-net';
 
 /**
  * Convert a Windows path to Docker-compatible mount path.
@@ -48,15 +49,35 @@ export async function getSonarqubeContainerStatus(): Promise<ContainerStatus> {
   }
 }
 
+async function ensureNetwork(): Promise<void> {
+  try {
+    await execFileAsync('docker', ['network', 'inspect', NETWORK_NAME]);
+  } catch {
+    await execFileAsync('docker', ['network', 'create', NETWORK_NAME]);
+  }
+}
+
+async function connectToNetwork(container: string): Promise<void> {
+  try {
+    await execFileAsync('docker', [
+      'network', 'connect', NETWORK_NAME, container,
+    ]);
+  } catch {
+    // Already connected — ignore
+  }
+}
+
 export async function startSonarqubeContainer(port: number): Promise<void> {
+  await ensureNetwork();
   const status = await getSonarqubeContainerStatus();
-  if (status === 'running') return;
+  if (status === 'running') {
+    await connectToNetwork(CONTAINER_NAME);
+    return;
+  }
 
   if (status === 'exited' || (status !== 'not_found' && status !== 'running')) {
-    const { stderr } = await execFileAsync('docker', ['start', CONTAINER_NAME]);
-    if (stderr && stderr.includes('Error')) {
-      throw new Error(`Failed to start container: ${stderr}`);
-    }
+    await execFileAsync('docker', ['start', CONTAINER_NAME]);
+    await connectToNetwork(CONTAINER_NAME);
     return;
   }
 
@@ -66,6 +87,8 @@ export async function startSonarqubeContainer(port: number): Promise<void> {
     '-d',
     '--name',
     CONTAINER_NAME,
+    '--network',
+    NETWORK_NAME,
     '-p',
     `${port}:9000`,
     '-v',
@@ -115,19 +138,18 @@ export function buildSonarProperties(
   projectKey: string,
   config: ScanConfig,
 ): Array<[string, string]> {
-  const allExclusions = mergeExclusions(config.exclusions);
+  const allExclusions = mergeExclusions(config.exclusions ?? []);
   const exclusionStr = allExclusions.join(',');
   const props: Array<[string, string]> = [
     ['sonar.projectKey', projectKey],
     ['sonar.exclusions', exclusionStr],
-    ['sonar.javascript.exclusions', exclusionStr],
-    ['sonar.typescript.exclusions', exclusionStr],
   ];
 
-  if (config.cpdExclusions.length > 0) {
-    props.push(['sonar.cpd.exclusions', config.cpdExclusions.join(',')]);
+  const cpdExcl = config.cpdExclusions ?? [];
+  if (cpdExcl.length > 0) {
+    props.push(['sonar.cpd.exclusions', cpdExcl.join(',')]);
   }
-  if (config.sources) props.push(['sonar.sources', config.sources]);
+  props.push(['sonar.sources', config.sources ?? '.']);
   if (config.sourceEncoding) {
     props.push(['sonar.sourceEncoding', config.sourceEncoding]);
   }
@@ -135,16 +157,163 @@ export function buildSonarProperties(
   if (config.scmDisabled) {
     props.push(['sonar.scm.disabled', 'true']);
   }
-  for (const [k, v] of Object.entries(config.extraProperties)) {
+  const extraProps = config.extraProperties ?? {};
+  for (const [k, v] of Object.entries(extraProps)) {
     props.push([k, v]);
   }
   return props;
 }
 
+/**
+ * Rewrite a localhost URL so the scanner container can reach SonarQube.
+ * Uses the SonarQube container name on the shared Docker network — this is
+ * more reliable than host.docker.internal (which can fail under amd64
+ * emulation on ARM hosts).
+ */
 function rewriteUrlForDocker(url: string): string {
   return url
-    .replace('://localhost:', '://host.docker.internal:')
-    .replace('://127.0.0.1:', '://host.docker.internal:');
+    .replace(/:\/\/(localhost|127\.0\.0\.1):(\d+)/, `://${CONTAINER_NAME}:9000`);
+}
+
+/**
+ * Check if a URL points to the local SonarQube container (localhost/127.0.0.1).
+ */
+function isLocalSonarUrl(url: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url);
+}
+
+/**
+ * Extract port number from a URL, defaulting to 9000.
+ */
+function extractPort(url: string): number {
+  const match = url.match(/:(\d+)/);
+  return match ? parseInt(match[1], 10) : 9000;
+}
+
+async function ensureLocalSonarRunning(sonarUrl: string): Promise<void> {
+  if (!isLocalSonarUrl(sonarUrl)) return;
+  const status = await getSonarqubeContainerStatus();
+  if (status !== 'running') {
+    const port = extractPort(sonarUrl);
+    await startSonarqubeContainer(port);
+    await waitForSonarqubeReady(sonarUrl, 120);
+  }
+}
+
+function writePropertiesFile(repoPath: string, projectKey: string, config: ScanConfig): void {
+  const lines = buildSonarProperties(projectKey, config).map(
+    ([k, v]) => `${k}=${v}`,
+  );
+  fs.writeFileSync(path.join(repoPath, 'sonar-project.properties'), lines.join('\n'));
+}
+
+function cleanupPropertiesFile(repoPath: string): void {
+  try { fs.unlinkSync(path.join(repoPath, 'sonar-project.properties')); } catch { /* ignore */ }
+}
+
+async function runScanCli(
+  repoPath: string,
+  projectKey: string,
+  sonarUrl: string,
+  sonarToken: string,
+  config: ScanConfig,
+): Promise<string> {
+  const isLocal = isLocalSonarUrl(sonarUrl);
+  const dockerSonarUrl = isLocal ? rewriteUrlForDocker(sonarUrl) : sonarUrl;
+  const scannerArgs = buildSonarProperties(projectKey, config).map(
+    ([k, v]) => `-D${k}=${v}`,
+  );
+
+  const cmdArgs = ['run', '--rm', '--platform', 'linux/amd64'];
+
+  if (isLocal) {
+    await ensureNetwork();
+    await connectToNetwork(CONTAINER_NAME);
+    cmdArgs.push('--network', NETWORK_NAME);
+  }
+
+  cmdArgs.push(
+    '-v', `${toDockerPath(repoPath)}:/usr/src`,
+    '-e', 'LANG=C.UTF-8',
+    '-e', `SONAR_HOST_URL=${dockerSonarUrl}`,
+    '-e', `SONAR_TOKEN=${sonarToken}`,
+    'sonarsource/sonar-scanner-cli',
+    ...scannerArgs,
+  );
+
+  const { stdout, stderr } = await execFileAsync('docker', cmdArgs, {
+    timeout: 10 * 60 * 1000,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  return `${stdout}${stderr}`;
+}
+
+async function runScanDotnet(
+  repoPath: string,
+  projectKey: string,
+  sonarUrl: string,
+  sonarToken: string,
+  config: ScanConfig,
+): Promise<string> {
+  const isLocal = isLocalSonarUrl(sonarUrl);
+  const dockerSonarUrl = isLocal ? rewriteUrlForDocker(sonarUrl) : sonarUrl;
+
+  // Filter out props not supported or already handled by dotnet sonarscanner
+  const skipKeys = new Set([
+    'sonar.projectKey',   // handled by /k:
+    'sonar.host.url',     // passed explicitly
+    'sonar.token',        // passed explicitly
+    'sonar.sources',      // not supported by dotnet scanner (auto-computed)
+    'sonar.python.version', // irrelevant for dotnet
+  ]);
+  const props = buildSonarProperties(projectKey, config)
+    .filter(([k]) => !skipKeys.has(k));
+  // Single-quote values to prevent bash glob expansion on patterns like **/node_modules/**
+  const beginArgs = props.map(([k, v]) => `/d:${k}='${v}'`).join(' ');
+
+  // Auto-find .sln or .csproj — dotnet build needs it if not in root
+  // Single docker run: install tool, begin, build, end
+  const script = [
+    'set -e',
+    'echo "=== Installing dotnet-sonarscanner ==="',
+    'dotnet tool install --global dotnet-sonarscanner || true',
+    'export PATH="$PATH:/root/.dotnet/tools"',
+    // Find the solution or project file
+    'SLN=$(find . -maxdepth 3 -name "*.sln" | head -1)',
+    'if [ -z "$SLN" ]; then SLN=$(find . -maxdepth 3 -name "*.csproj" | head -1); fi',
+    'if [ -z "$SLN" ]; then echo "ERROR: No .sln or .csproj file found"; exit 1; fi',
+    'echo "=== Found project: $SLN ==="',
+    'echo "=== SonarScanner begin ==="',
+    `dotnet sonarscanner begin /k:'${projectKey}' /d:sonar.host.url='${dockerSonarUrl}' /d:sonar.token='${sonarToken}' ${beginArgs}`,
+    'echo "=== dotnet build ==="',
+    'dotnet build "$SLN"',
+    'echo "=== SonarScanner end ==="',
+    `dotnet sonarscanner end /d:sonar.token='${sonarToken}'`,
+  ].join('\n');
+
+  // No --platform linux/amd64: dotnet SDK has native ARM support
+  const cmdArgs = ['run', '--rm'];
+
+  if (isLocal) {
+    await ensureNetwork();
+    await connectToNetwork(CONTAINER_NAME);
+    cmdArgs.push('--network', NETWORK_NAME);
+  }
+
+  cmdArgs.push(
+    '-v', `${toDockerPath(repoPath)}:/usr/src`,
+    '-w', '/usr/src',
+    '-e', 'LANG=C.UTF-8',
+    '-e', 'DOTNET_NUGET_SIGNATURE_VERIFICATION=false',
+    `mcr.microsoft.com/dotnet/sdk:${config.dotnetSdkVersion ?? '8.0'}`,
+    'bash', '-c', script,
+  );
+
+  const { stdout, stderr } = await execFileAsync('docker', cmdArgs, {
+    timeout: 15 * 60 * 1000, // 15 minutes — dotnet restore can be slow
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  return `${stdout}${stderr}`;
 }
 
 export async function runScan(
@@ -160,54 +329,26 @@ export async function runScan(
     );
   }
 
-  // Optionally write sonar-project.properties
-  if (config.generatePropertiesFile) {
-    const lines = buildSonarProperties(projectKey, config).map(
-      ([k, v]) => `${k}=${v}`,
-    );
-    const propsPath = path.join(repoPath, 'sonar-project.properties');
-    fs.writeFileSync(propsPath, lines.join('\n'));
+  await ensureLocalSonarRunning(sonarUrl);
+
+  const isDotnet = config.scannerType === 'dotnet';
+
+  // Dotnet scanner does not support sonar-project.properties — remove if present
+  if (isDotnet) {
+    cleanupPropertiesFile(repoPath);
+  } else if (config.generatePropertiesFile) {
+    writePropertiesFile(repoPath, projectKey, config);
   }
-
-  const dockerSonarUrl = rewriteUrlForDocker(sonarUrl);
-  const scannerArgs = buildSonarProperties(projectKey, config).map(
-    ([k, v]) => `-D${k}=${v}`,
-  );
-
-  const cmdArgs = [
-    'run',
-    '--rm',
-    '-v',
-    `${toDockerPath(repoPath)}:/usr/src`,
-    '-e',
-    `SONAR_HOST_URL=${dockerSonarUrl}`,
-    '-e',
-    `SONAR_TOKEN=${sonarToken}`,
-  ];
-
-  // host.docker.internal is automatic on macOS/Windows Docker Desktop
-  if (process.platform === 'linux') {
-    cmdArgs.push('--add-host', 'host.docker.internal:host-gateway');
-  }
-
-  cmdArgs.push('sonarsource/sonar-scanner-cli', ...scannerArgs);
 
   try {
-    const { stdout, stderr } = await execFileAsync('docker', cmdArgs);
+    const runner = isDotnet ? runScanDotnet : runScanCli;
+    const output = await runner(repoPath, projectKey, sonarUrl, sonarToken, config);
 
-    // Clean up properties file
-    if (config.generatePropertiesFile) {
-      const propsPath = path.join(repoPath, 'sonar-project.properties');
-      try { fs.unlinkSync(propsPath); } catch { /* ignore */ }
-    }
-
-    return `${stdout}${stderr}`;
+    if (!isDotnet && config.generatePropertiesFile) cleanupPropertiesFile(repoPath);
+    return output;
   } catch (e: any) {
-    // Clean up properties file on error too
-    if (config.generatePropertiesFile) {
-      const propsPath = path.join(repoPath, 'sonar-project.properties');
-      try { fs.unlinkSync(propsPath); } catch { /* ignore */ }
-    }
-    throw new Error(`Sonar scan failed: ${e.message}`);
+    if (!isDotnet && config.generatePropertiesFile) cleanupPropertiesFile(repoPath);
+    const output = [e.stdout, e.stderr, e.message].filter(Boolean).join('\n');
+    throw new Error(`Sonar scan failed: ${output}`);
   }
 }

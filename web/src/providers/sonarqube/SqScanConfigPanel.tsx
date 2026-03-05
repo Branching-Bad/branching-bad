@@ -2,17 +2,23 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { api } from "../../api";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "../../components/shared";
 
+type ScannerType = 'cli' | 'dotnet';
+
+const DOTNET_SDK_VERSIONS = ['6.0', '7.0', '8.0', '9.0', '10.0'];
+
 type ScanConfig = {
+  scannerType: ScannerType | null;
+  dotnetSdkVersion: string | null;
   exclusions: string[];
-  cpd_exclusions: string[];
+  cpdExclusions: string[];
   sources: string | null;
-  source_encoding: string | null;
-  python_version: string | null;
-  scm_disabled: boolean | null;
-  generate_properties_file: boolean;
-  extra_properties: Record<string, string>;
-  quality_gate_name: string | null;
-  quality_profile_key: string | null;
+  sourceEncoding: string | null;
+  pythonVersion: string | null;
+  scmDisabled: boolean | null;
+  generatePropertiesFile: boolean;
+  extraProperties: Record<string, string>;
+  qualityGateName: string | null;
+  qualityProfileKey: string | null;
   language: string | null;
 };
 
@@ -42,16 +48,18 @@ type Props = {
 };
 
 const emptyConfig: ScanConfig = {
+  scannerType: null,
+  dotnetSdkVersion: null,
   exclusions: [],
-  cpd_exclusions: [],
+  cpdExclusions: [],
   sources: null,
-  source_encoding: null,
-  python_version: null,
-  scm_disabled: null,
-  generate_properties_file: false,
-  extra_properties: {},
-  quality_gate_name: null,
-  quality_profile_key: null,
+  sourceEncoding: null,
+  pythonVersion: null,
+  scmDisabled: null,
+  generatePropertiesFile: false,
+  extraProperties: {},
+  qualityGateName: null,
+  qualityProfileKey: null,
   language: null,
 };
 
@@ -75,8 +83,9 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
       const res = await api<{ config: ScanConfig; defaultExclusions: string[] }>(
         `/api/sonarqube/scan-config?repoId=${repoId}&accountId=${accountId}&resourceId=${resourceId}`
       );
-      setConfig(res.config);
-      setDefaultExclusions(res.defaultExclusions);
+      // Merge with defaults to guard against missing fields
+      setConfig({ ...emptyConfig, ...res.config });
+      setDefaultExclusions(res.defaultExclusions ?? []);
       setLoaded(true);
     } catch { /* silent */ }
   }, [repoId, accountId, resourceId]);
@@ -94,10 +103,9 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
       qualityLoadedForAccount.current = accountId;
       setGates(gatesRes.gates);
       setProfiles(profilesRes.profiles);
-      // Set default gate only if no persisted selection
       const defGate = gatesRes.gates.find(g => g.isDefault);
       if (defGate) {
-        setConfig(prev => prev.quality_gate_name ? prev : { ...prev, quality_gate_name: defGate.name });
+        setConfig(prev => prev.qualityGateName ? prev : { ...prev, qualityGateName: defGate.name });
       }
     } catch { /* silent */ } finally {
       setQualityLoading(false);
@@ -142,7 +150,7 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
     if (!k) return;
     setConfig(prev => ({
       ...prev,
-      extra_properties: { ...prev.extra_properties, [k]: v },
+      extraProperties: { ...prev.extraProperties, [k]: v },
     }));
     setNewPropKey("");
     setNewPropValue("");
@@ -150,17 +158,16 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
 
   function removeProperty(key: string) {
     setConfig(prev => {
-      const copy = { ...prev.extra_properties };
+      const copy = { ...prev.extraProperties };
       delete copy[key];
-      return { ...prev, extra_properties: copy };
+      return { ...prev, extraProperties: copy };
     });
   }
 
   async function handleSave() {
     onError(""); onBusyChange(true);
     try {
-      // Find profile name + language for the selected profile
-      const selectedProfile = profiles.find(p => p.key === config.quality_profile_key);
+      const selectedProfile = profiles.find(p => p.key === config.qualityProfileKey);
       await api("/api/sonarqube/scan-config", {
         method: "POST",
         body: JSON.stringify({
@@ -168,7 +175,7 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
           accountId,
           resourceId,
           config,
-          qualityGateName: config.quality_gate_name || undefined,
+          qualityGateName: config.qualityGateName || undefined,
           qualityProfileName: selectedProfile?.name || undefined,
           qualityProfileLanguage: selectedProfile?.language || config.language || undefined,
         }),
@@ -238,12 +245,45 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
           <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
             <input
               type="checkbox"
-              checked={config.scm_disabled === true}
-              onChange={e => setConfig(prev => ({ ...prev, scm_disabled: e.target.checked || null }))}
+              checked={config.scmDisabled === true}
+              onChange={e => setConfig(prev => ({ ...prev, scmDisabled: e.target.checked || null }))}
               className="rounded border-border-strong"
             />
             Disable SCM Analysis
           </label>
+
+          {/* Scanner Type */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text-muted uppercase tracking-wide">Scanner Type</label>
+            <select
+              className={selectClass}
+              value={config.scannerType ?? ""}
+              onChange={e => setConfig(prev => ({
+                ...prev,
+                scannerType: (e.target.value || null) as ScannerType | null,
+              }))}
+            >
+              <option value="">Auto (CLI)</option>
+              <option value="cli">sonar-scanner-cli — JS/TS/Python/Java/Go/PHP</option>
+              <option value="dotnet">sonar-scanner-dotnet — C#/VB.NET</option>
+            </select>
+          </div>
+
+          {/* .NET SDK Version — only when dotnet scanner */}
+          {config.scannerType === 'dotnet' && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted uppercase tracking-wide">.NET SDK Version</label>
+              <select
+                className={selectClass}
+                value={config.dotnetSdkVersion ?? "8.0"}
+                onChange={e => setConfig(prev => ({ ...prev, dotnetSdkVersion: e.target.value }))}
+              >
+                {DOTNET_SDK_VERSIONS.map(v => (
+                  <option key={v} value={v}>.NET {v}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Language */}
           <div>
@@ -257,8 +297,7 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
                 onChange={e => setConfig(prev => ({
                   ...prev,
                   language: e.target.value || null,
-                  // Reset profile when language changes
-                  quality_profile_key: null,
+                  qualityProfileKey: null,
                 }))}
               >
                 <option value="">Auto-detect</option>
@@ -281,8 +320,8 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
               return (
                 <select
                   className={selectClass}
-                  value={config.quality_profile_key ?? ""}
-                  onChange={e => setConfig(prev => ({ ...prev, quality_profile_key: e.target.value || null }))}
+                  value={config.qualityProfileKey ?? ""}
+                  onChange={e => setConfig(prev => ({ ...prev, qualityProfileKey: e.target.value || null }))}
                 >
                   <option value="">Default</option>
                   {filtered.map(p => (
@@ -303,8 +342,8 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
             ) : (
               <select
                 className={selectClass}
-                value={config.quality_gate_name ?? ""}
-                onChange={e => setConfig(prev => ({ ...prev, quality_gate_name: e.target.value || null }))}
+                value={config.qualityGateName ?? ""}
+                onChange={e => setConfig(prev => ({ ...prev, qualityGateName: e.target.value || null }))}
               >
                 <option value="">Default</option>
                 {gates.map(g => (
@@ -320,8 +359,8 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
           <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
             <input
               type="checkbox"
-              checked={config.generate_properties_file}
-              onChange={e => setConfig(prev => ({ ...prev, generate_properties_file: e.target.checked }))}
+              checked={config.generatePropertiesFile}
+              onChange={e => setConfig(prev => ({ ...prev, generatePropertiesFile: e.target.checked }))}
               className="rounded border-border-strong"
             />
             Generate sonar-project.properties before scan
@@ -330,7 +369,7 @@ export function SqScanConfigPanel({ repoId, accountId, resourceId, busy, onBusyC
           {/* Custom properties */}
           <div>
             <label className="mb-1.5 block text-xs font-medium text-text-muted uppercase tracking-wide">Custom Properties</label>
-            {Object.entries(config.extra_properties).map(([k, v]) => (
+            {Object.entries(config.extraProperties).map(([k, v]) => (
               <div key={k} className="flex items-center gap-1.5 mb-1.5">
                 <span className={tagClass}>
                   <span className="font-mono">{k}={v}</span>

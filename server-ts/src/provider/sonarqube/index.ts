@@ -33,6 +33,7 @@ export {
 export {
   DEFAULT_EXCLUSIONS,
   defaultScanConfig,
+  normalizeScanConfig,
 } from './models.js';
 export type {
   ContainerStatus,

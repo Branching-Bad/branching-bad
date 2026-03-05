@@ -10,6 +10,7 @@ import {
   SonarClient,
   checkDockerAvailable,
   defaultScanConfig,
+  normalizeScanConfig,
   getSonarqubeContainerStatus,
   DEFAULT_EXCLUSIONS,
 } from './index.js';
@@ -94,7 +95,7 @@ export function sonarqubeRoutes(): Router {
     let scanConfig: ScanConfig = defaultScanConfig();
     if (configJson) {
       try {
-        scanConfig = JSON.parse(configJson);
+        scanConfig = normalizeScanConfig(JSON.parse(configJson));
       } catch {
         /* use default */
       }

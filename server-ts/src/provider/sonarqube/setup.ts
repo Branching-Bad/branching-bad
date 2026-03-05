@@ -34,6 +34,8 @@ export function startSetupJob(
       if (current) setupJobs.set(jobId, { ...current, ...update });
     };
 
+    try {
+
     // Step 1: Check Docker
     const dockerOk = await checkDockerAvailable();
     if (!dockerOk) {
@@ -119,6 +121,10 @@ export function startSetupJob(
       status: 'completed',
       result: { base_url: baseUrl, token },
     });
+
+    } catch (e: any) {
+      updateJob({ status: 'failed', error: `Unexpected error: ${e.message}` });
+    }
   });
 
   return jobId;

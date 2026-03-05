@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import type { AppState } from '../../state.js';
 import { ApiError } from '../../errors.js';
-import { defaultScanConfig } from './index.js';
+import { defaultScanConfig, normalizeScanConfig } from './index.js';
 import type { ScanConfig } from './index.js';
 import { startScanJob } from './scan.js';
 
@@ -51,7 +51,7 @@ export function sonarqubeScanRoutes(): Router {
       const bindingConfig = state.db.getBindingConfig(repoId, accountId, resourceId);
       if (bindingConfig) {
         try {
-          scanConfig = JSON.parse(bindingConfig);
+          scanConfig = normalizeScanConfig(JSON.parse(bindingConfig));
         } catch {
           /* use default */
         }

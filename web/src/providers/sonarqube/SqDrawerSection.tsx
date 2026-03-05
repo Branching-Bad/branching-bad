@@ -66,7 +66,7 @@ export function SqDrawerSection({ selectedRepoId, busy, onBusyChange, onTasksRef
     try {
       const [bindingsRes, bootstrapRes] = await Promise.all([
         api<{ bindings: Array<{ provider_account_id: string; provider_resource_id: string; provider_id: string }> }>(
-          `/api/providers/${PROVIDER_ID}/bindings?repoId=${selectedRepoId}`
+          `/api/providers/${PROVIDER_ID}/bindings?repo_id=${selectedRepoId}`
         ),
         api<{ providerAccounts?: Record<string, Array<{ id: string; config?: Record<string, unknown> }>> }>("/api/bootstrap"),
       ]);
@@ -97,11 +97,13 @@ export function SqDrawerSection({ selectedRepoId, busy, onBusyChange, onTasksRef
         return;
       }
 
-      // Get the resource to find the project key
-      const resources = await api<{ resources: Array<{ id: string; external_id: string }> }>(
-        `/api/providers/${PROVIDER_ID}/accounts/${binding.provider_account_id}/resources`
-      );
-      const resource = resources.resources.find(r => r.id === binding.provider_resource_id);
+      // Use the bindings endpoint which returns stored resources from DB
+      // (not the accounts/:id/resources endpoint which triggers a live API call)
+      const bindingsRes = await api<{
+        bindings: Array<{ provider_account_id: string; provider_resource_id: string }>;
+        resources: Array<{ id: string; external_id: string }>;
+      }>(`/api/providers/${PROVIDER_ID}/bindings?repo_id=${selectedRepoId}`);
+      const resource = bindingsRes.resources.find(r => r.id === binding.provider_resource_id);
       if (!resource) {
         onError("Bound resource not found.");
         setScanning(false); onBusyChange(false);
@@ -124,6 +126,16 @@ export function SqDrawerSection({ selectedRepoId, busy, onBusyChange, onTasksRef
     } finally {
       onBusyChange(false);
     }
+  }
+
+  async function clearItems() {
+    if (!selectedRepoId) return;
+    onError(""); onBusyChange(true);
+    try {
+      await api(`/api/providers/${PROVIDER_ID}/items/clear/${selectedRepoId}`, { method: "POST" });
+      setItems([]);
+      onInfo("All SonarQube issues cleared.");
+    } catch (e) { onError((e as Error).message); } finally { onBusyChange(false); }
   }
 
   async function syncOnline() {
@@ -160,6 +172,16 @@ export function SqDrawerSection({ selectedRepoId, busy, onBusyChange, onTasksRef
         >
           {scanning ? "Scanning..." : "Scan (Docker)"}
         </button>
+        {items.length > 0 && (
+          <button
+            onClick={() => void clearItems()}
+            disabled={busy || scanning}
+            className="flex items-center justify-center rounded-lg border border-red-700/40 bg-red-900/10 px-2.5 py-2 text-xs font-medium text-red-400 transition hover:bg-red-900/20 disabled:opacity-50"
+            title="Clear all issues"
+          >
+            Clear
+          </button>
+        )}
       </div>
       {dockerAvailable === false && (
         <p className="mb-2 -mt-1 text-[10px] text-yellow-400">Docker not available</p>

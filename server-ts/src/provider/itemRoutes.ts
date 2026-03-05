@@ -61,6 +61,10 @@ export function itemRoutes(): Router {
 
   router.get('/api/providers/:providerId/items/:id/event', async (req: Request, res: Response) => {
     const state = req.app.locals.state as AppState;
+    const providerId = req.params.providerId as string;
+    if (providerId !== 'sentry') {
+      throw ApiError.badRequest('Event detail is only supported for Sentry items.');
+    }
     const itemId = req.params.id as string;
 
     const item = state.db.getProviderItem(itemId);

@@ -33,12 +33,13 @@ export function applyBranchToBaseUnstaged(
     return { ok: false, conflict: { conflictedFiles } };
   }
 
-  execGit(repoPath, ['reset', 'HEAD']);
-
-  const status = execGit(repoPath, ['status', '--porcelain']);
-  const filesChanged = status.stdout
+  // Count only files brought in by the squash merge (staged), not the full working tree
+  const staged = execGit(repoPath, ['diff', '--cached', '--name-only']);
+  const filesChanged = staged.stdout
     .split('\n')
     .filter((l) => l.trim().length > 0).length;
+
+  execGit(repoPath, ['reset', 'HEAD']);
 
   return { ok: true, result: { filesChanged, baseBranch } };
 }
@@ -151,12 +152,13 @@ export function applyWorktreeToBaseUnstaged(
     return { ok: false, conflict: { conflictedFiles } };
   }
 
-  execGit(repoPath, ['reset', 'HEAD']);
-
-  const status = execGit(repoPath, ['status', '--porcelain']);
-  const filesChanged = status.stdout
+  // Count only files brought in by the squash merge (staged), not the full working tree
+  const staged = execGit(repoPath, ['diff', '--cached', '--name-only']);
+  const filesChanged = staged.stdout
     .split('\n')
     .filter((l) => l.trim().length > 0).length;
+
+  execGit(repoPath, ['reset', 'HEAD']);
 
   removeWorktree(repoPath, worktreePath);
   execGit(repoPath, ['branch', '-D', taskBranch]);

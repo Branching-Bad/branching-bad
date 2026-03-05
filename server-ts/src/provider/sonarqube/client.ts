@@ -21,6 +21,11 @@ export class SonarClient {
     if (status !== 'UP') {
       throw new Error(`SonarQube server status is '${status}', expected 'UP'`);
     }
+    // Verify token is valid by calling an authenticated endpoint
+    const authBody = await this.getJson('/api/authentication/validate', {});
+    if (!authBody.valid) {
+      throw new Error('Invalid SonarQube token. Authentication failed.');
+    }
     return `SonarQube (${this.baseUrl})`;
   }
 
@@ -117,9 +122,14 @@ export class SonarClient {
   }
 
   async setQualityGate(projectKey: string, gateName: string): Promise<void> {
+    // Find gate ID by name — the API requires gateName (SQ 10+) or gateId (older)
+    const gates = await this.listQualityGates();
+    const gate = gates.find((g) => g.name === gateName);
+    if (!gate) throw new Error(`Quality gate '${gateName}' not found`);
     await this.postForm('/api/qualitygates/select', {
       projectKey,
-      gateName,
+      gateName: gate.name,
+      gateId: gate.id,
     });
   }
 

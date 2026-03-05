@@ -1,7 +1,8 @@
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 
 import type { AppState } from './state.js';
+import { ApiError } from './errors.js';
 
 import { healthRoutes } from './routes/health.js';
 import { repoRoutes } from './routes/repos.js';
@@ -51,6 +52,15 @@ export function createApp(state: AppState): express.Express {
   app.use(cloudwatchRoutes());
   app.use(elasticsearchRoutes());
   app.use(sonarqubeRoutes());
+
+  // Global error handler — catches unhandled sync throws and async rejections
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof ApiError) {
+      err.toResponse(res);
+    } else {
+      ApiError.internal(err).toResponse(res);
+    }
+  });
 
   return app;
 }
