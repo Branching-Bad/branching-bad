@@ -27,6 +27,7 @@ export {
   gitPush,
   removeWorktree,
   savePlanArtifact,
+  saveTasklistArtifact,
 } from './git-write.js';
 
 export {

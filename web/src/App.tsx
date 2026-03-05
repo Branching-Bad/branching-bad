@@ -98,6 +98,36 @@ export default function App() {
   // ── Load memories when repo changes ──
   useEffect(() => { if (repo.selectedRepoId) void memoryState.loadMemories(repo.selectedRepoId); }, [repo.selectedRepoId, memoryState.loadMemories]);
 
+  // ── Tasklist progress polling ──
+  const [tasklistProgress, setTasklistProgress] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const runId = run.activeRun?.id;
+    const isRunning = run.activeRun?.status === "running";
+    if (!runId || !isRunning) return;
+    let cancelled = false;
+    const poll = () => {
+      if (cancelled) return;
+      api<{ tasks: Record<string, string> }>(`/api/runs/${encodeURIComponent(runId)}/tasklist-progress`)
+        .then((res) => { if (!cancelled) setTasklistProgress(res.tasks ?? {}); })
+        .catch(() => {});
+    };
+    poll();
+    const timer = setInterval(poll, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [run.activeRun?.id, run.activeRun?.status]);
+
+  // Clear progress when task changes
+  useEffect(() => { setTasklistProgress({}); }, [task.selectedTaskId]);
+
+  // Load final progress when run finishes
+  useEffect(() => {
+    const runId = run.activeRun?.id;
+    if (!runId || !run.runFinished) return;
+    api<{ tasks: Record<string, string> }>(`/api/runs/${encodeURIComponent(runId)}/tasklist-progress`)
+      .then((res) => setTasklistProgress(res.tasks ?? {}))
+      .catch(() => {});
+  }, [run.activeRun?.id, run.runFinished]);
+
   // ── Details panel effects ──
   useEffect(() => { if (!task.selectedTask) setDetailsOpen(false); }, [task.selectedTask]);
 
@@ -264,6 +294,7 @@ export default function App() {
           onToggleFeedbackIndex={plan.toggleFeedbackIndex}
           onReviewPlan={() => void plan.reviewPlan(plan.reviewPlanProfileId)}
           onUseAiFeedbackAsRevision={plan.useAiFeedbackAsRevision}
+          tasklistProgress={tasklistProgress}
         />
       )}
 

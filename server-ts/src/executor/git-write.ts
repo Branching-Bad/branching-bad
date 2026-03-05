@@ -61,6 +61,31 @@ export function savePlanArtifact(
   return filePath;
 }
 
+/**
+ * Save tasklist JSON with status fields to `.branching-bad/<issueKey>/tasklist.json`.
+ * Adds `"status": "pending"` to each task for progress tracking.
+ */
+export function saveTasklistArtifact(
+  repoPath: string,
+  issueKey: string,
+  tasklistJson: any,
+): string {
+  const artifactDir = path.join(repoPath, '.branching-bad', issueKey);
+  mkdirSync(artifactDir, { recursive: true });
+
+  // Deep clone and inject status fields
+  const enriched = JSON.parse(JSON.stringify(tasklistJson));
+  for (const phase of enriched.phases ?? []) {
+    for (const task of phase.tasks ?? []) {
+      if (!task.status) task.status = 'pending';
+    }
+  }
+
+  const filePath = path.join(artifactDir, 'tasklist.json');
+  writeFileSync(filePath, JSON.stringify(enriched, null, 2), 'utf-8');
+  return filePath;
+}
+
 // ---------------------------------------------------------------------------
 // Commit, push, PR
 // ---------------------------------------------------------------------------

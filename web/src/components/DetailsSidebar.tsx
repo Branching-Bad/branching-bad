@@ -49,6 +49,7 @@ export function DetailsSidebar({
   reviewPlanProfileId, onReviewPlanProfileChange,
   selectedFeedbackIndices, onToggleFeedbackIndex,
   onReviewPlan, onUseAiFeedbackAsRevision,
+  tasklistProgress,
 }: {
   selectedTask: Task;
   plans: Plan[]; selectedPlanId: string; setSelectedPlanId: (v: string) => void;
@@ -119,8 +120,10 @@ export function DetailsSidebar({
   onToggleFeedbackIndex?: (index: number) => void;
   onReviewPlan?: () => void;
   onUseAiFeedbackAsRevision?: () => void;
+  tasklistProgress?: Record<string, string>;
 }) {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? latestPlan;
+  tasklistProgress = tasklistProgress ?? {};
 
   return (
     <>
@@ -600,15 +603,19 @@ export function DetailsSidebar({
 
             {detailsTab === "tasklist" && (
               <>
-                {/* Tasklist Summary */}
+                {/* Tasklist Summary with Progress */}
                 {(() => {
                   try {
                     const tl = JSON.parse(manualTasklistJsonText);
                     const phases = tl?.phases as Array<{ id: string; name: string; tasks: Array<{ id: string; title: string; complexity?: string; suggested_model?: string }> }> | undefined;
                     if (!phases?.length) return null;
                     const items = phases.flatMap((p) => p.tasks ?? []);
-                    if (!items.some((t) => t.complexity || t.suggested_model)) return null;
                     const cxColors: Record<string, string> = { low: "bg-blue-500/15 text-blue-400", medium: "bg-orange-500/15 text-orange-400", high: "bg-red-500/15 text-red-400" };
+                    const statusIcon: Record<string, { icon: string; color: string }> = {
+                      completed: { icon: "\u2713", color: "text-brand bg-brand/15 border-brand/30" },
+                      in_progress: { icon: "\u25B6", color: "text-yellow-400 bg-yellow-500/15 border-yellow-500/30 animate-pulse" },
+                      pending: { icon: "\u2022", color: "text-text-muted bg-surface-300 border-border-default" },
+                    };
                     const modelOptions = ["haiku", "sonnet", "opus"];
                     const updateTaskModel = (taskId: string, newModel: string) => {
                       try {
@@ -623,28 +630,55 @@ export function DetailsSidebar({
                         setManualTasklistJsonText(JSON.stringify(parsed, null, 2));
                       } catch { /* ignore parse errors */ }
                     };
+                    const completedCount = items.filter((t) => tasklistProgress[t.id] === "completed").length;
+                    const hasProgress = Object.keys(tasklistProgress).length > 0;
                     return (
                       <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                        <h4 className="mb-2 text-xs font-medium text-text-secondary">Tasklist Overview</h4>
+                        <div className="mb-2 flex items-center justify-between">
+                          <h4 className="text-xs font-medium text-text-secondary">Tasklist Overview</h4>
+                          {hasProgress && (
+                            <span className="text-[11px] tabular-nums text-text-muted">
+                              {completedCount}/{items.length} done
+                            </span>
+                          )}
+                        </div>
+                        {/* Progress bar */}
+                        {hasProgress && items.length > 0 && (
+                          <div className="mb-2.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-300">
+                            <div
+                              className="h-full rounded-full bg-brand transition-all duration-500"
+                              style={{ width: `${(completedCount / items.length) * 100}%` }}
+                            />
+                          </div>
+                        )}
                         <div className="space-y-1.5">
-                          {items.map((t) => (
-                            <div key={t.id} className="flex items-center gap-2 text-[11px]">
-                              <span className="min-w-0 flex-1 truncate text-text-primary" title={t.title}>{t.id}: {t.title}</span>
-                              {t.complexity && (
-                                <span className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${cxColors[t.complexity] ?? "bg-surface-300 text-text-muted"}`}>
-                                  {t.complexity}
+                          {items.map((t) => {
+                            const s = tasklistProgress[t.id] ?? "pending";
+                            const si = statusIcon[s] ?? statusIcon.pending;
+                            return (
+                              <div key={t.id} className="flex items-center gap-2 text-[11px]">
+                                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[10px] font-bold ${si.color}`}>
+                                  {si.icon}
                                 </span>
-                              )}
-                              <select
-                                value={t.suggested_model ?? ""}
-                                onChange={(e) => updateTaskModel(t.id, e.target.value)}
-                                className="shrink-0 rounded border border-purple-500/30 bg-purple-500/10 px-1 py-0.5 text-[10px] text-purple-400 focus:border-purple-400 focus:outline-none"
-                              >
-                                <option value="">-</option>
-                                {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-                              </select>
-                            </div>
-                          ))}
+                                <span className={`min-w-0 flex-1 truncate ${s === "completed" ? "text-text-muted line-through" : "text-text-primary"}`} title={t.title}>
+                                  {t.title}
+                                </span>
+                                {t.complexity && (
+                                  <span className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${cxColors[t.complexity] ?? "bg-surface-300 text-text-muted"}`}>
+                                    {t.complexity}
+                                  </span>
+                                )}
+                                <select
+                                  value={t.suggested_model ?? ""}
+                                  onChange={(e) => updateTaskModel(t.id, e.target.value)}
+                                  className="shrink-0 rounded border border-purple-500/30 bg-purple-500/10 px-1 py-0.5 text-[10px] text-purple-400 focus:border-purple-400 focus:outline-none"
+                                >
+                                  <option value="">-</option>
+                                  {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );

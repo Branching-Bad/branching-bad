@@ -1,4 +1,6 @@
 import { Router, type Request, type Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 
 import { ApiError } from '../errors.js';
 import { gitStatusInfo } from '../executor/index.js';
@@ -145,6 +147,50 @@ export function runRoutes(): Router {
       const runId = req.params.run_id as string;
       const diff = state.db.getRunDiff(runId);
       return res.json({ diff: diff ?? '' });
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
+  // GET /api/runs/:run_id/tasklist-progress — read live tasklist status
+  router.get('/api/runs/:run_id/tasklist-progress', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const runId = String(req.params.run_id);
+      const run = state.db.getRunById(runId);
+      if (!run) return ApiError.notFound('Run not found').toResponse(res);
+
+      const task = state.db.getTaskById(run.task_id);
+      if (!task) return ApiError.notFound('Task not found').toResponse(res);
+
+      const repo = state.db.getRepoById(task.repo_id);
+      if (!repo) return ApiError.notFound('Repo not found').toResponse(res);
+
+      const workingDir = run.worktree_path ?? repo.path;
+      // Try to find the tasklist.json in .branching-bad/<issueKey>/
+      const issueKey = task.jira_issue_key || task.id;
+      const filePath = path.join(workingDir, '.branching-bad', issueKey, 'tasklist.json');
+
+      try {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        const tasks: Record<string, string> = {};
+        for (const phase of parsed.phases ?? []) {
+          for (const t of phase.tasks ?? []) {
+            if (t.id) tasks[t.id] = t.status ?? 'pending';
+          }
+        }
+        return res.json({ tasks });
+      } catch {
+        // File doesn't exist — check DB events as fallback
+        const events = state.db.listRunEvents(runId);
+        const progressEvent = [...events].reverse().find((e: any) => e.type === 'tasklist_progress');
+        if (progressEvent?.payload?.snapshot) {
+          return res.json({ tasks: (progressEvent.payload as any).snapshot });
+        }
+        return res.json({ tasks: {} });
+      }
     } catch (e) {
       if (e instanceof ApiError) return e.toResponse(res);
       return ApiError.internal(e).toResponse(res);
