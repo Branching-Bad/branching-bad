@@ -195,7 +195,21 @@ export function usePlanState({
     const labels: Record<string, string> = { approve: "Approving plan…", reject: "Rejecting plan…", revise: "Generating revised plan…" };
     setBusy(true); setError(""); setPlanActionInProgress(labels[action] ?? action);
     try {
-      const result = await api<{ status: string; job?: PlanJob }>(`/api/plans/${latestPlan.id}/action`, { method: "POST", body: JSON.stringify({ action, comment: planComment || undefined }) });
+      // Auto-include selected AI findings in revision comment if planComment is empty
+      let effectiveComment = planComment;
+      if (action === "revise" && !effectiveComment && aiFeedbackParsed && aiFeedbackParsed.comments.length > 0) {
+        const indices = selectedFeedbackIndices.size > 0
+          ? [...selectedFeedbackIndices].sort((a, b) => a - b)
+          : aiFeedbackParsed.comments.map((_, i) => i);
+        const lines = indices
+          .filter((i) => i < aiFeedbackParsed.comments.length)
+          .map((i, n) => {
+            const c = aiFeedbackParsed.comments[i];
+            return `${n + 1}. [${c.severity}/${c.category}] ${c.reason}\n   → ${c.suggestion}`;
+          });
+        effectiveComment = lines.join("\n\n");
+      }
+      const result = await api<{ status: string; job?: PlanJob }>(`/api/plans/${latestPlan.id}/action`, { method: "POST", body: JSON.stringify({ action, comment: effectiveComment || undefined }) });
 
       if (action === "revise" && result.job) {
         // Revision is now async via plan job — stream live output
@@ -227,7 +241,7 @@ export function usePlanState({
         setPlanComment("");
       }
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); setPlanActionInProgress(""); }
-  }, [latestPlan, planComment, selectedTaskId, selectedRepoId, setTasks, updateTaskPlanState, streamRef, setError, setInfo, setBusy]);
+  }, [latestPlan, planComment, aiFeedbackParsed, selectedFeedbackIndices, selectedTaskId, selectedRepoId, setTasks, updateTaskPlanState, streamRef, setError, setInfo, setBusy]);
 
   const validateTasklistDraft = useCallback((): { ok: true; tasklistJson: unknown } | { ok: false; error: string } => {
     let tasklistJson: unknown;
