@@ -53,7 +53,11 @@ export class Db {
     const appliedSet = new Set(applied);
 
     const migrationsDir = path.resolve(__dirname, '../../migrations');
-    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort((a, b) => {
+      const va = parseInt(a.match(/^V(\d+)/)?.[1] ?? '0', 10);
+      const vb = parseInt(b.match(/^V(\d+)/)?.[1] ?? '0', 10);
+      return va - vb;
+    });
 
     for (const file of files) {
       const match = file.match(/^V(\d+)__(.+)\.sql$/);

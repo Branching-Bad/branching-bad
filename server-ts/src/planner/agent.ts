@@ -33,7 +33,7 @@ export async function invokeAgentCli(
   const isClaude = binaryLower.includes('claude');
   const extraArgs = parts.slice(1);
 
-  const { args, codexLastMessagePath } = buildAgentArgs(
+  const { args, codexLastMessagePath, useStdinPrompt } = buildAgentArgs(
     binary,
     binaryLower,
     extraArgs,
@@ -45,10 +45,16 @@ export async function invokeAgentCli(
 
   const child = spawn(binary, args, {
     cwd: workingDir,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: [useStdinPrompt ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     env,
     shell: process.platform === 'win32',
   });
+
+  // Pipe long prompts via stdin on Windows to avoid command-line length limit
+  if (useStdinPrompt && child.stdin) {
+    child.stdin.write(prompt);
+    child.stdin.end();
+  }
 
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];

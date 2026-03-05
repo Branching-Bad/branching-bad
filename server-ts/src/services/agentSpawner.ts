@@ -73,12 +73,12 @@ async function spawnClaudeResumeSession(
   const { createInterface } = await import('readline');
 
   const [bin, ...extraArgs] = parts;
+  const useStdinPrompt = process.platform === 'win32';
   const args = [
     ...extraArgs,
     '--resume',
     sessionId,
-    '-p',
-    prompt,
+    ...(useStdinPrompt ? ['-p'] : ['-p', prompt]),
     '--permission-mode',
     'bypassPermissions',
     '--dangerously-skip-permissions',
@@ -100,6 +100,9 @@ async function spawnClaudeResumeSession(
     });
 
     if (child.stdin) {
+      if (useStdinPrompt) {
+        child.stdin.write(prompt);
+      }
       child.stdin.end();
     }
 

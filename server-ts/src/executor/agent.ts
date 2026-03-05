@@ -28,15 +28,27 @@ function buildAgentArgs(
   agentKind: string,
   extraArgs: string[],
   prompt: string,
-): { args: string[]; useStdinPipe: boolean } {
+): { args: string[]; useStdinPipe: boolean; stdinPrompt: string | null } {
   const args = [...extraArgs];
   let useStdinPipe = false;
+  let stdinPrompt: string | null = null;
   const codexExplicitExec = extraArgs[0] === 'exec';
+
+  // On Windows, shell: true is required for .cmd shim resolution but cmd.exe
+  // mangles special characters and imposes an ~8191-char command-line limit.
+  // Always pipe the prompt via stdin on Windows to avoid both issues.
+  const isWindows = process.platform === 'win32';
+  const useStdinForPrompt = isWindows;
 
   switch (agentKind) {
     case 'claude': {
       useStdinPipe = true;
-      args.push('-p', prompt);
+      if (useStdinForPrompt) {
+        stdinPrompt = prompt;
+        args.push('-p');
+      } else {
+        args.push('-p', prompt);
+      }
       args.push('--permission-mode', 'bypassPermissions');
       args.push('--dangerously-skip-permissions');
       args.push('--output-format', 'stream-json');
@@ -47,21 +59,37 @@ function buildAgentArgs(
       if (!codexExplicitExec) args.push('exec');
       args.push('--dangerously-bypass-approvals-and-sandbox');
       args.push('--json');
-      args.push(prompt);
+      // Codex reads prompt from stdin when not provided as positional arg
+      if (useStdinForPrompt) {
+        useStdinPipe = true;
+        stdinPrompt = prompt;
+      } else {
+        args.push(prompt);
+      }
       break;
     }
     case 'gemini': {
-      args.push('-p', prompt);
+      if (useStdinForPrompt) {
+        useStdinPipe = true;
+        stdinPrompt = prompt;
+      } else {
+        args.push('-p', prompt);
+      }
       args.push('--approval-mode', 'yolo');
       break;
     }
     default: {
-      args.push('-p', prompt);
+      if (useStdinForPrompt) {
+        useStdinPipe = true;
+        stdinPrompt = prompt;
+      } else {
+        args.push('-p', prompt);
+      }
       break;
     }
   }
 
-  return { args, useStdinPipe };
+  return { args, useStdinPipe, stdinPrompt };
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +143,7 @@ export function spawnAgent(
 
   const [bin, ...extraArgs] = parts;
   const agentKind = detectAgentKind(agentCommand);
-  const { args, useStdinPipe } = buildAgentArgs(agentKind, extraArgs, prompt);
+  const { args, useStdinPipe, stdinPrompt } = buildAgentArgs(agentKind, extraArgs, prompt);
 
   // Strip env vars that trigger "nested Claude Code session" errors
   const env = { ...process.env };
@@ -130,6 +158,9 @@ export function spawnAgent(
   });
 
   if (useStdinPipe && child.stdin) {
+    if (stdinPrompt) {
+      child.stdin.write(stdinPrompt);
+    }
     child.stdin.end();
   }
 
