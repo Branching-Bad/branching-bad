@@ -69,8 +69,10 @@ export async function generatePlanWithAgentStrict(
       progress,
       `Plan generation attempt ${attempt}/${GENERATION_MAX_ATTEMPTS} started.`,
     );
+    let rawOutputText = '';
     try {
       const output = await invokeAgentCli(agentCommand, prompt, repoPath, progress, resumeSessionId);
+      rawOutputText = output.text;
       const plan = parseStrictPlanResponse(output.text);
       emitProgressText(progress, `Plan generation attempt ${attempt} succeeded.`);
       return { plan_markdown: plan.markdown, session_id: output.session_id };
@@ -80,6 +82,9 @@ export async function generatePlanWithAgentStrict(
         progress,
         `Plan generation attempt ${attempt} failed: ${err instanceof Error ? err.message : String(err)}`,
       );
+      if (rawOutputText) {
+        emitProgressText(progress, `[debug] raw output (${rawOutputText.length} chars): ${rawOutputText.substring(0, 500)}`);
+      }
       errors.push(errText);
     }
   }

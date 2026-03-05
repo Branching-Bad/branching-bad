@@ -53,7 +53,11 @@ ${fileList}
 
 Constraints:
 - \`plan_markdown\` must be concise, actionable, and <= 64KB.
-- Include sections for: Goal, Summary, Scope, Risks, Test Strategy, Acceptance Criteria.
+- Include sections for: Goal, Summary, Scope, Risks, Verification, Acceptance Criteria.
+- IMPLEMENTATION-READY: The plan must contain enough detail (exact file paths, function names, logic descriptions) so the executing agent can start coding immediately without any discovery or exploration phase. You are doing the discovery now — the executor should not need to.
+- NO DISCOVERY TASKS: Do NOT include tasks like "explore codebase", "analyze architecture", "investigate existing patterns", "review current implementation". All discovery happens during this planning phase.
+- NO TEST WRITING: Do NOT include tasks for writing unit tests, integration tests, or test files unless the user explicitly requested tests in the task description. The executor will only verify the build compiles successfully.
+- Verification section should focus on build verification (\`npm run build\`, \`tsc --noEmit\`, etc.), not on writing new tests.
 - Never output keys outside the schema.
 `;
 }
@@ -114,13 +118,16 @@ Constraints:
 - At least one phase and one task required.
 - \`tasklist_json\` serialized size must stay <= 256KB.
 - \`complexity\` is REQUIRED for every task. Assess based on scope, number of files, and risk:
-  - "low": simple grep, lookup, single-file edit, config change
+  - "low": single-file edit, config change, simple addition
   - "medium": multi-file changes, moderate logic, standard patterns
   - "high": cross-cutting changes, complex logic, architectural decisions, risky refactors
 - \`suggested_model\` is REQUIRED for every task. Choose based on complexity:
-  - "haiku": low complexity tasks (exploration, simple edits, lookups)
+  - "haiku": low complexity tasks (simple edits, config changes)
   - "sonnet": medium complexity tasks (standard feature work, multi-file changes)
   - "opus": high complexity tasks (architecture, complex logic, critical code)
+- IMPLEMENTATION-ONLY TASKS: Every task must be a concrete implementation action (create file, modify function, add route, update config, etc.). Do NOT create tasks for discovery, exploration, analysis, investigation, or reviewing existing code. The plan already contains all the context needed.
+- NO TEST TASKS: Do NOT create tasks for writing tests unless the original task description explicitly requests tests. The final task should be build verification only.
+- Include a final task for build verification (e.g. "Run type check and build") — not for writing tests.
 
 CRITICAL: This is a READ-ONLY planning task. Do NOT modify, edit, create, or delete any files. Do NOT run any commands that change state. Do NOT take any action to implement the plan. Your ONLY job is to decompose the plan into a structured tasklist. Nothing else.
 `;
