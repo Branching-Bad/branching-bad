@@ -55,12 +55,12 @@ export function ChatPanel({
         <span>Follow-up Chat</span>
         {queuedCount > 0 && (
           <span className="flex items-center gap-1.5">
-            <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] text-amber-400">
+            <span className="rounded-full bg-status-warning-soft border border-status-warning/30 px-2 py-0.5 text-[11px] font-medium text-status-warning">
               {queuedCount} queued
             </span>
             <button
               onClick={() => void onCancelQueued()}
-              className="text-[10px] text-red-400 hover:text-red-300 transition"
+              className="text-[11px] text-status-danger hover:text-status-danger/80 transition"
             >
               Cancel
             </button>
@@ -80,18 +80,18 @@ export function ChatPanel({
               }`}
             >
               <div className="flex items-center gap-1.5 mb-1">
-                <span className="font-medium text-[10px] uppercase tracking-wide opacity-60">
+                <span className="font-medium text-[11px] uppercase tracking-wide text-text-muted">
                   {msg.role === "user" ? "You" : "Agent"}
                 </span>
-                <span className="text-[10px] opacity-40">{formatDate(msg.created_at)}</span>
+                <span className="text-[11px] text-text-muted/60">{formatDate(msg.created_at)}</span>
                 {msg.status === "queued" && (
-                  <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] text-amber-400">
-                    queued
+                  <span className="rounded-full bg-status-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-status-warning">
+                    ◇ queued
                   </span>
                 )}
                 {msg.status === "dispatched" && msg.result_run_id && (
-                  <span className="rounded-full bg-green-500/20 px-1.5 py-0.5 text-[9px] text-green-400">
-                    dispatched
+                  <span className="rounded-full bg-status-success-soft px-1.5 py-0.5 text-[10px] font-medium text-status-success">
+                    ✓ dispatched
                   </span>
                 )}
               </div>
@@ -122,14 +122,14 @@ export function ChatPanel({
         <button
           onClick={() => void handleSend()}
           disabled={!input.trim() || sending}
-          className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-medium text-white transition hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
         >
           Send
         </button>
       </div>
 
       {isRunning && (
-        <p className="text-[10px] text-amber-400/80">
+        <p className="text-[11px] text-status-warning/80">
           Agent is running — message will be queued and dispatched when the run finishes.
         </p>
       )}

@@ -392,7 +392,7 @@ export function PlanExpandModal({
                   <button
                     onClick={() => onPlanAction("reject")}
                     disabled={busy || !latestPlan}
-                    className="rounded-md border border-error-border bg-error-bg px-3 py-1.5 text-xs font-medium text-error-text transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-md border border-status-danger/30 bg-status-danger-soft px-3 py-1.5 text-xs font-medium text-status-danger transition hover:bg-status-danger/20 disabled:bg-surface-300/50 disabled:text-text-muted/40 disabled:cursor-not-allowed"
                   >
                     Reject
                   </button>

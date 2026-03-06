@@ -31,18 +31,18 @@ export function MergeOptionsBar({
           <button
             onClick={() => onApplyToMain({ autoCommit, commitMessage: commitMessage.trim() || undefined, strategy })}
             disabled={busy}
-            className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110"
+            className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:bg-surface-200"
           >
             Apply to Main
           </button>
         )}
         {onPushBranch && (
-          <button onClick={onPushBranch} disabled={busy} className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:brightness-110">
+          <button onClick={onPushBranch} disabled={busy} className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-secondary transition hover:bg-surface-200">
             Push
           </button>
         )}
         {onCreatePR && (
-          <button onClick={onCreatePR} disabled={busy} className="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400 transition hover:brightness-110">
+          <button onClick={onCreatePR} disabled={busy} className="rounded-md border border-status-info/40 bg-status-info-soft px-3 py-1 text-xs font-medium text-status-info transition hover:bg-status-info/20 disabled:bg-surface-300/50 disabled:border-border-default disabled:text-text-muted disabled:cursor-not-allowed">
             Create PR
           </button>
         )}
@@ -50,7 +50,7 @@ export function MergeOptionsBar({
           <button
             onClick={onMarkTaskDone}
             disabled={busy}
-            className="rounded-md border border-brand/40 bg-brand-tint px-3 py-1 text-xs font-medium text-brand transition hover:brightness-110"
+            className="rounded-md border border-status-success/40 bg-status-success-soft px-3 py-1 text-xs font-medium text-status-success transition hover:bg-status-success/20 disabled:bg-surface-300/50 disabled:border-border-default disabled:text-text-muted disabled:cursor-not-allowed"
           >
             Mark as Done
           </button>
@@ -59,9 +59,9 @@ export function MergeOptionsBar({
 
       {/* PR link */}
       {selectedTask.pr_url && (
-        <div className="mb-3 flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-1.5">
-          <IconGitBranch className="h-3.5 w-3.5 text-blue-400" />
-          <a href={selectedTask.pr_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline">
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-status-info/20 bg-status-info-soft px-3 py-1.5">
+          <IconGitBranch className="h-3.5 w-3.5 text-status-info" />
+          <a href={selectedTask.pr_url} target="_blank" rel="noopener noreferrer" className="text-xs text-status-info hover:underline">
             PR #{selectedTask.pr_number} — {selectedTask.pr_url}
           </a>
         </div>

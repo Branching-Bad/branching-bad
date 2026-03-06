@@ -64,7 +64,7 @@ export function ExtensionsDrawer({
             const meta = providerMetas.find((m) => m.id === id);
             const displayName = meta?.displayName ?? id;
             const count = providerItemCounts[id] ?? 0;
-            const isExpanded = expanded[id] ?? true;
+            const isExpanded = expanded[id] ?? false;
             const Section = ui.drawerSection;
 
             return (

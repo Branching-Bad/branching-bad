@@ -2,54 +2,97 @@
 @import "tailwindcss";
 
 @theme {
-  --color-surface-0: #121212;
-  --color-surface-100: #171717;
-  --color-surface-200: #1F1F1F;
-  --color-surface-300: #242424;
-  --color-border-default: #2E2E2E;
-  --color-border-strong: #363636;
-  --color-text-primary: #FAFAFA;
-  --color-text-secondary: #B4B4B4;
-  --color-text-muted: #898989;
+  /* ── Surface palette (Linear-inspired depth) ── */
+  --color-surface-0: #0c0c0c;
+  --color-surface-100: #141414;
+  --color-surface-200: #1c1c1c;
+  --color-surface-300: #232323;
+  --color-surface-400: #2a2a2a;
+
+  /* ── Border palette (subtle, layered) ── */
+  --color-border-default: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.1);
+  --color-border-focus: rgba(62, 207, 142, 0.5);
+
+  /* ── Text palette ── */
+  --color-text-primary: #ebebeb;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #636363;
+
+  /* ── Brand (accent) ── */
   --color-brand: #3ECF8E;
   --color-brand-dark: #006239;
-  --color-brand-glow: rgba(62, 207, 142, 0.3);
-  --color-brand-tint: #002918;
-  --color-error-bg: hsl(358, 76%, 10%);
-  --color-error-border: hsl(357, 89%, 16%);
-  --color-error-text: hsl(358, 100%, 81%);
-  --color-info-bg: hsl(215, 100%, 6%);
-  --color-info-border: hsl(223, 100%, 12%);
-  --color-info-text: hsl(216, 87%, 65%);
+  --color-brand-glow: rgba(62, 207, 142, 0.25);
+  --color-brand-tint: rgba(62, 207, 142, 0.08);
+
+  /* ── Semantic: status colors (colorblind-safe contrast) ── */
+  --color-status-success: #3ECF8E;
+  --color-status-success-soft: rgba(62, 207, 142, 0.1);
+  --color-status-warning: #E5A913;
+  --color-status-warning-soft: rgba(229, 169, 19, 0.1);
+  --color-status-danger: #EF6461;
+  --color-status-danger-soft: rgba(239, 100, 97, 0.1);
+  --color-status-info: #60A5FA;
+  --color-status-info-soft: rgba(96, 165, 250, 0.1);
+  --color-status-neutral: #636363;
+  --color-status-neutral-soft: rgba(99, 99, 99, 0.1);
+
+  /* ── Legacy compat ── */
+  --color-error-bg: rgba(239, 100, 97, 0.08);
+  --color-error-border: rgba(239, 100, 97, 0.25);
+  --color-error-text: #EF6461;
+  --color-info-bg: rgba(96, 165, 250, 0.08);
+  --color-info-border: rgba(96, 165, 250, 0.25);
+  --color-info-text: #60A5FA;
+
+  /* ── Radius scale ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-full: 999px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(62, 207, 142, 0.06);
 }
 
 @layer base {
   body {
-    font-family: "Plus Jakarta Sans", sans-serif;
-    background-color: #121212;
-    color: #FAFAFA;
+    font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    background-color: var(--color-surface-0);
+    color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   code, pre {
-    font-family: "Source Code Pro", monospace;
+    font-family: "Source Code Pro", "SF Mono", "Fira Code", monospace;
   }
 
   /* Custom scrollbar */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #363636;
-    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #4a4a4a;
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  /* Focus ring for accessibility */
+  :focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
   }
 }
 
@@ -63,8 +106,8 @@
   border-collapse: collapse;
 }
 .diff-viewer-content .diff-gutter {
-  background: #1a1a1a;
-  color: #666;
+  background: var(--color-surface-100);
+  color: var(--color-text-muted);
   cursor: pointer;
   user-select: none;
   padding: 0 8px;
@@ -72,39 +115,39 @@
   text-align: right;
 }
 .diff-viewer-content .diff-gutter:hover {
-  color: #3ECF8E;
-  background: #1f2f1f;
+  color: var(--color-brand);
+  background: rgba(62, 207, 142, 0.06);
 }
 .diff-viewer-content .diff-code {
-  background: #171717;
+  background: var(--color-surface-0);
   padding: 0 12px;
   white-space: pre-wrap;
   word-break: break-all;
 }
 .diff-viewer-content .diff-code-insert {
-  background: rgba(62, 207, 142, 0.08);
+  background: rgba(62, 207, 142, 0.06);
 }
 .diff-viewer-content .diff-code-delete {
-  background: rgba(248, 81, 73, 0.08);
+  background: rgba(239, 100, 97, 0.06);
 }
 .diff-viewer-content .diff-gutter-insert {
-  background: rgba(62, 207, 142, 0.15);
-  color: #3ECF8E;
+  background: rgba(62, 207, 142, 0.12);
+  color: var(--color-status-success);
 }
 .diff-viewer-content .diff-gutter-delete {
-  background: rgba(248, 81, 73, 0.15);
-  color: #f85149;
+  background: rgba(239, 100, 97, 0.12);
+  color: var(--color-status-danger);
 }
 .diff-viewer-content .diff-line-selected .diff-code,
 .diff-viewer-content .diff-line-selected .diff-gutter {
-  background: rgba(56, 139, 253, 0.15) !important;
+  background: rgba(96, 165, 250, 0.12) !important;
 }
 .diff-viewer-content .diff-batch-commented .diff-code {
-  border-left: 2px solid #3ECF8E;
+  border-left: 2px solid var(--color-brand);
 }
 .diff-viewer-content .diff-hunk-header {
-  background: #1a1a2e;
-  color: #8b949e;
+  background: var(--color-surface-200);
+  color: var(--color-text-muted);
   padding: 4px 12px;
 }
 .diff-viewer-content .diff-widget {

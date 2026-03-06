@@ -38,14 +38,14 @@ export function LogViewer({
 
   if (logs.length === 0) {
     return (
-      <div className={`rounded-lg border border-border-strong bg-[#0f0f0f] px-3 py-2 text-[11px] leading-relaxed ${className}`}>
+      <div className={`rounded-lg border border-border-strong bg-surface-0 px-3 py-2 text-[11px] leading-relaxed ${className}`}>
         <p className="py-8 text-center text-text-muted">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div className={`relative rounded-lg border border-border-strong bg-[#0f0f0f] text-[11px] leading-relaxed ${className}`}>
+    <div className={`relative rounded-lg border border-border-strong bg-surface-0 text-[11px] leading-relaxed ${className}`}>
       <Virtuoso
         ref={virtuosoRef}
         data={logs}
@@ -53,7 +53,7 @@ export function LogViewer({
         followOutput={atBottom ? "smooth" : false}
         atBottomStateChange={handleAtBottomChange}
         itemContent={(_index, entry) => (
-          <div className="px-3 py-[3px]">
+          <div className="px-3 py-1">
             <LogEntry type={entry.type} data={entry.data} />
           </div>
         )}

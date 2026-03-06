@@ -30,7 +30,7 @@ function RuleRow({
       />
       <button
         onClick={() => { onUpdate(rule.id, text); setEditing(false); }}
-        className="shrink-0 rounded-md bg-brand px-2.5 py-1 text-[10px] font-medium text-white hover:brightness-110"
+        className="shrink-0 rounded-md bg-brand px-2.5 py-1 text-[10px] font-medium text-white hover:bg-brand/80"
       >
         Save
       </button>
@@ -111,7 +111,7 @@ function RulesSection({
             }
           }}
           disabled={!newContent.trim()}
-          className="self-end shrink-0 rounded-md bg-brand px-3 py-1.5 text-[11px] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+          className="self-end shrink-0 rounded-md bg-brand px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
         >
           Add
         </button>
@@ -361,10 +361,10 @@ export function SettingsModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-[7%]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-[2%]">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative flex w-full max-h-[85vh] rounded-2xl border border-border-default bg-surface-100 shadow-2xl overflow-hidden">
+      <div className="relative flex w-full h-[85vh] rounded-2xl border border-border-default bg-surface-100 shadow-2xl overflow-hidden">
         {/* ── Left sidebar nav ── */}
         <div className="flex w-52 shrink-0 flex-col border-r border-border-default bg-surface-0">
           <div className="px-5 py-5">
@@ -454,7 +454,10 @@ export function SettingsModal({
                       <label className="mb-1.5 block text-xs text-text-muted">Folder</label>
                       <FolderPicker value={repoPath} onChange={setRepoPath} />
                     </div>
-                    <input className={inputClass} placeholder="Label (optional)" value={repoName} onChange={(e) => setRepoName(e.target.value)} />
+                    <div>
+                      <label className="mb-1.5 block text-xs text-text-muted">Label</label>
+                      <input className={inputClass} placeholder="e.g. My Project (optional)" value={repoName} onChange={(e) => setRepoName(e.target.value)} />
+                    </div>
                     <button type="submit" disabled={busy || !repoPath} className={btnPrimary}>Save Repository</button>
                   </form>
                 </div>
@@ -517,39 +520,48 @@ export function SettingsModal({
                       Merge duplicates, remove contradictions, and simplify your rules.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      className={`${selectClass} !py-1.5 !text-xs flex-1`}
-                      value={optimizeScope}
-                      onChange={(e) => { setOptimizeScope(e.target.value as "global" | "repo"); setOptimizePreview(null); }}
-                    >
-                      <option value="global">Global Rules</option>
-                      {selectedRepoId && (
-                        <option value="repo">Repo Rules{selectedRepo ? ` (${selectedRepo.name})` : ""}</option>
-                      )}
-                    </select>
-                    <select
-                      className={`${selectClass} !py-1.5 !text-xs flex-1`}
-                      value={optimizeProfileId}
-                      onChange={(e) => setOptimizeProfileId(e.target.value)}
-                    >
-                      <option value="">Select agent</option>
-                      {agentProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>{`${p.agent_name} \u00B7 ${p.model}`}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-[11px] text-text-muted">Scope</label>
+                      <select
+                        className={`${selectClass} !py-1.5 !text-xs`}
+                        value={optimizeScope}
+                        onChange={(e) => { setOptimizeScope(e.target.value as "global" | "repo"); setOptimizePreview(null); }}
+                      >
+                        <option value="global">Global Rules</option>
+                        {selectedRepoId && (
+                          <option value="repo">Repo Rules{selectedRepo ? ` (${selectedRepo.name})` : ""}</option>
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] text-text-muted">Agent</label>
+                      <select
+                        className={`${selectClass} !py-1.5 !text-xs`}
+                        value={optimizeProfileId}
+                        onChange={(e) => setOptimizeProfileId(e.target.value)}
+                      >
+                        <option value="">Select agent</option>
+                        {agentProfiles.map((p) => (
+                          <option key={p.id} value={p.id}>{`${p.agent_name} \u00B7 ${p.model}`}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <textarea
-                    value={optimizeInstruction}
-                    onChange={(e) => setOptimizeInstruction(e.target.value)}
-                    placeholder="Optional: specific instructions (e.g. 'group by category', 'keep security rules separate')..."
-                    rows={2}
-                    className="w-full rounded-md border border-border-strong bg-surface-300 px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-                  />
+                  <div>
+                    <label className="mb-1 block text-[11px] text-text-muted">Instructions</label>
+                    <textarea
+                      value={optimizeInstruction}
+                      onChange={(e) => setOptimizeInstruction(e.target.value)}
+                      placeholder="e.g. 'group by category', 'keep security rules separate' (optional)"
+                      rows={2}
+                      className="w-full rounded-md border border-border-strong bg-surface-300 px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                    />
+                  </div>
                   <button
                     onClick={() => void handleOptimize()}
                     disabled={optimizing || !optimizeProfileId || (optimizeScope === "global" ? (globalRules?.length ?? 0) === 0 : (repoRules?.length ?? 0) === 0)}
-                    className="w-full rounded-md bg-brand px-4 py-1.5 text-[11px] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                    className="w-full rounded-md bg-brand px-4 py-1.5 text-[11px] font-medium text-white transition hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
                   >
                     {optimizing ? "Optimizing..." : "Optimize"}
                   </button>
@@ -567,7 +579,7 @@ export function SettingsModal({
                       <div className="flex gap-2">
                         <button
                           onClick={() => void handleApplyOptimized()}
-                          className="rounded-md bg-brand px-4 py-1.5 text-[11px] font-medium text-white transition hover:brightness-110"
+                          className="rounded-md bg-brand px-4 py-1.5 text-[11px] font-medium text-white transition hover:bg-brand/80"
                         >
                           Apply
                         </button>
@@ -586,7 +598,9 @@ export function SettingsModal({
 
             {tab === "memory" && (
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-text-muted uppercase tracking-wider">Search Memories</label>
+                  <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={memorySearchQuery ?? ""}
@@ -594,16 +608,17 @@ export function SettingsModal({
                     onKeyDown={(e) => {
                       if (e.key === "Enter") void onLoadMemories?.(selectedRepoId, memorySearchQuery, 1);
                     }}
-                    placeholder="Search memories..."
+                    placeholder="Enter keywords..."
                     className={`${inputClass} flex-1 !py-1.5 !text-xs`}
                   />
                   <button
                     onClick={() => void onLoadMemories?.(selectedRepoId, memorySearchQuery, 1)}
                     disabled={memoryLoading || !selectedRepoId}
-                    className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-[11px] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                    className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
                   >
                     {memoryLoading ? "Loading..." : "Search"}
                   </button>
+                  </div>
                 </div>
 
                 {!selectedRepoId && (
@@ -649,14 +664,14 @@ export function SettingsModal({
                       <button
                         onClick={() => void onLoadMemories?.(selectedRepoId, memorySearchQuery, (memoryPage ?? 1) - 1)}
                         disabled={(memoryPage ?? 1) <= 1 || memoryLoading}
-                        className="rounded-md bg-surface-300 px-2.5 py-1 text-[10px] font-medium text-text-muted hover:text-text-primary disabled:opacity-40"
+                        className="rounded-md bg-surface-300 px-2.5 py-1 text-[10px] font-medium text-text-muted hover:text-text-primary disabled:text-text-muted/40 disabled:cursor-not-allowed"
                       >
                         Prev
                       </button>
                       <button
                         onClick={() => void onLoadMemories?.(selectedRepoId, memorySearchQuery, (memoryPage ?? 1) + 1)}
                         disabled={(memoryPage ?? 1) >= (memoryTotalPages ?? 1) || memoryLoading}
-                        className="rounded-md bg-surface-300 px-2.5 py-1 text-[10px] font-medium text-text-muted hover:text-text-primary disabled:opacity-40"
+                        className="rounded-md bg-surface-300 px-2.5 py-1 text-[10px] font-medium text-text-muted hover:text-text-primary disabled:text-text-muted/40 disabled:cursor-not-allowed"
                       >
                         Next
                       </button>

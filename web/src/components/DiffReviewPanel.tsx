@@ -210,7 +210,7 @@ export function DiffReviewPanel({
           <button
             onClick={onSubmitBatchReview}
             disabled={busy || (batchLineComments.length === 0 && !reviewText.trim())}
-            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
           >
             Review Gonder ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
           </button>
@@ -218,7 +218,7 @@ export function DiffReviewPanel({
           <button
             onClick={onSubmitReview}
             disabled={busy || !reviewText.trim()}
-            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
           >
             Submit Feedback
           </button>

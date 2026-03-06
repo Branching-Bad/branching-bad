@@ -44,14 +44,14 @@ export function InlineCommentEditor({
         <div className="flex gap-1">
           <button
             onClick={onCancel}
-            className="rounded-md border border-border-strong bg-surface-100 px-2 py-0.5 text-[11px] text-text-secondary hover:brightness-110"
+            className="rounded-md border border-border-strong bg-surface-100 px-2 py-0.5 text-[11px] text-text-secondary hover:bg-surface-200"
           >
             Cancel
           </button>
           <button
             onClick={onSave}
             disabled={!draftText.trim()}
-            className="rounded-md bg-brand px-2 py-0.5 text-[11px] font-medium text-white hover:brightness-110 disabled:opacity-50"
+            className="rounded-md bg-brand px-2 py-0.5 text-[11px] font-medium text-white hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
           >
             {reviewMode === "batch" ? "Add Comment" : "Send"}
           </button>
