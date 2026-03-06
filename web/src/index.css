@@ -110,3 +110,67 @@
 .diff-viewer-content .diff-widget {
   background: transparent;
 }
+
+/* Split (side-by-side) view overrides */
+.diff-viewer-content .diff-split .diff-gutter {
+  min-width: 36px;
+  padding: 0 6px;
+}
+.diff-viewer-content .diff-split .diff-code {
+  width: 50%;
+}
+
+/* Syntax highlighting token colors (refractor / Prism) */
+.diff-viewer-content .token.comment,
+.diff-viewer-content .token.prolog,
+.diff-viewer-content .token.doctype,
+.diff-viewer-content .token.cdata {
+  color: #6a737d;
+  font-style: italic;
+}
+.diff-viewer-content .token.punctuation {
+  color: #a0a0a0;
+}
+.diff-viewer-content .token.property,
+.diff-viewer-content .token.tag,
+.diff-viewer-content .token.boolean,
+.diff-viewer-content .token.number,
+.diff-viewer-content .token.constant,
+.diff-viewer-content .token.symbol {
+  color: #79c0ff;
+}
+.diff-viewer-content .token.selector,
+.diff-viewer-content .token.attr-name,
+.diff-viewer-content .token.string,
+.diff-viewer-content .token.char,
+.diff-viewer-content .token.builtin {
+  color: #a5d6ff;
+}
+.diff-viewer-content .token.operator,
+.diff-viewer-content .token.entity,
+.diff-viewer-content .token.url {
+  color: #d2a8ff;
+}
+.diff-viewer-content .token.atrule,
+.diff-viewer-content .token.attr-value,
+.diff-viewer-content .token.keyword {
+  color: #ff7b72;
+}
+.diff-viewer-content .token.function,
+.diff-viewer-content .token.class-name {
+  color: #d2a8ff;
+}
+.diff-viewer-content .token.regex,
+.diff-viewer-content .token.important,
+.diff-viewer-content .token.variable {
+  color: #ffa657;
+}
+.diff-viewer-content .token.inserted {
+  color: #7ee787;
+}
+.diff-viewer-content .token.deleted {
+  color: #ffa198;
+}
+.diff-viewer-content .token.namespace {
+  color: #8b949e;
+}

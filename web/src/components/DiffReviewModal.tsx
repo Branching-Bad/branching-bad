@@ -16,6 +16,8 @@ type Selection = {
   anchorKey: string;
 };
 
+type ViewType = "unified" | "split";
+
 /* ---------- file tree helpers ---------- */
 
 type TreeNode = {
@@ -114,6 +116,7 @@ function FileTree({
     return (
       <button
         onClick={() => onSelect(node.path)}
+        title={node.path}
         className={`flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-left text-[11px] transition ${
           isActive
             ? "bg-brand/15 text-brand font-medium"
@@ -140,6 +143,7 @@ function FileTree({
     <div>
       <button
         onClick={() => setExpanded(!expanded)}
+        title={node.path}
         className="flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-left text-[11px] text-text-muted hover:bg-surface-300 hover:text-text-secondary transition"
         style={{ paddingLeft: `${depth * 12 + 6}px` }}
       >
@@ -236,6 +240,11 @@ export function DiffReviewModal({
   const tree = useMemo(() => buildTree(files, batchLineComments), [files, batchLineComments]);
 
   const [activeFile, setActiveFile] = useState("");
+  const [viewType, setViewType] = useState<ViewType>("unified");
+
+  // Resizable file tree width
+  const [treeWidth, setTreeWidth] = useState(220);
+  const treeWidthRef = useRef(220);
 
   const rightPanelRef = useRef<HTMLDivElement>(null);
 
@@ -244,7 +253,6 @@ export function DiffReviewModal({
   const scrollToFile = useCallback((path: string) => {
     setActiveFile(path);
     setFocusedFile(path);
-    // Scroll after React renders the expanded file
     setTimeout(() => {
       if (!rightPanelRef.current) return;
       const el = rightPanelRef.current.querySelector(`[data-file-path="${CSS.escape(path)}"]`);
@@ -265,27 +273,59 @@ export function DiffReviewModal({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
+      <div className="relative flex flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-100 shadow-2xl"
+        style={{ width: "96vw", height: "92vh", maxWidth: "96vw", maxHeight: "92vh" }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border-default px-5 py-3">
+        <div className="flex items-center justify-between border-b border-border-default px-4 py-2.5">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-text-primary">
               Review — {selectedTask.jira_issue_key}{" "}
               <span className="font-normal text-text-secondary">{selectedTask.title}</span>
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary"
-          >
-            <IconX className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* View type toggle */}
+            <div className="flex items-center gap-0.5 rounded-lg border border-border-strong bg-surface-300 p-0.5">
+              <button
+                onClick={() => setViewType("unified")}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition ${
+                  viewType === "unified"
+                    ? "bg-surface-100 text-text-primary shadow-sm"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+                title="Unified view"
+              >
+                Unified
+              </button>
+              <button
+                onClick={() => setViewType("split")}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition ${
+                  viewType === "split"
+                    ? "bg-surface-100 text-text-primary shadow-sm"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+                title="Side-by-side view"
+              >
+                Split
+              </button>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary"
+            >
+              <IconX className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Body — two columns */}
+        {/* Body — two columns with resizable splitter */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left: file tree */}
-          <div className="w-56 shrink-0 overflow-y-auto border-r border-border-default bg-surface-200 p-2">
+          {/* Left: file tree (resizable) */}
+          <div
+            className="shrink-0 overflow-y-auto bg-surface-200 p-2"
+            style={{ width: `${treeWidth}px` }}
+          >
             <h3 className="mb-1.5 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Files</h3>
             {tree.children.length === 0 ? (
               <p className="px-1.5 py-3 text-[11px] text-text-muted">No files in diff</p>
@@ -296,8 +336,17 @@ export function DiffReviewModal({
             )}
           </div>
 
+          {/* Resize handle between tree and diff */}
+          <TreeResizeHandle
+            onResize={(newWidth) => {
+              setTreeWidth(newWidth);
+              treeWidthRef.current = newWidth;
+            }}
+            currentWidth={treeWidth}
+          />
+
           {/* Right: diff + review controls */}
-          <div ref={rightPanelRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div ref={rightPanelRef} className="flex-1 overflow-y-auto px-[2%] py-3 space-y-3">
             {/* Merge options, PR link, git status, action buttons */}
             <MergeOptionsBar
               selectedTask={selectedTask}
@@ -367,6 +416,7 @@ export function DiffReviewModal({
                 onCommentSave={onLineSave}
                 onCommentCancel={onLineCancel}
                 focusedFile={focusedFile}
+                viewType={viewType}
               />
             ) : null}
 
@@ -486,5 +536,51 @@ export function DiffReviewModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---------- Tree resize handle (tracks base width) ---------- */
+
+function TreeResizeHandle({
+  onResize,
+  currentWidth,
+}: {
+  onResize: (newWidth: number) => void;
+  currentWidth: number;
+}) {
+  const baseRef = useRef(currentWidth);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      baseRef.current = currentWidth;
+      const startX = e.clientX;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        const delta = ev.clientX - startX;
+        const newWidth = Math.max(120, Math.min(500, baseRef.current + delta));
+        onResize(newWidth);
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [onResize, currentWidth],
+  );
+
+  return (
+    <div
+      onMouseDown={handleMouseDown}
+      className="shrink-0 w-[3px] cursor-col-resize bg-border-default transition hover:bg-brand/40 hover:w-[4px]"
+    />
   );
 }

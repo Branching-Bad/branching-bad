@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from "react";
-import { Diff, Hunk, parseDiff, getChangeKey } from "react-diff-view";
+import { Diff, Hunk, parseDiff, getChangeKey, tokenize } from "react-diff-view";
 import type { ChangeData, FileData, HunkData } from "react-diff-view";
+import { refractor } from "refractor";
 import type { LineComment } from "../types";
 import { InlineCommentEditor } from "./InlineCommentEditor";
 import "react-diff-view/style/index.css";
@@ -13,6 +14,37 @@ type Selection = {
   anchorKey: string;
 };
 
+type ViewType = "unified" | "split";
+
+/* ---------- language detection ---------- */
+
+const EXT_TO_LANG: Record<string, string> = {
+  ts: "typescript", tsx: "tsx", js: "javascript", jsx: "jsx",
+  py: "python", rb: "ruby", rs: "rust", go: "go",
+  java: "java", kt: "kotlin", cs: "csharp", cpp: "cpp", c: "c", h: "c",
+  css: "css", scss: "css", less: "css",
+  html: "html", htm: "html", vue: "html", svelte: "html",
+  json: "json", yaml: "yaml", yml: "yaml", toml: "toml",
+  md: "markdown", mdx: "markdown",
+  sql: "sql", sh: "bash", bash: "bash", zsh: "bash",
+  xml: "xml", svg: "xml",
+  php: "php", swift: "swift", dart: "dart",
+  dockerfile: "docker", makefile: "makefile",
+  graphql: "graphql", gql: "graphql",
+  elixir: "elixir", ex: "elixir", exs: "elixir",
+};
+
+function detectLanguage(fp: string): string | undefined {
+  if (!refractor?.registered) return undefined;
+  const name = fp.split("/").pop()?.toLowerCase() ?? "";
+  if (name === "dockerfile") return "docker";
+  if (name === "makefile") return "makefile";
+  const ext = name.split(".").pop() ?? "";
+  const lang = EXT_TO_LANG[ext];
+  if (!lang) return undefined;
+  return refractor.registered(lang) ? lang : undefined;
+}
+
 export function DiffViewer({
   diffText,
   batchComments,
@@ -24,6 +56,7 @@ export function DiffViewer({
   onCommentSave,
   onCommentCancel,
   focusedFile,
+  viewType = "unified",
 }: {
   diffText: string;
   batchComments: LineComment[];
@@ -35,6 +68,7 @@ export function DiffViewer({
   onCommentSave: () => void;
   onCommentCancel: () => void;
   focusedFile?: string;
+  viewType?: ViewType;
 }) {
   const files = useMemo(() => {
     if (!diffText) return [];
@@ -87,6 +121,7 @@ export function DiffViewer({
           onDraftChange={onDraftChange}
           onCommentSave={onCommentSave}
           onCommentCancel={onCommentCancel}
+          viewType={viewType}
         />
       ))}
     </div>
@@ -121,6 +156,7 @@ function FileCard({
   onDraftChange,
   onCommentSave,
   onCommentCancel,
+  viewType,
 }: {
   file: FileData;
   expanded: boolean;
@@ -133,6 +169,7 @@ function FileCard({
   onDraftChange: (text: string) => void;
   onCommentSave: () => void;
   onCommentCancel: () => void;
+  viewType: ViewType;
 }) {
   const fp = filePath(file);
   const stats = fileStats(file);
@@ -140,6 +177,24 @@ function FileCard({
 
   // Count batch comments for this file
   const fileCommentCount = batchComments.filter((c) => c.filePath === fp).length;
+
+  // Syntax highlighting tokens
+  const tokens = useMemo(() => {
+    const lang = detectLanguage(fp);
+    if (!lang || file.hunks.length === 0) return undefined;
+    try {
+      const result = tokenize(file.hunks, {
+        highlight: true,
+        refractor,
+        language: lang,
+      });
+      // Validate structure before passing to Diff
+      if (!result || !Array.isArray(result.old) || !Array.isArray(result.new)) return undefined;
+      return result;
+    } catch {
+      return undefined;
+    }
+  }, [file.hunks, fp]);
 
   // Build widgets for inline comment editor
   const widgets: Record<string, ReactNode> = {};
@@ -236,14 +291,16 @@ function FileCard({
       {expanded && (
         <div className="diff-viewer-content overflow-x-auto border-t border-border-strong text-[11px]">
           <Diff
-            viewType="unified"
+            viewType={viewType}
             diffType={file.type as "add" | "delete" | "modify" | "rename" | "copy"}
             hunks={file.hunks}
             widgets={widgets}
             selectedChanges={selectedChanges}
+            tokens={tokens}
             gutterEvents={{ onClick: handleGutterClick }}
             generateLineClassName={({ changes }) => {
               for (const c of changes) {
+                if (!c) continue;
                 const ln = getLineNumber(c);
                 if (ln !== null && batchLineSet.has(ln)) {
                   return "diff-batch-commented";
@@ -260,7 +317,8 @@ function FileCard({
   );
 }
 
-function getLineNumber(change: ChangeData): number | null {
+function getLineNumber(change: ChangeData | null | undefined): number | null {
+  if (!change) return null;
   if (change.type === "normal") return change.newLineNumber;
   if (change.type === "insert") return change.lineNumber;
   if (change.type === "delete") return change.lineNumber;
