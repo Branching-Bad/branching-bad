@@ -31,7 +31,7 @@ export function DetailsSidebar({
   onClose,
   onEditTask, onDeleteTask,
   onCreatePlan, onPlanAction, onValidateTasklist, onSaveManualRevision,
-  onStartRun, onStopRun,
+  onStartRun, onResumeRun, onStopRun,
   onSubmitReview, onSubmitBatchReview, onApplyToMain, onPushBranch, onCreatePR, onMarkTaskDone,
   onLineSelect, onLineSave, onLineCancel,
   onRequeueAutostart, onClearTaskPipeline,
@@ -82,6 +82,7 @@ export function DetailsSidebar({
   onValidateTasklist: () => void;
   onSaveManualRevision: () => void;
   onStartRun: () => void;
+  onResumeRun: () => void;
   onStopRun: () => void;
   onSubmitReview: () => void;
   onSubmitBatchReview: () => void;
@@ -738,16 +739,32 @@ export function DetailsSidebar({
                         <p className="mt-1 text-[11px] text-text-muted">Agent/model not selected for repo</p>
                       )}
                     </div>
-                    <button
-                      onClick={onStartRun}
-                      disabled={busy || !selectedProfileId || (taskRequiresPlan && !approvedPlan)}
-                      className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <IconPlay className="h-3.5 w-3.5" />
-                        Start Run
-                      </span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={onStartRun}
+                        disabled={busy || !selectedProfileId || (taskRequiresPlan && !approvedPlan)}
+                        className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
+                        title="Start a fresh run"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <IconPlay className="h-3.5 w-3.5" />
+                          New
+                        </span>
+                      </button>
+                      {activeRun?.agent_session_id && (
+                        <button
+                          onClick={onResumeRun}
+                          disabled={busy || !selectedProfileId || activeRun.status === "running"}
+                          className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
+                          title="Resume previous agent session"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <IconPlay className="h-3.5 w-3.5" />
+                            Resume
+                          </span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {selectedTask.use_worktree && !activeRun && (
                     <div className="mt-2">

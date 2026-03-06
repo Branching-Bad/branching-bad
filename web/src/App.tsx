@@ -257,6 +257,7 @@ export default function App() {
           onValidateTasklist={plan.onValidateTasklist}
           onSaveManualRevision={() => void plan.saveManualRevision()}
           onStartRun={() => void run.startRun()}
+          onResumeRun={() => void run.resumeRun()}
           onStopRun={() => void run.stopRun()}
           onSubmitReview={() => void review.submitReview()}
           onSubmitBatchReview={() => void review.submitBatchReview()}

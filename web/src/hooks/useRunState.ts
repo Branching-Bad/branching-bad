@@ -110,6 +110,31 @@ export function useRunState({
     }
   }, [selectedTaskId, selectedTask, selectedProfileId, approvedPlan, selectedRepoId, customBranchName, updateTaskRunState, streamRef, refreshTasks, setError, setInfo, setBusy]);
 
+  const resumeRun = useCallback(async () => {
+    if (!selectedTaskId || !selectedTask) { setError("Select a task first."); return; }
+    if (!selectedProfileId) { setError("Select an agent/model for this repo first."); return; }
+    if (!activeRun?.agent_session_id) { setError("No previous session to resume."); return; }
+
+    const taskId = selectedTaskId;
+    const repoIdForRefresh = selectedRepoId;
+
+    setBusy(true); setError("");
+    updateTaskRunState(taskId, (prev) => ({ ...prev, runLogs: [], runFinished: false, runResult: null }));
+    try {
+      const payload = await api<{ run: { id: string; status: string; branch_name: string; agent?: RunAgent } }>("/api/runs/resume", {
+        method: "POST", body: JSON.stringify({ taskId, profileId: selectedProfileId }),
+      });
+      updateTaskRunState(taskId, (prev) => ({ ...prev, activeRun: payload.run }));
+      setBusy(false);
+      setInfo("Resuming previous session...");
+      await refreshTasks();
+      streamRef.current?.attachRunLogStream(payload.run.id, taskId, repoIdForRefresh);
+    } catch (e) {
+      await refreshTasks();
+      setError((e as Error).message); setBusy(false);
+    }
+  }, [selectedTaskId, selectedTask, selectedProfileId, activeRun, selectedRepoId, updateTaskRunState, streamRef, refreshTasks, setError, setInfo, setBusy]);
+
   const stopRun = useCallback(async () => {
     if (!selectedTaskId || !activeRun) return;
     try {
@@ -126,7 +151,7 @@ export function useRunState({
   return {
     taskRunStates, updateTaskRunState,
     activeRun, runLogs, runFinished, runResult,
-    startRun, stopRun,
+    startRun, resumeRun, stopRun,
     customBranchName, setCustomBranchName,
   };
 }

@@ -4,12 +4,12 @@ import path from 'path';
 
 import { ApiError } from '../errors.js';
 import { gitStatusInfo } from '../executor/index.js';
-import { startRunInternal } from '../services/runService.js';
+import { startRunInternal, resumeRunInternal } from '../services/runService.js';
 import type { AppState } from '../state.js';
 import { streamSSEBatch, streamStoreAsSSE, waitForStoreSSE } from './sse.js';
 
 export type { StartRunPayload, StartRunResult } from '../services/runService.js';
-export { startRunInternal } from '../services/runService.js';
+export { startRunInternal, resumeRunInternal } from '../services/runService.js';
 export { spawnResumeRun } from '../services/agentSpawner.js';
 
 export function runRoutes(): Router {
@@ -20,6 +20,18 @@ export function runRoutes(): Router {
     const state = req.app.locals.state as AppState;
     try {
       const result = await startRunInternal(state, req.body);
+      return res.status(202).json(result.response);
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
+  // POST /api/runs/resume - resume a previous run session
+  router.post('/api/runs/resume', async (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const result = await resumeRunInternal(state, req.body);
       return res.status(202).json(result.response);
     } catch (e) {
       if (e instanceof ApiError) return e.toResponse(res);

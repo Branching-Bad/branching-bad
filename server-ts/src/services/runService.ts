@@ -12,6 +12,7 @@ import {
   resolvePlanAndTask,
 } from './runHelpers.js';
 import { spawnRunAgent } from './runAgent.js';
+import { spawnResumeRun } from './agentSpawner.js';
 
 export type { StartRunPayload } from './runHelpers.js';
 
@@ -106,6 +107,68 @@ export async function startRunInternal(
     executionPlanVersion,
     executionTasklistJson,
   });
+
+  return { run: { id: run.id, status: run.status, branch_name: run.branch_name }, response };
+}
+
+export async function resumeRunInternal(
+  state: AppState,
+  payload: { taskId: string; profileId?: string },
+): Promise<StartRunResult> {
+  const taskId = payload.taskId?.trim();
+  if (!taskId) throw ApiError.badRequest('taskId is required.');
+
+  const task = state.db.getTaskById(taskId);
+  if (!task) throw ApiError.notFound('Task not found.');
+
+  const repo = state.db.getRepoById(task.repo_id);
+  if (!repo) throw ApiError.notFound('Repo not found.');
+
+  if (state.db.hasRunningRunForRepo(repo.id)) {
+    throw ApiError.conflict('Another run is already active for this repository.');
+  }
+
+  const prevRun = state.db.getLatestRunByTask(taskId);
+  if (!prevRun?.agent_session_id) {
+    throw ApiError.badRequest('No previous session to resume. Use Start Run instead.');
+  }
+
+  const profile = resolveAgentProfile(state, payload, task, repo.id);
+  const agentCommand = buildAgentCommand(profile);
+  const workingDir = prevRun.worktree_path ?? repo.path;
+  const baseSha = prevRun.base_sha ?? (getHeadSha(repo.path) ?? null);
+
+  const run = state.db.createRun(
+    task.id,
+    prevRun.plan_id,
+    'running',
+    prevRun.branch_name,
+    profile.id,
+    prevRun.worktree_path ?? undefined,
+    baseSha ?? undefined,
+  );
+
+  state.db.updateTaskStatus(task.id, 'IN_PROGRESS');
+
+  const response = {
+    run: {
+      id: run.id, status: run.status, branch_name: run.branch_name,
+      agent: { id: profile.id, provider: profile.provider, agent_name: profile.agent_name, model: profile.model },
+    },
+  };
+
+  const store = new MsgStoreClass();
+  state.processManager.registerStore(run.id, store);
+  persistStoreOutputs(store, state.db, task.id);
+
+  const prompt = 'Continue where you left off. Check the current state and complete the remaining work.';
+
+  spawnResumeRun(
+    agentCommand, prompt, workingDir, prevRun.agent_session_id,
+    run.id, task.id, repo.path, baseSha,
+    state.db, state.processManager, store,
+    { command: agentCommand, isResume: true, previousRunId: prevRun.id },
+  );
 
   return { run: { id: run.id, status: run.status, branch_name: run.branch_name }, response };
 }

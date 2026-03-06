@@ -41,6 +41,7 @@ export type ActiveRun = {
   status: string;
   branch_name: string;
   agent?: RunAgent;
+  agent_session_id?: string | null;
 };
 export type RunLogEntry = { type: string; data: string };
 export type RunResponse = {
