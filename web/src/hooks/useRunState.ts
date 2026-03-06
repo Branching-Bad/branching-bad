@@ -87,7 +87,8 @@ export function useRunState({
 
     const taskId = selectedTaskId;
     const repoIdForRefresh = selectedRepoId;
-    const body: Record<string, string> = { profileId: selectedProfileId };
+    const effectiveProfileId = selectedTask.agent_profile_id || selectedProfileId;
+    const body: Record<string, string> = { profileId: effectiveProfileId };
     if (approvedPlan) body.planId = approvedPlan.id;
     if (!approvedPlan) body.taskId = taskId;
     if (customBranchName.trim()) body.branchName = customBranchName.trim();
@@ -121,8 +122,9 @@ export function useRunState({
     setBusy(true); setError("");
     updateTaskRunState(taskId, (prev) => ({ ...prev, runLogs: [], runFinished: false, runResult: null }));
     try {
+      const effectiveProfileId = selectedTask.agent_profile_id || selectedProfileId;
       const payload = await api<{ run: { id: string; status: string; branch_name: string; agent?: RunAgent } }>("/api/runs/resume", {
-        method: "POST", body: JSON.stringify({ taskId, profileId: selectedProfileId }),
+        method: "POST", body: JSON.stringify({ taskId, profileId: effectiveProfileId }),
       });
       updateTaskRunState(taskId, (prev) => ({ ...prev, activeRun: payload.run }));
       setBusy(false);
