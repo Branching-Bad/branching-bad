@@ -48,8 +48,7 @@ export async function createMemoryFromRun(
   if (!diff || diff.length === 0) return;
 
   // Don't create duplicate memories for the same task
-  const existing = db.getMemoriesByTask(taskId);
-  if (existing.length > 0) return;
+  if (db.hasMemoriesForTask(taskId)) return;
 
   const filesChanged = extractChangedFiles(diff);
   if (filesChanged.length === 0) return;

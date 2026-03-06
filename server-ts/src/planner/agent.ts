@@ -31,6 +31,7 @@ export async function invokeAgentCli(
   const binary = parts[0];
   const binaryLower = binary.toLowerCase();
   const isClaude = binaryLower.includes('claude');
+  const isCodex = binaryLower.includes('codex');
   const extraArgs = parts.slice(1);
 
   const { args, codexLastMessagePath, useStdinPrompt } = buildAgentArgs(
@@ -60,7 +61,7 @@ export async function invokeAgentCli(
   const stderrLines: string[] = [];
   const state = { capturedSessionId: null as string | null, claudeFinalOutput: null as string | null };
 
-  attachStdoutHandler(child, stdoutLines, isClaude, progress, state);
+  attachStdoutHandler(child, stdoutLines, isClaude, isCodex, progress, state);
   attachStderrHandler(child, stderrLines, progress);
 
   const timeoutSecs = resolveAgentTimeoutSecs();
@@ -108,6 +109,7 @@ function attachStdoutHandler(
   child: ReturnType<typeof spawn>,
   stdoutLines: string[],
   isClaude: boolean,
+  isCodex: boolean,
   progress: ProgressCallback | null,
   state: { capturedSessionId: string | null; claudeFinalOutput: string | null },
 ): void {
@@ -124,8 +126,23 @@ function attachStdoutHandler(
       for (const msg of messages) {
         emitProgress(progress, msg);
       }
-    } else if (line.trim()) {
-      emitProgress(progress, { type: 'stdout', data: truncateProgressLine(line) });
+    } else if (isCodex) {
+      // Try to capture thread ID from Codex JSON events
+      try {
+        const v = JSON.parse(line);
+        const tid = v?.thread_id ?? v?.session_id;
+        if (typeof tid === 'string') state.capturedSessionId = tid;
+      } catch { /* not JSON */ }
+      if (line.trim()) {
+        emitProgress(progress, { type: 'stdout', data: truncateProgressLine(line) });
+      }
+    } else {
+      // Best-effort Gemini session ID capture
+      const sessionMatch = line.match(/session[_\s-]?id[:\s]+([a-f0-9-]{36})/i);
+      if (sessionMatch) state.capturedSessionId = sessionMatch[1];
+      if (line.trim()) {
+        emitProgress(progress, { type: 'stdout', data: truncateProgressLine(line) });
+      }
     }
   });
 }

@@ -1,12 +1,12 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { api } from "../api";
 import { useWebSocketStream } from "./useWebSocketStream";
-import type { Task, Plan, PlanJob, ActiveRun, RunEvent, TaskRunState, TaskPlanState, ReviewComment, ChatMessage, RunResponse } from "../types";
+import type { Plan, PlanJob, ActiveRun, RunEvent, TaskRunState, TaskPlanState, ReviewComment, ChatMessage, RunResponse } from "../types";
 
 export function useEventStream({
   updateTaskRunState,
   updateTaskPlanState,
-  setTasks,
+  refreshTasks,
   setPlans,
   setReviewComments,
   setChatMessages,
@@ -15,7 +15,7 @@ export function useEventStream({
 }: {
   updateTaskRunState: (taskId: string, updater: (current: TaskRunState) => TaskRunState) => void;
   updateTaskPlanState: (taskId: string, updater: (current: TaskPlanState) => TaskPlanState) => void;
-  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  refreshTasks: () => Promise<void>;
   setPlans: React.Dispatch<React.SetStateAction<Plan[]>>;
   setReviewComments: React.Dispatch<React.SetStateAction<ReviewComment[]>>;
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -103,11 +103,7 @@ export function useEventStream({
       activeRun: prev.activeRun ? { ...prev.activeRun, status: finishedStatus } : prev.activeRun,
     }));
 
-    if (repoId) {
-      api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoId)}`)
-        .then((payload) => setTasks(payload.tasks))
-        .catch(() => {});
-    }
+    void refreshTasks();
 
     api<{ run: RunResponse["run"]; events: RunEvent[] }>(`/api/runs/${runId}`)
       .then((payload) => {
@@ -153,7 +149,7 @@ export function useEventStream({
       .catch(() => {});
 
     setInfo("Run finished.");
-  }, [runWs.isFinished, runWs.logs, updateTaskRunState, setTasks, setReviewComments, setChatMessages, attachRunLogStream, setInfo]);
+  }, [runWs.isFinished, runWs.logs, updateTaskRunState, refreshTasks, setReviewComments, setChatMessages, attachRunLogStream, setInfo]);
 
   // --- Plan log forwarding ---
   useEffect(() => {
@@ -211,11 +207,7 @@ export function useEventStream({
         .catch(() => {});
     }
 
-    if (repoId) {
-      api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoId)}`)
-        .then((payload) => setTasks(payload.tasks))
-        .catch(() => {});
-    }
+    void refreshTasks();
 
     // After plan finishes, check if an auto-started run exists and attach its log stream
     if (finishedStatus === "done") {
@@ -251,7 +243,7 @@ export function useEventStream({
       };
       pollForRun(0);
     }
-  }, [planWs.isFinished, planWs.logs, selectedTaskIdRef, updateTaskPlanState, updateTaskRunState, attachRunLogStream, setPlans, setTasks]);
+  }, [planWs.isFinished, planWs.logs, selectedTaskIdRef, updateTaskPlanState, updateTaskRunState, attachRunLogStream, setPlans, refreshTasks]);
 
   return {
     attachRunLogStream,

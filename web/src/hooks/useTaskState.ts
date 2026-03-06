@@ -5,6 +5,21 @@ import { laneFromStatus } from "../components/shared";
 import type { StreamFunctions } from "./streamTypes";
 import { usePolling } from "./usePolling";
 
+/** Coalescing wrapper: concurrent calls share a single in-flight request. */
+function useCoalescingFetch<T>(
+  fetcher: () => Promise<T>,
+): () => Promise<T | undefined> {
+  const inflight = useRef<Promise<T | undefined> | null>(null);
+  return useCallback(() => {
+    if (inflight.current) return inflight.current;
+    const p = fetcher()
+      .then((v) => { inflight.current = null; return v; })
+      .catch(() => { inflight.current = null; return undefined; });
+    inflight.current = p;
+    return p;
+  }, [fetcher]);
+}
+
 export function useTaskState({
   selectedRepoId,
   streamRef,
@@ -43,13 +58,17 @@ export function useTaskState({
     }
   }, []);
 
-  const refreshTasks = useCallback(async () => {
-    if (!selectedRepoId) return;
-    try {
-      const payload = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-      setTasks(payload.tasks);
-    } catch { /* silent */ }
+  const fetchTasks = useCallback(() => {
+    if (!selectedRepoId) return Promise.resolve(undefined);
+    return api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
   }, [selectedRepoId]);
+
+  const coalescedFetch = useCoalescingFetch(fetchTasks);
+
+  const refreshTasks = useCallback(async () => {
+    const payload = await coalescedFetch();
+    if (payload) setTasks(payload.tasks);
+  }, [coalescedFetch]);
 
   // Load tasks + agent selection when repo changes
   useEffect(() => {
@@ -71,13 +90,7 @@ export function useTaskState({
   }, [selectedRepoId]);
 
   // Task polling
-  const pollTasks = useCallback(() => {
-    if (!selectedRepoId) return;
-    api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`)
-      .then((payload) => setTasks(payload.tasks))
-      .catch(() => {});
-  }, [selectedRepoId]);
-  usePolling(pollTasks, 4000, !!selectedRepoId);
+  usePolling(refreshTasks, 4000, !!selectedRepoId);
 
   const createManualTask = useCallback(async (fields: {
     title: string; description: string; priority: string;
@@ -98,11 +111,10 @@ export function useTaskState({
           agentProfileId: fields.agentProfileId || undefined,
         }),
       });
-      const payload = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-      setTasks(payload.tasks);
+      await refreshTasks();
       setInfo("Task created.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedRepoId, setBusy, setError, setInfo]);
+  }, [selectedRepoId, refreshTasks, setBusy, setError, setInfo]);
 
   const saveTaskEdits = useCallback(async (taskId: string, fields: {
     title: string; description: string; priority: string;
@@ -142,10 +154,9 @@ export function useTaskState({
     try {
       await api(`/api/tasks/${selectedTask.id}/autostart/requeue`, { method: "POST" });
       setInfo("Task requeued for autostart pipeline.");
-      const payload = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-      setTasks(payload.tasks);
+      await refreshTasks();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedTask, selectedRepoId, setBusy, setError, setInfo]);
+  }, [selectedTask, refreshTasks, setBusy, setError, setInfo]);
 
   const clearTaskPipeline = useCallback(async () => {
     if (!selectedTask) return;
@@ -159,10 +170,9 @@ export function useTaskState({
       if (result.autostart_jobs_failed > 0) parts.push(`${result.autostart_jobs_failed} autostart job`);
       if (result.task_reset) parts.push("task status reset");
       setInfo(parts.length > 0 ? `Pipeline temizlendi: ${parts.join(", ")}` : "Temizlenecek bir şey yoktu.");
-      const payload = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-      setTasks(payload.tasks);
+      await refreshTasks();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedTask, selectedRepoId, setBusy, setError, setInfo]);
+  }, [selectedTask, refreshTasks, setBusy, setError, setInfo]);
 
   const clearAllPipelines = useCallback(async () => {
     setBusy(true); setError("");
@@ -175,10 +185,9 @@ export function useTaskState({
       if (result.autostart_jobs_failed > 0) parts.push(`${result.autostart_jobs_failed} autostart job`);
       if (result.task_reset) parts.push("task status reset");
       setInfo(parts.length > 0 ? `Tüm pipeline temizlendi: ${parts.join(", ")}` : "Temizlenecek bir şey yoktu.");
-      const payload = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-      setTasks(payload.tasks);
+      await refreshTasks();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedRepoId, setBusy, setError, setInfo]);
+  }, [refreshTasks, setBusy, setError, setInfo]);
 
   return {
     tasks, setTasks, selectedTaskId, setSelectedTaskId,

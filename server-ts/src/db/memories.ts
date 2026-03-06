@@ -25,6 +25,7 @@ declare module './index.js' {
     searchMemories(repoId: string, query: string, limit?: number): TaskMemory[];
     listMemories(repoId: string, limit: number, offset: number): { memories: TaskMemory[]; total: number };
     getMemoriesByTask(taskId: string): TaskMemory[];
+    hasMemoriesForTask(taskId: string): boolean;
     deleteMemory(id: string): void;
   }
 }
@@ -98,6 +99,14 @@ Db.prototype.getMemoriesByTask = function (taskId: string): TaskMemory[] {
     'SELECT * FROM task_memories WHERE task_id = ? ORDER BY created_at DESC',
   ).all(taskId) as any[];
   return rows.map(rowToMemory);
+};
+
+Db.prototype.hasMemoriesForTask = function (taskId: string): boolean {
+  const db = this.connect();
+  const row = db.prepare(
+    'SELECT 1 FROM task_memories WHERE task_id = ? LIMIT 1',
+  ).get(taskId);
+  return !!row;
 };
 
 Db.prototype.deleteMemory = function (id: string): void {

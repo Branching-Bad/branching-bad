@@ -55,19 +55,19 @@ export default function App() {
   });
   const plan = usePlanState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
-    streamRef, detailsOpen, setError, setInfo, setBusy, setTasks: task.setTasks,
+    streamRef, detailsOpen, setError, setInfo, setBusy, refreshTasks: task.refreshTasks,
   });
   const run = useRunState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     selectedProfileId: repo.selectedProfileId, selectedTask: task.selectedTask,
     approvedPlan: plan.approvedPlan, streamRef,
-    setTasks: task.setTasks, setError, setInfo, setBusy,
+    refreshTasks: task.refreshTasks, setError, setInfo, setBusy,
   });
   const review = useReviewState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     tasks: task.tasks, taskRunStates: run.taskRunStates, detailsTab,
     streamRef, updateTaskRunState: run.updateTaskRunState,
-    setTasks: task.setTasks, setError, setInfo, setBusy, setDetailsTab,
+    refreshTasks: task.refreshTasks, setError, setInfo, setBusy, setDetailsTab,
   });
   const rulesState = useRulesState();
   const memoryState = useMemoryState();
@@ -80,7 +80,7 @@ export default function App() {
   const stream = useEventStream({
     updateTaskRunState: run.updateTaskRunState,
     updateTaskPlanState: plan.updateTaskPlanState,
-    setTasks: task.setTasks,
+    refreshTasks: task.refreshTasks,
     setPlans: plan.setPlans,
     setReviewComments: review.setReviewComments,
     setChatMessages: chat.setChatMessages,

@@ -171,14 +171,30 @@ function buildReviewPrompt(
 ): string {
   const parts: string[] = ['Review feedback on previous work:\n'];
 
+  // Group comments by file+diffHunk to avoid sending the same hunk multiple times
+  const grouped = new Map<
+    string,
+    { filePath: string; diffHunk: string; comments: { lineStart: number; lineEnd: number; text: string }[] }
+  >();
   for (const lc of lineComments) {
-    const lineRange =
-      lc.lineStart === lc.lineEnd
-        ? `Line ${lc.lineStart}`
-        : `Lines ${lc.lineStart}-${lc.lineEnd}`;
-    parts.push(`## File: ${lc.filePath} (${lineRange})`);
-    parts.push(`\`\`\`\n${lc.diffHunk}\n\`\`\``);
-    parts.push(`> ${lc.text}\n`);
+    const key = `${lc.filePath}::${lc.diffHunk}`;
+    if (!grouped.has(key)) {
+      grouped.set(key, { filePath: lc.filePath, diffHunk: lc.diffHunk, comments: [] });
+    }
+    grouped.get(key)!.comments.push({ lineStart: lc.lineStart, lineEnd: lc.lineEnd, text: lc.text });
+  }
+
+  for (const { filePath, diffHunk, comments } of grouped.values()) {
+    parts.push(`## File: ${filePath}`);
+    parts.push(`\`\`\`\n${diffHunk}\n\`\`\``);
+    for (const c of comments) {
+      const lineRange =
+        c.lineStart === c.lineEnd
+          ? `Line ${c.lineStart}`
+          : `Lines ${c.lineStart}-${c.lineEnd}`;
+      parts.push(`> (${lineRange}) ${c.text}`);
+    }
+    parts.push('');
   }
 
   if (commentText) {

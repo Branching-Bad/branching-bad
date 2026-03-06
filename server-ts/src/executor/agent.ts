@@ -28,6 +28,7 @@ function buildAgentArgs(
   agentKind: string,
   extraArgs: string[],
   prompt: string,
+  sessionId: string | null = null,
 ): { args: string[]; useStdinPipe: boolean; stdinPrompt: string | null } {
   const args = [...extraArgs];
   let useStdinPipe = false;
@@ -42,6 +43,9 @@ function buildAgentArgs(
 
   switch (agentKind) {
     case 'claude': {
+      if (sessionId) {
+        args.push('--resume', sessionId);
+      }
       useStdinPipe = true;
       if (useStdinForPrompt) {
         stdinPrompt = prompt;
@@ -56,7 +60,12 @@ function buildAgentArgs(
       break;
     }
     case 'codex': {
-      if (!codexExplicitExec) args.push('exec');
+      if (sessionId) {
+        if (!codexExplicitExec) args.push('exec');
+        args.push('resume', sessionId);
+      } else {
+        if (!codexExplicitExec) args.push('exec');
+      }
       args.push('--dangerously-bypass-approvals-and-sandbox');
       args.push('--json');
       // Codex reads prompt from stdin when not provided as positional arg
@@ -69,6 +78,9 @@ function buildAgentArgs(
       break;
     }
     case 'gemini': {
+      if (sessionId) {
+        args.push('--resume', sessionId);
+      }
       if (useStdinForPrompt) {
         useStdinPipe = true;
         stdinPrompt = prompt;
@@ -112,10 +124,19 @@ function setupStdoutReader(child: ChildProcess, agentKind: string, store: MsgSto
     } else if (agentKind === 'codex') {
       const parsed = parseCodexExecJson(line);
       if (parsed) {
-        store.push(parsed);
+        if (parsed.sessionId) store.setSessionId(parsed.sessionId);
+        if (parsed.msg.data) store.push(parsed.msg);
         return;
       }
       if (isStructuredCliEvent(line)) return;
+    }
+
+    // Best-effort session ID capture from Gemini or other agents
+    if (agentKind === 'gemini') {
+      const sessionMatch = line.match(/session[_\s-]?id[:\s]+([a-f0-9-]{36})/i);
+      if (sessionMatch) {
+        store.setSessionId(sessionMatch[1]);
+      }
     }
 
     store.push({ type: 'stdout', data: line });
@@ -135,6 +156,7 @@ export function spawnAgent(
   prompt: string,
   workingDir: string,
   store: MsgStore,
+  sessionId: string | null = null,
 ): ChildProcess {
   const parts = splitCommand(agentCommand);
   if (parts.length === 0) {
@@ -143,7 +165,7 @@ export function spawnAgent(
 
   const [bin, ...extraArgs] = parts;
   const agentKind = detectAgentKind(agentCommand);
-  const { args, useStdinPipe, stdinPrompt } = buildAgentArgs(agentKind, extraArgs, prompt);
+  const { args, useStdinPipe, stdinPrompt } = buildAgentArgs(agentKind, extraArgs, prompt, sessionId);
 
   // Strip env vars that trigger "nested Claude Code session" errors
   const env = { ...process.env };

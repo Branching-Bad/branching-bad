@@ -10,7 +10,7 @@ export function usePlanState({
   selectedRepoId,
   streamRef,
   detailsOpen,
-  setError, setInfo, setBusy, setTasks,
+  setError, setInfo, setBusy, refreshTasks,
 }: {
   selectedTaskId: string;
   selectedRepoId: string;
@@ -19,7 +19,7 @@ export function usePlanState({
   setError: (msg: string) => void;
   setInfo: (msg: string) => void;
   setBusy: (v: boolean) => void;
-  setTasks: React.Dispatch<React.SetStateAction<import("../types").Task[]>>;
+  refreshTasks: () => Promise<void>;
 }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -233,15 +233,12 @@ export function usePlanState({
           setManualPlanMarkdown(latest.plan_markdown ?? "");
           setManualTasklistJsonText(JSON.stringify(latest.tasklist ?? {}, null, 2));
         }
-        if (selectedRepoId) {
-          const t = await api<{ tasks: import("../types").Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-          setTasks(t.tasks);
-        }
+        await refreshTasks();
         setInfo(`Plan action: ${action}`);
         setPlanComment("");
       }
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); setPlanActionInProgress(""); }
-  }, [latestPlan, planComment, aiFeedbackParsed, selectedFeedbackIndices, selectedTaskId, selectedRepoId, setTasks, updateTaskPlanState, streamRef, setError, setInfo, setBusy]);
+  }, [latestPlan, planComment, aiFeedbackParsed, selectedFeedbackIndices, selectedTaskId, selectedRepoId, refreshTasks, updateTaskPlanState, streamRef, setError, setInfo, setBusy]);
 
   const validateTasklistDraft = useCallback((): { ok: true; tasklistJson: unknown } | { ok: false; error: string } => {
     let tasklistJson: unknown;

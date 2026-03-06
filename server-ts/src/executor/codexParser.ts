@@ -6,7 +6,9 @@ import { truncatePreview } from './shell.js';
 // ---------------------------------------------------------------------------
 
 /** Parse a single line from `codex exec --json`. */
-export function parseCodexExecJson(line: string): LogMsg | undefined {
+export function parseCodexExecJson(
+  line: string,
+): { msg: LogMsg; sessionId?: string } | undefined {
   let v: any;
   try {
     v = JSON.parse(line);
@@ -19,17 +21,27 @@ export function parseCodexExecJson(line: string): LogMsg | undefined {
     return undefined;
   }
 
+  // Capture thread/session ID from any event that carries it
+  const sessionId =
+    typeof v.thread_id === 'string' ? v.thread_id
+    : typeof v.session_id === 'string' ? v.session_id
+    : undefined;
+
   switch (msgType) {
-    case 'item.started':
-      return parseCodexItemStarted(v);
-    case 'item.completed':
-      return parseCodexItemCompleted(v);
+    case 'item.started': {
+      const msg = parseCodexItemStarted(v);
+      return msg ? { msg, sessionId } : undefined;
+    }
+    case 'item.completed': {
+      const msg = parseCodexItemCompleted(v);
+      return msg ? { msg, sessionId } : undefined;
+    }
     case 'error': {
       const message = v.error ?? v.message ?? '';
-      return message ? { type: 'stderr', data: message } : undefined;
+      return message ? { msg: { type: 'stderr', data: message }, sessionId } : undefined;
     }
     default:
-      return undefined;
+      return sessionId ? { msg: { type: 'agent_text', data: '' }, sessionId } : undefined;
   }
 }
 

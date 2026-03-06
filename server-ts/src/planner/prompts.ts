@@ -63,6 +63,31 @@ Constraints:
 ${memoriesSection}`;
 }
 
+export function buildPlanResumePrompt(revisionComment: string): string {
+  return `The user has reviewed your previous plan and requests changes.
+
+Revision request:
+${revisionComment}
+
+Update the plan accordingly and return the result.
+
+Return JSON only. No markdown fences. No extra text.
+
+Output schema (exact keys, no extra keys):
+{
+  "schema_version": 1,
+  "plan_markdown": "string"
+}
+
+Constraints:
+- \`plan_markdown\` must be concise, actionable, and <= 64KB.
+- Include sections for: Goal, Summary, Scope, Risks, Verification, Acceptance Criteria.
+- IMPLEMENTATION-READY: The plan must contain enough detail (exact file paths, function names, logic descriptions) so the executing agent can start coding immediately without any discovery or exploration phase.
+- NO DISCOVERY TASKS: Do NOT include tasks like "explore codebase", "analyze architecture", etc.
+- NO TEST WRITING: Do NOT include tasks for writing tests unless the user explicitly requested tests.
+- Never output keys outside the schema.`;
+}
+
 export function buildTasklistPrompt(
   task: TaskWithPayload,
   planMarkdown: string,

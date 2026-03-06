@@ -41,8 +41,11 @@ export function buildAgentArgs(
       '--verbose',
     );
   } else if (isCodex) {
-    if (!codexExplicitExec) {
-      args.push('exec');
+    if (resumeSessionId) {
+      if (!codexExplicitExec) args.push('exec');
+      args.push('resume', resumeSessionId);
+    } else {
+      if (!codexExplicitExec) args.push('exec');
     }
     args.push('--dangerously-bypass-approvals-and-sandbox');
     args.push('--json');
@@ -57,6 +60,9 @@ export function buildAgentArgs(
     }
     codexLastMessagePath = outputFile;
   } else if (binaryLower.includes('gemini')) {
+    if (resumeSessionId) {
+      args.push('--resume', resumeSessionId);
+    }
     if (useStdinPrompt) {
       args.push('--approval-mode', 'yolo');
     } else {

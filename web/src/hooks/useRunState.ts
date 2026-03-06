@@ -13,7 +13,7 @@ export function useRunState({
   selectedTask,
   approvedPlan,
   streamRef,
-  setTasks,
+  refreshTasks,
   setError, setInfo, setBusy,
 }: {
   selectedTaskId: string;
@@ -22,7 +22,7 @@ export function useRunState({
   selectedTask: Task | null;
   approvedPlan: { id: string } | null;
   streamRef: React.RefObject<StreamFunctions | null>;
-  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  refreshTasks: () => Promise<void>;
   setError: (msg: string) => void;
   setInfo: (msg: string) => void;
   setBusy: (v: boolean) => void;
@@ -102,17 +102,13 @@ export function useRunState({
       setCustomBranchName("");
       setBusy(false);
       setInfo("Run started. Streaming logs...");
-      if (repoIdForRefresh) {
-        try { const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoIdForRefresh)}`); setTasks(t.tasks); } catch { /* ignore */ }
-      }
+      await refreshTasks();
       streamRef.current?.attachRunLogStream(payload.run.id, taskId, repoIdForRefresh);
     } catch (e) {
-      if (repoIdForRefresh) {
-        try { const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(repoIdForRefresh)}`); setTasks(t.tasks); } catch { /* ignore */ }
-      }
+      await refreshTasks();
       setError((e as Error).message); setBusy(false);
     }
-  }, [selectedTaskId, selectedTask, selectedProfileId, approvedPlan, selectedRepoId, customBranchName, updateTaskRunState, streamRef, setTasks, setError, setInfo, setBusy]);
+  }, [selectedTaskId, selectedTask, selectedProfileId, approvedPlan, selectedRepoId, customBranchName, updateTaskRunState, streamRef, refreshTasks, setError, setInfo, setBusy]);
 
   const stopRun = useCallback(async () => {
     if (!selectedTaskId || !activeRun) return;
@@ -122,13 +118,10 @@ export function useRunState({
         ...prev, activeRun: prev.activeRun ? { ...prev.activeRun, status: "cancelled" } : prev.activeRun, runFinished: true,
       }));
       streamRef.current?.closeAllRunStreams();
-      if (selectedRepoId) {
-        const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-        setTasks(t.tasks);
-      }
+      await refreshTasks();
       setInfo("Run cancelled.");
     } catch (e) { setError((e as Error).message); }
-  }, [selectedTaskId, activeRun, selectedRepoId, updateTaskRunState, streamRef, setTasks, setError, setInfo]);
+  }, [selectedTaskId, activeRun, updateTaskRunState, streamRef, refreshTasks, setError, setInfo]);
 
   return {
     taskRunStates, updateTaskRunState,

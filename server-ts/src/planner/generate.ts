@@ -2,7 +2,7 @@ import type { TaskWithPayload } from '../models.js';
 import { invokeAgentCli } from './agent.js';
 import { emitProgressText } from './helpers.js';
 import { parseStrictPlanResponse, parseStrictTasklistResponse } from './parse.js';
-import { buildPlanPrompt, buildTasklistPrompt } from './prompts.js';
+import { buildPlanPrompt, buildPlanResumePrompt, buildTasklistPrompt } from './prompts.js';
 import type { GeneratedPlan, GeneratedPlanTasklist, ProgressCallback } from './types.js';
 import { GENERATION_MAX_ATTEMPTS } from './types.js';
 
@@ -64,7 +64,9 @@ export async function generatePlanWithAgentStrict(
   rulesSection: string,
   memoriesSection = '',
 ): Promise<GeneratedPlan> {
-  const prompt = buildPlanPrompt(repoPath, task, revisionComment, rulesSection, memoriesSection);
+  const prompt = resumeSessionId && revisionComment
+    ? buildPlanResumePrompt(revisionComment)
+    : buildPlanPrompt(repoPath, task, revisionComment, rulesSection, memoriesSection);
   const errors: string[] = [];
 
   for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt++) {

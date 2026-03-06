@@ -11,7 +11,7 @@ export function useReviewState({
   detailsTab,
   streamRef,
   updateTaskRunState,
-  setTasks,
+  refreshTasks,
   setError, setInfo, setBusy,
   setDetailsTab,
 }: {
@@ -22,7 +22,7 @@ export function useReviewState({
   detailsTab: string;
   streamRef: React.RefObject<StreamFunctions | null>;
   updateTaskRunState: (taskId: string, updater: (current: TaskRunState) => TaskRunState) => void;
-  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  refreshTasks: () => Promise<void>;
   setError: (msg: string) => void;
   setInfo: (msg: string) => void;
   setBusy: (v: boolean) => void;
@@ -244,22 +244,19 @@ export function useReviewState({
     try {
       const data = await api<{ prUrl: string; prNumber: number }>(`/api/tasks/${encodeURIComponent(selectedTaskId)}/create-pr`, { method: "POST" });
       setInfo(`PR created: ${data.prUrl}`);
-      if (selectedRepoId) {
-        const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`);
-        setTasks(t.tasks);
-      }
+      await refreshTasks();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedTaskId, selectedRepoId, setTasks, setError, setInfo, setBusy]);
+  }, [selectedTaskId, refreshTasks, setError, setInfo, setBusy]);
 
   const markTaskDone = useCallback(async () => {
     if (!selectedTaskId) return;
     setError(""); setBusy(true);
     try {
       await api(`/api/tasks/${encodeURIComponent(selectedTaskId)}/complete`, { method: "POST" });
-      if (selectedRepoId) { const t = await api<{ tasks: Task[] }>(`/api/tasks?repoId=${encodeURIComponent(selectedRepoId)}`); setTasks(t.tasks); }
+      await refreshTasks();
       setInfo("Task marked as done.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedTaskId, selectedRepoId, setTasks, setError, setInfo, setBusy]);
+  }, [selectedTaskId, refreshTasks, setError, setInfo, setBusy]);
 
   return {
     reviewComments, setReviewComments,
