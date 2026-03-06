@@ -4,10 +4,10 @@
   "description": "Local-first, approval-first coding agent with pluggable provider system",
   "scripts": {
     "dev": "npx concurrently \"npm run dev:server\" \"npm run dev:web\"",
-    "dev:server": "npx cross-env NODE_OPTIONS=--experimental-sqlite tsx server-ts/src/main.ts",
+    "dev:server": "cd server-ts && node --experimental-sqlite --import tsx src/main.ts",
     "dev:web": "npm --prefix web run dev",
     "build": "npm --prefix web run build && cd server-ts && npx tsc --noEmit",
-    "start": "node --experimental-sqlite --import tsx server-ts/src/main.ts",
+    "start": "cd server-ts && node --experimental-sqlite --import tsx src/main.ts",
     "typecheck": "npm --prefix web run build",
     "check:server": "cd server-ts && npx tsc --noEmit"
   },
@@ -16,7 +16,6 @@
   "license": "UNLICENSED",
   "private": true,
   "devDependencies": {
-    "concurrently": "^9.2.1",
-    "cross-env": "^10.1.0"
+    "concurrently": "^9.2.1"
   }
 }
