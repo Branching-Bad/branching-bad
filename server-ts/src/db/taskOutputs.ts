@@ -52,7 +52,7 @@ Db.prototype.listTaskOutputs = function (
     .prepare(
       'SELECT id, task_id, type, data, created_at FROM task_outputs WHERE task_id = ? ORDER BY id ASC LIMIT ?',
     )
-    .all(taskId, limit ?? MAX_OUTPUTS_PER_TASK) as TaskOutput[];
+    .all(taskId, limit ?? MAX_OUTPUTS_PER_TASK) as any[];
 };
 
 Db.prototype.clearTaskOutputs = function (taskId?: string): void {

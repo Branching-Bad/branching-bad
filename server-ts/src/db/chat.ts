@@ -97,7 +97,7 @@ Db.prototype.deleteQueuedChatMessages = function (taskId: string): number {
     const result = db
       .prepare("DELETE FROM chat_messages WHERE task_id = ? AND status = 'queued'")
       .run(taskId);
-    return result.changes;
+    return Number(result.changes);
 };
 
 Db.prototype.countQueuedChatMessages = function (taskId: string): number {

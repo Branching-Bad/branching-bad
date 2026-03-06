@@ -64,7 +64,7 @@ Db.prototype.updateBindingConfig = function (
         'UPDATE provider_bindings SET config_json = ?, updated_at = ? WHERE repo_id = ? AND provider_account_id = ? AND provider_resource_id = ?',
       )
       .run(configJson, nowIso(), repoId, accountId, resourceId);
-    if (result.changes === 0) {
+    if (Number(result.changes) === 0) {
       throw new Error('Binding not found');
     }
 };
@@ -79,7 +79,7 @@ Db.prototype.getBindingConfig = function (
       .prepare(
         'SELECT config_json FROM provider_bindings WHERE repo_id = ? AND provider_account_id = ? AND provider_resource_id = ?',
       )
-      .get(repoId, accountId, resourceId) as { config_json: string } | undefined;
+      .get(repoId, accountId, resourceId) as any | undefined;
     return row?.config_json ?? null;
 };
 
@@ -87,7 +87,7 @@ Db.prototype.listProviderBindings = function (providerId: string): ProviderBindi
   const db = this.connect();
     return db
       .prepare(`SELECT ${BINDING_COLS} FROM provider_bindings WHERE provider_id = ?`)
-      .all(providerId) as ProviderBindingRow[];
+      .all(providerId) as any[];
 };
 
 Db.prototype.listProviderBindingsForRepo = function (
@@ -96,5 +96,5 @@ Db.prototype.listProviderBindingsForRepo = function (
   const db = this.connect();
     return db
       .prepare(`SELECT ${BINDING_COLS} FROM provider_bindings WHERE repo_id = ?`)
-      .all(repoId) as ProviderBindingRow[];
+      .all(repoId) as any[];
 };

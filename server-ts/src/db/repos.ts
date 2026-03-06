@@ -59,7 +59,7 @@ Db.prototype.listRepos = function (): Repo[] {
       .prepare(
         'SELECT id, name, path, default_branch, created_at, updated_at FROM repos ORDER BY updated_at DESC',
       )
-      .all() as Repo[];
+      .all() as any[];
 };
 
 Db.prototype.getRepoById = function (id: string): Repo | null {
@@ -68,7 +68,7 @@ Db.prototype.getRepoById = function (id: string): Repo | null {
       .prepare(
         'SELECT id, name, path, default_branch, created_at, updated_at FROM repos WHERE id = ?',
       )
-      .get(id) as Repo | undefined;
+      .get(id) as any | undefined;
     return row ?? null;
 };
 

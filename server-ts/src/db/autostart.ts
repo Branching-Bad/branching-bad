@@ -70,7 +70,7 @@ Db.prototype.claimNextPendingAutostartJob = function (): AutostartJob | null {
   const db = this.connect();
     let result: AutostartJob | null = null;
 
-    const tx = db.transaction(() => {
+    const tx = this.transaction(() => {
       const nextRow = db
         .prepare(
           "SELECT id FROM autostart_jobs WHERE state = 'pending' ORDER BY created_at ASC LIMIT 1",

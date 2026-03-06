@@ -22,7 +22,7 @@ Db.prototype.upsertAgentProfiles = function (profiles: DiscoveredProfile[]): num
 
   const db = this.connect();
     const ts = nowIso();
-    const tx = db.transaction(() => {
+    const tx = this.transaction(() => {
       for (const profile of profiles) {
         const existing = db
           .prepare(

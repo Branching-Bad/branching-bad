@@ -30,7 +30,7 @@ Db.prototype.upsertTasks = function (
     const transitions: UpsertTaskTransition[] = [];
     const ts = nowIso();
 
-    const tx = db.transaction(() => {
+    const tx = this.transaction(() => {
       for (const task of tasks) {
         const existing = db
           .prepare(

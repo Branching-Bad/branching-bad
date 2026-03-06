@@ -40,7 +40,7 @@ Db.prototype.upsertProviderItems = function (
     const ts = nowIso();
     let upserted = 0;
 
-    const tx = db.transaction(() => {
+    const tx = this.transaction(() => {
       for (const [externalId, title, dataJson] of items) {
         const existing = db
           .prepare(
@@ -124,14 +124,14 @@ Db.prototype.listProviderItems = function (
              ORDER BY pi.updated_at DESC`;
     }
 
-    return db.prepare(sql).all(...params) as ProviderItemRow[];
+    return db.prepare(sql).all(...params) as any[];
 };
 
 Db.prototype.getProviderItem = function (id: string): ProviderItemRow | null {
   const db = this.connect();
     const row = db
       .prepare(`SELECT ${ITEM_COLS} FROM provider_items WHERE id = ?`)
-      .get(id) as ProviderItemRow | undefined;
+      .get(id) as any | undefined;
     return row ?? null;
 };
 
@@ -160,7 +160,7 @@ Db.prototype.deleteProviderItemsForRepo = function (
            )`,
       )
       .run(providerId, repoId, providerId);
-    return result.changes;
+    return Number(result.changes);
 };
 
 Db.prototype.linkProviderItemToTask = function (itemId: string, taskId: string): void {
@@ -193,6 +193,6 @@ Db.prototype.getLastProviderSyncTime = function (
       .prepare(
         'SELECT MAX(updated_at) as max_updated FROM provider_items WHERE provider_account_id = ? AND provider_resource_id = ?',
       )
-      .get(providerAccountId, providerResourceId) as { max_updated: string | null } | undefined;
+      .get(providerAccountId, providerResourceId) as any | undefined;
     return row?.max_updated ?? null;
 };

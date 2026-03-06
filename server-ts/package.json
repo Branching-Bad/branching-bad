@@ -4,12 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "node --import tsx src/main.ts",
+    "dev": "tsx watch --node-options='--experimental-sqlite' src/main.ts",
+    "start": "node --experimental-sqlite --import tsx src/main.ts",
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "tree-kill": "^1.2.2",
@@ -18,7 +17,6 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/node": "^22.13.0",

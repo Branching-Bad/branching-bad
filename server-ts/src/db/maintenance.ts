@@ -48,7 +48,7 @@ Db.prototype.failStaleRunningRuns = function (): number {
       "UPDATE tasks SET status = 'FAILED', updated_at = ? WHERE status = 'IN_PROGRESS' AND id IN (SELECT task_id FROM runs WHERE status = 'failed' AND completed_at = ?)",
     ).run(ts, ts);
 
-    return result.changes;
+    return Number(result.changes);
 };
 
 Db.prototype.failStaleRunningPlanJobs = function (): number {
@@ -59,7 +59,7 @@ Db.prototype.failStaleRunningPlanJobs = function (): number {
         "UPDATE plan_jobs SET status = 'failed', error = COALESCE(error, 'Recovered stale running plan job on startup'), completed_at = ?, updated_at = ? WHERE status = 'running'",
       )
       .run(ts, ts);
-    return result.changes;
+    return Number(result.changes);
 };
 
 Db.prototype.resetStalePlanGeneratingTasks = function (): number {
@@ -74,7 +74,7 @@ Db.prototype.resetStalePlanGeneratingTasks = function (): number {
          )`,
       )
       .run(ts);
-    return result.changes;
+    return Number(result.changes);
 };
 
 Db.prototype.requeueStaleRunningAutostartJobs = function (): number {
@@ -85,7 +85,7 @@ Db.prototype.requeueStaleRunningAutostartJobs = function (): number {
         "UPDATE autostart_jobs SET state = 'pending', error = COALESCE(error, 'Recovered stale running job on startup'), updated_at = ?, started_at = NULL WHERE state = 'running'",
       )
       .run(ts);
-    return result.changes;
+    return Number(result.changes);
 };
 
 Db.prototype.clearTaskPipeline = function (taskId: string): ClearPipelineResult {
@@ -111,9 +111,9 @@ Db.prototype.clearTaskPipeline = function (taskId: string): ClearPipelineResult 
       .run(ts, ts, taskId);
 
     return {
-      plan_jobs_failed: planJobsResult.changes,
-      autostart_jobs_failed: autostartResult.changes,
-      task_reset: taskResult.changes > 0,
+      plan_jobs_failed: Number(planJobsResult.changes),
+      autostart_jobs_failed: Number(autostartResult.changes),
+      task_reset: Number(taskResult.changes) > 0,
     };
 };
 
@@ -140,8 +140,8 @@ Db.prototype.clearAllPipelines = function (): ClearPipelineResult {
       .run(ts, ts);
 
     return {
-      plan_jobs_failed: planJobsResult.changes,
-      autostart_jobs_failed: autostartResult.changes,
-      task_reset: taskResult.changes > 0,
+      plan_jobs_failed: Number(planJobsResult.changes),
+      autostart_jobs_failed: Number(autostartResult.changes),
+      task_reset: Number(taskResult.changes) > 0,
     };
 };

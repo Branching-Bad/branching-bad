@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,17 +12,16 @@ export function nowIso(): string {
 
 export class Db {
   path: string;
-  private _db: Database.Database | null = null;
+  private _db: DatabaseSync | null = null;
 
   constructor(dbPath: string) {
     this.path = dbPath;
   }
 
-  connect(): Database.Database {
+  connect(): DatabaseSync {
     if (!this._db) {
-      const db = new Database(this.path);
-      db.pragma('foreign_keys = ON');
-      db.pragma('journal_mode = WAL');
+      const db = new DatabaseSync(this.path, { enableForeignKeyConstraints: true });
+      db.exec('PRAGMA journal_mode = WAL');
       this._db = db;
     }
     return this._db;
@@ -35,8 +34,24 @@ export class Db {
     }
   }
 
+  transaction<T>(fn: () => T): () => T {
+    const db = this.connect();
+    return () => {
+      db.exec('BEGIN');
+      try {
+        const result = fn();
+        db.exec('COMMIT');
+        return result;
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+    };
+  }
+
   init(): void {
     const db = this.connect();
+    console.log(`[db] SQLite database opened: ${this.path} (node:sqlite)`);
     db.exec(`
       CREATE TABLE IF NOT EXISTS refinery_schema_history (
         version INTEGER PRIMARY KEY,

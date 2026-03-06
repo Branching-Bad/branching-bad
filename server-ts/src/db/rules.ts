@@ -92,7 +92,7 @@ Db.prototype.updateRule = function (id: string, content: string): void {
     const result = db
       .prepare('UPDATE repository_rules SET content = ?, updated_at = ? WHERE id = ?')
       .run(content, nowIso(), id);
-    if (result.changes === 0) {
+    if (Number(result.changes) === 0) {
       throw new Error('Rule not found');
     }
 };
@@ -118,7 +118,7 @@ Db.prototype.bulkReplaceRules = function (
     const ts = nowIso();
     const result: RepositoryRule[] = [];
 
-    const tx = db.transaction(() => {
+    const tx = this.transaction(() => {
       if (repoId) {
         db.prepare('DELETE FROM repository_rules WHERE repo_id = ?').run(repoId);
       } else {

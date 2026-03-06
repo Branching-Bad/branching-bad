@@ -78,7 +78,7 @@ Db.prototype.getTaskById = function (taskId: string): TaskWithPayload | null {
 Db.prototype.deleteTask = function (taskId: string): void {
   const db = this.connect();
     const result = db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
-    if (result.changes === 0) {
+    if (Number(result.changes) === 0) {
       throw new Error(`Task not found: ${taskId}`);
     }
 };

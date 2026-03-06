@@ -44,7 +44,7 @@ Db.prototype.upsertProviderAccount = function (
       .prepare(
         'SELECT id FROM provider_accounts WHERE provider_id = ? AND display_name = ?',
       )
-      .get(providerId, displayName) as { id: string } | undefined;
+      .get(providerId, displayName) as any | undefined;
 
     if (existing) {
       db.prepare(
@@ -52,7 +52,7 @@ Db.prototype.upsertProviderAccount = function (
       ).run(configJson, ts, existing.id);
       return db
         .prepare(`SELECT ${ACCOUNT_COLS} FROM provider_accounts WHERE id = ?`)
-        .get(existing.id) as ProviderAccountRow;
+        .get(existing.id) as any;
     }
 
     const id = uuidv4();
@@ -61,7 +61,7 @@ Db.prototype.upsertProviderAccount = function (
     ).run(id, providerId, configJson, displayName, ts, ts);
     return db
       .prepare(`SELECT ${ACCOUNT_COLS} FROM provider_accounts WHERE id = ?`)
-      .get(id) as ProviderAccountRow;
+      .get(id) as any;
 };
 
 Db.prototype.listProviderAccounts = function (providerId: string): ProviderAccountRow[] {
@@ -70,14 +70,14 @@ Db.prototype.listProviderAccounts = function (providerId: string): ProviderAccou
       .prepare(
         `SELECT ${ACCOUNT_COLS} FROM provider_accounts WHERE provider_id = ? ORDER BY updated_at DESC`,
       )
-      .all(providerId) as ProviderAccountRow[];
+      .all(providerId) as any[];
 };
 
 Db.prototype.getProviderAccount = function (id: string): ProviderAccountRow | null {
   const db = this.connect();
     const row = db
       .prepare(`SELECT ${ACCOUNT_COLS} FROM provider_accounts WHERE id = ?`)
-      .get(id) as ProviderAccountRow | undefined;
+      .get(id) as any | undefined;
     return row ?? null;
 };
 
@@ -93,13 +93,13 @@ Db.prototype.upsertProviderResources = function (
 ): void {
   const db = this.connect();
     const ts = nowIso();
-    const tx = db.transaction(() => {
+    const tx = this.transaction(() => {
       for (const [externalId, name, extraJson] of resources) {
         const existing = db
           .prepare(
             'SELECT id FROM provider_resources WHERE provider_account_id = ? AND external_id = ?',
           )
-          .get(providerAccountId, externalId) as { id: string } | undefined;
+          .get(providerAccountId, externalId) as any | undefined;
 
         const id = existing?.id ?? uuidv4();
 
@@ -122,13 +122,13 @@ Db.prototype.listProviderResources = function (
       .prepare(
         `SELECT ${RESOURCE_COLS} FROM provider_resources WHERE provider_account_id = ? ORDER BY name ASC`,
       )
-      .all(providerAccountId) as ProviderResourceRow[];
+      .all(providerAccountId) as any[];
 };
 
 Db.prototype.getProviderResource = function (id: string): ProviderResourceRow | null {
   const db = this.connect();
     const row = db
       .prepare(`SELECT ${RESOURCE_COLS} FROM provider_resources WHERE id = ?`)
-      .get(id) as ProviderResourceRow | undefined;
+      .get(id) as any | undefined;
     return row ?? null;
 };
