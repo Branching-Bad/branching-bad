@@ -1,1 +1,0 @@
-ALTER TABLE runs ADD COLUMN base_sha TEXT;
