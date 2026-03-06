@@ -80,7 +80,7 @@ export class ProcessManager {
   spawnExitMonitor(
     runId: string,
     taskId: string,
-    _repoPath: string,
+    repoPath: string,
     workingDir: string,
     baseSha: string | null,
     db: Db,
@@ -95,7 +95,7 @@ export class ProcessManager {
         this.monitors.delete(runId);
       }
 
-      handleChildExit(runId, taskId, workingDir, baseSha, exitCode, db, this.stores.get(runId));
+      handleChildExit(runId, taskId, repoPath, workingDir, baseSha, exitCode, db, this.stores.get(runId), this);
       this.children.delete(runId);
     };
 
@@ -109,9 +109,17 @@ export class ProcessManager {
         clearInterval(timer);
         this.monitors.delete(runId);
         handleChildExit(
-          runId, taskId, workingDir, baseSha, child.exitCode, db, this.stores.get(runId),
+          runId, taskId, repoPath, workingDir, baseSha, child.exitCode, db, this.stores.get(runId), this,
         );
         this.children.delete(runId);
+        return;
+      }
+
+      // Stall detection: kill if no output for 5 minutes
+      const store = this.stores.get(runId);
+      if (store && Date.now() - store.getLastActivityAt() > 5 * 60 * 1000) {
+        store.pushStderr('[stall] Agent stalled — no output for 5 minutes, terminating.');
+        this.killProcess(runId);
       }
     }, POLL_INTERVAL_MS);
 

@@ -3,6 +3,7 @@ export interface Repo {
   name: string;
   path: string;
   default_branch: string;
+  build_command: string | null;
   created_at: string;
   updated_at: string;
 }

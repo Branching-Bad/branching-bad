@@ -9,6 +9,7 @@ declare module './index.js' {
     listRepos(): Repo[];
     getRepoById(id: string): Repo | null;
     updateRepoDefaultBranch(id: string, defaultBranch: string): void;
+    updateRepoBuildCommand(id: string, buildCommand: string | null): void;
   }
 }
 
@@ -16,7 +17,7 @@ Db.prototype.createOrUpdateRepo = function (repoPath: string, name?: string): Re
   const db = this.connect();
     const existing = db
       .prepare(
-        'SELECT id, name, path, default_branch, created_at, updated_at FROM repos WHERE path = ?',
+        'SELECT id, name, path, default_branch, build_command, created_at, updated_at FROM repos WHERE path = ?',
       )
       .get(repoPath) as any | undefined;
     const ts = nowIso();
@@ -30,7 +31,7 @@ Db.prototype.createOrUpdateRepo = function (repoPath: string, name?: string): Re
       );
       const updated = db
         .prepare(
-          'SELECT id, name, path, default_branch, created_at, updated_at FROM repos WHERE id = ?',
+          'SELECT id, name, path, default_branch, build_command, created_at, updated_at FROM repos WHERE id = ?',
         )
         .get(existing.id) as any;
       return updated as Repo;
@@ -44,6 +45,7 @@ Db.prototype.createOrUpdateRepo = function (repoPath: string, name?: string): Re
       name: derivedName,
       path: repoPath,
       default_branch: 'main',
+      build_command: null,
       created_at: ts,
       updated_at: ts,
     };
@@ -57,7 +59,7 @@ Db.prototype.listRepos = function (): Repo[] {
   const db = this.connect();
     return db
       .prepare(
-        'SELECT id, name, path, default_branch, created_at, updated_at FROM repos ORDER BY updated_at DESC',
+        'SELECT id, name, path, default_branch, build_command, created_at, updated_at FROM repos ORDER BY updated_at DESC',
       )
       .all() as any[];
 };
@@ -66,7 +68,7 @@ Db.prototype.getRepoById = function (id: string): Repo | null {
   const db = this.connect();
     const row = db
       .prepare(
-        'SELECT id, name, path, default_branch, created_at, updated_at FROM repos WHERE id = ?',
+        'SELECT id, name, path, default_branch, build_command, created_at, updated_at FROM repos WHERE id = ?',
       )
       .get(id) as any | undefined;
     return row ?? null;
@@ -79,4 +81,13 @@ Db.prototype.updateRepoDefaultBranch = function (id: string, defaultBranch: stri
       nowIso(),
       id,
     );
+};
+
+Db.prototype.updateRepoBuildCommand = function (id: string, buildCommand: string | null): void {
+  const db = this.connect();
+  db.prepare('UPDATE repos SET build_command = ?, updated_at = ? WHERE id = ?').run(
+    buildCommand,
+    nowIso(),
+    id,
+  );
 };

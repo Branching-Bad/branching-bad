@@ -18,6 +18,7 @@ export class MsgStore {
   private historyBytes = 0;
   private emitter = new EventEmitter();
   private _sessionId: string | null = null;
+  private _lastActivityAt: number = Date.now();
 
   constructor() {
     this.emitter.setMaxListeners(1000);
@@ -31,6 +32,7 @@ export class MsgStore {
     }
     this.historyBytes += size;
     this.history.push(msg);
+    this._lastActivityAt = Date.now();
     this.emitter.emit('msg', msg);
   }
 
@@ -52,6 +54,10 @@ export class MsgStore {
 
   getSessionId(): string | null {
     return this._sessionId;
+  }
+
+  getLastActivityAt(): number {
+    return this._lastActivityAt;
   }
 
   getHistory(): LogMsg[] {

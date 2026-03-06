@@ -1,8 +1,11 @@
 import type { Db } from './db/index.js';
 import { captureDiffWithBase, gitCommitAll } from './executor/index.js';
 import type { MsgStore } from './msgStore.js';
-import { createMemoryFromRun } from './services/memoryService.js';
+import type { ProcessManager } from './processManager.js';
 import { buildAgentCommand } from './routes/shared.js';
+import { runBuildCommand } from './services/buildRunner.js';
+import { attemptBuildRetry } from './services/buildRetry.js';
+import { createMemoryFromRun } from './services/memoryService.js';
 
 /**
  * Handle post-exit cleanup for a child agent process:
@@ -11,12 +14,15 @@ import { buildAgentCommand } from './routes/shared.js';
 export function handleChildExit(
   runId: string,
   taskId: string,
+  repoPath: string,
   workingDir: string,
   baseSha: string | null,
-  exitCode: number | null,
+  _exitCode: number | null,
   db: Db,
   store: MsgStore | undefined,
+  pm?: ProcessManager,
 ): void {
+  let exitCode = _exitCode;
   // Commit any uncommitted changes
   try {
     gitCommitAll(workingDir, 'agent: apply changes');
@@ -63,6 +69,37 @@ export function handleChildExit(
         db.updateRunSessionId(runId, sessionId);
       } catch {
         // Ignore
+      }
+    }
+  }
+
+  // Build verification (only on successful agent exit)
+  if (exitCode === 0 && store) {
+    const task = db.getTaskById(taskId);
+    if (task) {
+      const buildResult = runBuildCommand(db, task.repo_id, workingDir, store);
+      if (buildResult && !buildResult.success) {
+        db.addRunEvent(runId, 'build_failed', {
+          exitCode: buildResult.exitCode,
+          output: buildResult.output.slice(-2000),
+        });
+
+        // Attempt retry with build error
+        if (pm) {
+          const retried = attemptBuildRetry(
+            db, pm, store, runId, taskId, repoPath, workingDir, baseSha, buildResult.output,
+          );
+          if (retried) {
+            // Don't mark this run as done/failed yet - retry will handle it
+            db.updateRunStatus(runId, 'failed', true);
+            db.addRunEvent(runId, 'run_finished', { exitCode: 0, status: 'failed', reason: 'build_failed' });
+            return;
+          }
+          // Max retries exceeded - fall through to mark as failed
+          exitCode = 1; // Force failure path
+        }
+      } else if (buildResult?.success) {
+        db.addRunEvent(runId, 'build_passed', {});
       }
     }
   }

@@ -162,6 +162,42 @@ const navItems = [
   { key: "data", label: "Data", icon: IconData },
 ] as const;
 
+/* ── Build Command Section ── */
+function BuildCommandSection({ repo, onSave }: { repo: Repo; onSave: (cmd: string | null) => void }) {
+  const [cmd, setCmd] = useState(repo.build_command ?? "");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setCmd(repo.build_command ?? "");
+    setSaved(false);
+  }, [repo.id, repo.build_command]);
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-semibold text-text-muted uppercase tracking-wider">
+        Build Command
+      </label>
+      <div className="flex gap-2">
+        <input
+          className={inputClass + " flex-1 font-mono"}
+          value={cmd}
+          onChange={(e) => { setCmd(e.target.value); setSaved(false); }}
+          placeholder="e.g. npm run build, dotnet build, go build ./..."
+        />
+        <button
+          onClick={() => { onSave(cmd.trim() || null); setSaved(true); }}
+          className={btnSecondary + " shrink-0"}
+        >
+          {saved ? "Saved" : "Save"}
+        </button>
+      </div>
+      <p className="mt-1.5 text-[11px] text-text-muted">
+        Runs after each agent completion to verify the build. Leave empty to skip.
+      </p>
+    </div>
+  );
+}
+
 export function SettingsModal({
   open, onClose, repos, agentProfiles,
   selectedRepoId, setSelectedRepoId, selectedProfileId, setSelectedProfileId,
@@ -229,6 +265,17 @@ export function SettingsModal({
       await api(`/api/repos/${encodeURIComponent(selectedRepoId)}`, {
         method: "PATCH",
         body: JSON.stringify({ defaultBranch: branch }),
+      });
+      onReposChange?.();
+    } catch { /* silent */ }
+  }, [selectedRepoId, onReposChange]);
+
+  const handleBuildCommandSave = useCallback(async (cmd: string | null) => {
+    if (!selectedRepoId) return;
+    try {
+      await api(`/api/repos/${encodeURIComponent(selectedRepoId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ buildCommand: cmd }),
       });
       onReposChange?.();
     } catch { /* silent */ }
@@ -352,6 +399,12 @@ export function SettingsModal({
                       Base branch for merging changes (currently: {selectedRepo.default_branch})
                     </p>
                   </div>
+                )}
+                {selectedRepo && (
+                  <BuildCommandSection
+                    repo={selectedRepo}
+                    onSave={(cmd) => void handleBuildCommandSave(cmd)}
+                  />
                 )}
                 <div className="rounded-xl border border-border-default bg-surface-200 p-5">
                   <h3 className="mb-3 text-sm font-medium text-text-secondary">Add New Repository</h3>

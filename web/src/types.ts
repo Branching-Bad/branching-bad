@@ -1,5 +1,5 @@
 /* ─── Types ─── */
-export type Repo = { id: string; name: string; path: string; default_branch: string };
+export type Repo = { id: string; name: string; path: string; default_branch: string; build_command: string | null };
 export type AgentProfile = {
   id: string; provider: string; agent_name: string;
   model: string; command: string; source: string; discovery_kind: string;
