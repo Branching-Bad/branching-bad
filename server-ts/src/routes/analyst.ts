@@ -9,6 +9,7 @@ import { MsgStore } from '../msgStore.js';
 import { spawnAgent } from '../executor/agent.js';
 import { buildAgentCommand } from './shared.js';
 import { buildAnalystStartPrompt, buildAnalystFollowUpPrompt, type AnalystRepo } from '../services/analystService.js';
+import { GuardedMsgStore } from '../services/leakGuard.js';
 
 /**
  * Append agent-specific flags to restrict filesystem scope to the given repo paths.
@@ -26,9 +27,12 @@ function buildScopedCommand(agentCommand: string, repoPaths: string[]): string {
   }
 
   if (cmd.includes('codex')) {
-    // Codex: --writable-root for each repo path
-    const roots = repoPaths.map((p) => `--writable-root "${p}"`).join(' ');
-    return `${agentCommand} ${roots}`;
+    // Codex: --add-dir for additional repos (cwd is already primary)
+    if (repoPaths.length > 1) {
+      const extra = repoPaths.slice(1).map((p) => `--add-dir "${p}"`).join(' ');
+      return `${agentCommand} ${extra}`;
+    }
+    return agentCommand;
   }
 
   if (cmd.includes('gemini')) {
@@ -173,7 +177,8 @@ export function analystRoutes(): Router {
     const session: LiveSession = { id: sessionId, store, child: null, idle: false, lastLogIndex: 0 };
     liveSessions.set(sessionId, session);
 
-    const child = spawnAgent(scopedCommand, prompt, repo.path, store);
+    const guarded = new GuardedMsgStore(store);
+    const child = spawnAgent(scopedCommand, prompt, repo.path, guarded);
     monitorChild(session, child);
 
     // Flush logs periodically while child is alive
@@ -238,7 +243,8 @@ export function analystRoutes(): Router {
 
     const scopedCommand = buildScopedCommand(agentCommand, [repo.path]);
     const prompt = buildAnalystFollowUpPrompt(content);
-    const child = spawnAgent(scopedCommand, prompt, repo.path, session.store, agentSessionId);
+    const guarded = new GuardedMsgStore(session.store);
+    const child = spawnAgent(scopedCommand, prompt, repo.path, guarded, agentSessionId);
     monitorChild(session, child);
 
     const flushInterval = setInterval(() => {
