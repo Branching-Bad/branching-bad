@@ -19,22 +19,43 @@ export function CreateTaskModal({
   open, onClose, busy,
   agentProfiles,
   onSubmit, repoName,
+  prefill,
 }: {
   open: boolean; onClose: () => void; busy: boolean;
   agentProfiles: AgentProfile[];
   onSubmit: (fields: TaskFormValues) => Promise<void>;
   repoName: string;
+  prefill?: { title: string; description: string } | null;
 }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  if (!open) return null;
+
+  return (
+    <CreateTaskModalInner
+      onClose={onClose} busy={busy}
+      agentProfiles={agentProfiles}
+      onSubmit={onSubmit} repoName={repoName}
+      prefill={prefill}
+    />
+  );
+}
+
+function CreateTaskModalInner({
+  onClose, busy, agentProfiles, onSubmit, repoName, prefill,
+}: {
+  onClose: () => void; busy: boolean;
+  agentProfiles: AgentProfile[];
+  onSubmit: (fields: TaskFormValues) => Promise<void>;
+  repoName: string;
+  prefill?: { title: string; description: string } | null;
+}) {
+  const [title, setTitle] = useState(prefill?.title ?? "");
+  const [description, setDescription] = useState(prefill?.description ?? "");
   const [priority, setPriority] = useState("");
   const [requirePlan, setRequirePlan] = useState(true);
   const [autoApprovePlan, setAutoApprovePlan] = useState(false);
   const [autoStart, setAutoStart] = useState(false);
   const [useWorktree, setUseWorktree] = useState(true);
   const [agentProfileId, setAgentProfileId] = useState("");
-
-  if (!open) return null;
 
   const handleSubmit = async () => {
     await onSubmit({ title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, agentProfileId });

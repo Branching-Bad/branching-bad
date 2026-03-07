@@ -8,6 +8,7 @@ import {
   handleWaitWS,
   sendBatchWS,
 } from './routes/sse.js';
+import { getAnalystStore } from './routes/analyst.js';
 import type { AppState } from './state.js';
 
 /**
@@ -32,6 +33,12 @@ export function attachWebSocketHandler(server: Server, state: AppState): void {
     const runWsMatch = pathname.match(/^\/api\/runs\/([^/]+)\/ws$/);
     if (runWsMatch) {
       handleRunUpgrade(wss, req, socket, head, runWsMatch[1], state);
+      return;
+    }
+
+    const analystWsMatch = pathname.match(/^\/api\/analyst\/([^/]+)\/ws$/);
+    if (analystWsMatch) {
+      handleAnalystUpgrade(wss, req, socket, head, analystWsMatch[1]);
       return;
     }
 
@@ -126,5 +133,22 @@ function handleRunUpgrade(
       }),
     );
     sendBatchWS(ws, messages);
+  });
+}
+
+function handleAnalystUpgrade(
+  wss: WebSocketServer,
+  req: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+  sessionId: string,
+): void {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    const store = getAnalystStore(sessionId);
+    if (!store) {
+      ws.close(4004, 'Analyst session not found');
+      return;
+    }
+    handleStoreWS(ws, store);
   });
 }

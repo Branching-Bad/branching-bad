@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { api } from "./api";
 import { btnSecondary } from "./components/shared";
-import { IconSettings, IconExtensions } from "./components/icons";
+import { IconSettings, IconExtensions, IconAnalyst } from "./components/icons";
 import { SettingsModal } from "./components/SettingsModal";
 import { ExtensionsDrawer } from "./components/ExtensionsDrawer";
 import { CreateTaskModal } from "./components/CreateTaskModal";
@@ -10,6 +10,7 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailsSidebar } from "./components/DetailsSidebar";
 import { DiffReviewModal } from "./components/DiffReviewModal";
 import { PlanExpandModal } from "./components/PlanExpandModal";
+import { TaskAnalystModal } from "./components/TaskAnalystModal";
 import { initProviders } from "./providers/init";
 import { useEventStream } from "./hooks/useEventStream";
 import { useBootstrap } from "./hooks/useBootstrap";
@@ -21,6 +22,7 @@ import { useReviewState } from "./hooks/useReviewState";
 import { useChatState } from "./hooks/useChatState";
 import { useRulesState } from "./hooks/useRulesState";
 import { useMemoryState } from "./hooks/useMemoryState";
+import { useAnalystState } from "./hooks/useAnalystState";
 import type { StreamFunctions } from "./hooks/streamTypes";
 
 initProviders();
@@ -38,6 +40,8 @@ export default function App() {
   const [detailsTab, setDetailsTab] = useState<"plan" | "tasklist" | "run" | "review">("plan");
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
   const [editTaskModalOpen, setEditTaskModalOpen] = useState(false);
+  const [analystOpen, setAnalystOpen] = useState(false);
+  const [taskPrefill, setTaskPrefill] = useState<{ title: string; description: string } | null>(null);
 
   // ── Stream function ref (breaks circular dep between hooks and useEventStream) ──
   const streamRef = useRef<StreamFunctions | null>(null);
@@ -71,6 +75,7 @@ export default function App() {
   });
   const rulesState = useRulesState();
   const memoryState = useMemoryState();
+  const analyst = useAnalystState();
   const chat = useChatState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     streamRef, updateTaskRunState: run.updateTaskRunState, setError,
@@ -173,6 +178,13 @@ export default function App() {
                 <>
                   <span className="text-text-muted">/</span>
                   <span className="text-sm text-text-secondary">{repo.selectedRepo.name}</span>
+                  <button
+                    onClick={() => setAnalystOpen(true)}
+                    className="ml-1 flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition hover:text-brand hover:bg-surface-300"
+                    title="Task Analyst"
+                  >
+                    <IconAnalyst className="w-3.5 h-3.5 text-orange-500" />
+                  </button>
                 </>
               )}
             </div>
@@ -420,10 +432,26 @@ export default function App() {
         }}
       />
 
+      {repo.selectedRepoId && (
+        <TaskAnalystModal
+          open={analystOpen}
+          onClose={() => setAnalystOpen(false)}
+          repoId={repo.selectedRepoId}
+          repos={boot.repos}
+          agentProfiles={boot.agentProfiles}
+          onCreateTask={(prefill) => {
+            setTaskPrefill(prefill);
+            setCreateTaskModalOpen(true);
+          }}
+          analystState={analyst}
+        />
+      )}
+
       <CreateTaskModal
-        open={createTaskModalOpen} onClose={() => setCreateTaskModalOpen(false)} busy={busy}
+        open={createTaskModalOpen} onClose={() => { setCreateTaskModalOpen(false); setTaskPrefill(null); }} busy={busy}
         agentProfiles={boot.agentProfiles}
         onSubmit={task.createManualTask} repoName={repo.selectedRepo?.name ?? "selected repo"}
+        prefill={taskPrefill}
       />
 
       <EditTaskModal
