@@ -120,7 +120,7 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
     }
     const account = accounts.find((a) => a.id === selectedAccountId);
     if (account) prefillForm(account);
-  }, [selectedAccountId]);
+  }, [selectedAccountId, accounts]);
 
   function prefillForm(account: ProviderAccount) {
     const cfg = account.config ?? {};

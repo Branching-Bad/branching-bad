@@ -96,7 +96,7 @@ export function EsInvestigateModal(props: Props) {
     } else {
       setTab("errors");
     }
-  }, [data?.status]);
+  }, [data?.status, data]);
 
   if (!open) return null;
 

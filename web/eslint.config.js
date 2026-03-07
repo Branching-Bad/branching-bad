@@ -19,5 +19,11 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Data-fetching effects legitimately call setState; demote to warn
+      'react-hooks/set-state-in-effect': 'warn',
+      // Ref access during render is needed for derived-state patterns
+      'react-hooks/refs': 'warn',
+    },
   },
 ])

@@ -94,7 +94,7 @@ export default function App() {
     setInfo,
     selectedTaskIdRef: task.selectedTaskIdRef,
   });
-  streamRef.current = stream;
+  useEffect(() => { streamRef.current = stream; }, [stream]);
 
   // ── Auto-select first repo on bootstrap ──
   useEffect(() => { repo.initRepoId(boot.repos); }, [boot.repos, repo.initRepoId]);

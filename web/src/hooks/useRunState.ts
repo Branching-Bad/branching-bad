@@ -71,12 +71,12 @@ export function useRunState({
 
   // Cleanup streams on unmount
   useEffect(() => {
+    const ref = streamRef;
     return () => {
-      streamRef.current?.closeAllRunStreams();
-      streamRef.current?.closeAllPlanStreams();
+      ref.current?.closeAllRunStreams();
+      ref.current?.closeAllPlanStreams();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [streamRef]);
 
   const [customBranchName, setCustomBranchName] = useState("");
 
