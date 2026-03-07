@@ -20,6 +20,7 @@ export async function generatePlanAndTasklistWithAgentStrict(
   resumeSessionId: string | null,
   rulesSection: string,
   memoriesSection = '',
+  glossarySection = '',
 ): Promise<GeneratedPlanTasklist> {
   emitProgressText(progress, 'Starting strict plan generation...');
 
@@ -32,6 +33,7 @@ export async function generatePlanAndTasklistWithAgentStrict(
     resumeSessionId,
     rulesSection,
     memoriesSection,
+    glossarySection,
   );
 
   emitProgressText(progress, 'Plan validated. Generating strict tasklist...');
@@ -63,10 +65,11 @@ export async function generatePlanWithAgentStrict(
   resumeSessionId: string | null,
   rulesSection: string,
   memoriesSection = '',
+  glossarySection = '',
 ): Promise<GeneratedPlan> {
   const prompt = resumeSessionId && revisionComment
     ? buildPlanResumePrompt(revisionComment)
-    : buildPlanPrompt(repoPath, task, revisionComment, rulesSection, memoriesSection);
+    : buildPlanPrompt(repoPath, task, revisionComment, rulesSection, memoriesSection, glossarySection);
   const errors: string[] = [];
 
   for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt++) {

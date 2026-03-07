@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import type { FormEvent } from "react";
 import type { Repo, AgentProfile, RepositoryRule } from "../types";
 import type { TaskMemory } from "../hooks/useMemoryState";
+import type { GlossaryTerm } from "../hooks/useGlossaryState";
+import { GlossaryPanel } from "./GlossaryPanel";
 import { api } from "../api";
 import { IconX, IconRefresh, IconFolder } from "./icons";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
@@ -154,10 +156,19 @@ function IconMemory({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function IconGlossary({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+    </svg>
+  );
+}
+
 const navItems = [
   { key: "repo", label: "Repository", icon: IconFolder },
   { key: "agent", label: "AI Agent", icon: IconAgent },
   { key: "rules", label: "Rules", icon: IconRules },
+  { key: "glossary", label: "Glossary", icon: IconGlossary },
   { key: "memory", label: "Memories", icon: IconMemory },
   { key: "data", label: "Data", icon: IconData },
 ] as const;
@@ -251,6 +262,8 @@ export function SettingsModal({
   memories, memoryTotal, memoryPage, memoryTotalPages, memoryLoading,
   memorySearchQuery, onMemorySearchChange,
   onLoadMemories, onDeleteMemory,
+  glossaryTerms, glossaryLoading,
+  onAddGlossaryTerm, onUpdateGlossaryTerm, onDeleteGlossaryTerm,
 }: {
   open: boolean; onClose: () => void;
   repos: Repo[]; agentProfiles: AgentProfile[];
@@ -283,6 +296,11 @@ export function SettingsModal({
   onMemorySearchChange?: (q: string) => void;
   onLoadMemories?: (repoId: string, query?: string, page?: number) => Promise<void>;
   onDeleteMemory?: (id: string, repoId: string, query?: string, page?: number) => Promise<void>;
+  glossaryTerms?: GlossaryTerm[];
+  glossaryLoading?: boolean;
+  onAddGlossaryTerm?: (repoId: string, term: string, description: string) => Promise<void>;
+  onUpdateGlossaryTerm?: (id: string, term: string, description: string, repoId: string) => Promise<void>;
+  onDeleteGlossaryTerm?: (id: string, repoId: string) => Promise<void>;
 }) {
   const [tab, setTab] = useState("repo");
   const [branches, setBranches] = useState<string[]>([]);
@@ -594,6 +612,17 @@ export function SettingsModal({
                   )}
                 </div>
               </div>
+            )}
+
+            {tab === "glossary" && (
+              <GlossaryPanel
+                terms={glossaryTerms ?? []}
+                loading={glossaryLoading ?? false}
+                selectedRepoId={selectedRepoId}
+                onAdd={onAddGlossaryTerm ?? (async () => {})}
+                onUpdate={onUpdateGlossaryTerm ?? (async () => {})}
+                onDelete={onDeleteGlossaryTerm ?? (async () => {})}
+              />
             )}
 
             {tab === "memory" && (

@@ -6,6 +6,7 @@ import { loadRulesSection, persistStoreOutputs } from '../routes/shared.js';
 import { handleAutoApproval, handleAutoStart } from './planAutostart.js';
 import { openPlanDebugLogFile, writePlanDebugLog } from './planService.js';
 import { buildMemoriesSection } from './memoryService.js';
+import { buildGlossarySection } from './glossaryService.js';
 
 // -- Plan generation job --
 
@@ -78,6 +79,9 @@ export function spawnPlanGenerationJob(
     }
 
     const memoriesSection = buildMemoriesSection(state.db, task);
+    const glossarySection = buildGlossarySection(
+      state.db, task.repo_id, `${task.title} ${task.description ?? ''}`,
+    );
 
     writePlanDebugLog(logFile, 'Starting plan generation...');
     let generated;
@@ -96,6 +100,7 @@ export function spawnPlanGenerationJob(
         previousSessionId,
         rulesSection,
         memoriesSection,
+        glossarySection,
       );
     } catch (error) {
       failJob(`plan pipeline failed: ${error instanceof Error ? error.message : String(error)}`);

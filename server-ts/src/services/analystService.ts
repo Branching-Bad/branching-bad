@@ -1,6 +1,7 @@
 import { walkFiles } from '../planner/context.js';
 import type { Db } from '../db/index.js';
 import { loadRulesSection } from '../routes/shared.js';
+import { buildGlossarySection } from './glossaryService.js';
 
 const SYSTEM_PROMPT = `You are a Task Analyst — a senior technical product manager who understands the codebase and helps stakeholders turn ideas into well-structured task definitions.
 
@@ -72,11 +73,17 @@ export function buildAnalystStartPrompt(
     return `[${r.name}]\n${fileTree}\n${rulesSection}`;
   });
 
+  // Gather glossary from all repos
+  const glossarySections = repos
+    .map((r) => buildGlossarySection(db, r.repoId, message))
+    .filter(Boolean);
+  const glossary = glossarySections.length > 0 ? glossarySections.join('\n') : '';
+
   return `${SYSTEM_PROMPT}
 
 --- PROJECT CONTEXT (use to inform your analysis, do not dump raw structure) ---
 ${repos.length > 1 ? `This task spans ${repos.length} repositories.\n` : ''}${repoSections.map((s, i) => `Repository ${i + 1}:\n${s}`).join('\n\n')}
---- END PROJECT CONTEXT ---
+${glossary}--- END PROJECT CONTEXT ---
 
 User's initial request:
 ${message}`;

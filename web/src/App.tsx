@@ -22,6 +22,7 @@ import { useReviewState } from "./hooks/useReviewState";
 import { useChatState } from "./hooks/useChatState";
 import { useRulesState } from "./hooks/useRulesState";
 import { useMemoryState } from "./hooks/useMemoryState";
+import { useGlossaryState } from "./hooks/useGlossaryState";
 import { useAnalystState } from "./hooks/useAnalystState";
 import type { StreamFunctions } from "./hooks/streamTypes";
 
@@ -75,6 +76,7 @@ export default function App() {
   });
   const rulesState = useRulesState();
   const memoryState = useMemoryState();
+  const glossaryState = useGlossaryState();
   const analyst = useAnalystState();
   const chat = useChatState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
@@ -102,6 +104,7 @@ export default function App() {
 
   // ── Load memories when repo changes ──
   useEffect(() => { if (repo.selectedRepoId) void memoryState.loadMemories(repo.selectedRepoId); }, [repo.selectedRepoId, memoryState.loadMemories]);
+  useEffect(() => { if (repo.selectedRepoId) void glossaryState.loadTerms(repo.selectedRepoId); }, [repo.selectedRepoId, glossaryState.loadTerms]);
 
   // ── Tasklist progress polling ──
   const [tasklistProgress, setTasklistProgress] = useState<Record<string, string>>({});
@@ -426,6 +429,11 @@ export default function App() {
         onMemorySearchChange={memoryState.setSearchQuery}
         onLoadMemories={memoryState.loadMemories}
         onDeleteMemory={memoryState.deleteMemory}
+        glossaryTerms={glossaryState.terms}
+        glossaryLoading={glossaryState.loading}
+        onAddGlossaryTerm={glossaryState.addTerm}
+        onUpdateGlossaryTerm={glossaryState.updateTerm}
+        onDeleteGlossaryTerm={glossaryState.deleteTerm}
         onClearOutputs={async () => {
           await api("/api/outputs", { method: "DELETE" });
           setInfo("All output logs cleared.");
