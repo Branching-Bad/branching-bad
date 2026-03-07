@@ -68,7 +68,7 @@ Db.prototype.listGlossaryTerms = function (repoId: string): GlossaryTerm[] {
 Db.prototype.searchGlossaryTerms = function (
   repoId: string,
   query: string,
-  limit = 10,
+  limit = 5,
 ): GlossaryTerm[] {
   const db = this.connect();
   const rows = db.prepare(

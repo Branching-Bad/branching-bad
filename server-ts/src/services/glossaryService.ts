@@ -9,7 +9,7 @@ export function buildGlossarySection(db: Db, repoId: string, text: string): stri
 
   let terms;
   try {
-    terms = db.searchGlossaryTerms(repoId, sanitized, 10);
+    terms = db.searchGlossaryTerms(repoId, sanitized, 5);
   } catch {
     return '';
   }
@@ -17,5 +17,6 @@ export function buildGlossarySection(db: Db, repoId: string, text: string): stri
   if (terms.length === 0) return '';
 
   const items = terms.map((t) => `- **${t.term}**: ${t.description}`);
-  return `\nGlossary (domain terms relevant to this task):\n${items.join('\n')}\n`;
+  return `\nRelated glossary entries (BM25 search results — some may not be relevant):
+${items.join('\n')}\n`;
 }
