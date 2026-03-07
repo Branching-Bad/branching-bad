@@ -6,6 +6,7 @@
     "dev": "npx concurrently \"npm run dev:server\" \"npm run dev:web\"",
     "dev:server": "cd server-ts && node --experimental-sqlite --import tsx src/main.ts",
     "dev:web": "npm --prefix web run dev",
+    "dev:analyst": "npm --prefix analyst run dev",
     "build": "npm --prefix web run build && cd server-ts && npx tsc --noEmit",
     "start": "cd server-ts && node --experimental-sqlite --import tsx src/main.ts",
     "typecheck": "npm --prefix web run build",

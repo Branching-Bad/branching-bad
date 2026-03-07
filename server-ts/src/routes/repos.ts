@@ -125,6 +125,7 @@ export function repoRoutes(): Router {
         cwd: PROJECT_ROOT,
         encoding: 'utf8',
         timeout: 30_000,
+        shell: process.platform === 'win32',
       });
 
       if (pull.status !== 0) {

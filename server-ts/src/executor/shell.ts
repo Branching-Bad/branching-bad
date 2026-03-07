@@ -19,6 +19,7 @@ export function gitOutput(repoPath: string, args: string[]): string {
   const result = spawnSync('git', ['-C', repoPath, ...args], {
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
   });
   if (result.status !== 0) {
     return '';
@@ -33,6 +34,7 @@ export function execGit(
   const result = spawnSync('git', ['-C', repoPath, ...args], {
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
   });
   return {
     stdout: result.stdout ?? '',
