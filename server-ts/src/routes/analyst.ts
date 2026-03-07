@@ -57,8 +57,29 @@ interface LiveSession {
 
 const liveSessions = new Map<string, LiveSession>();
 
-export function getAnalystStore(sessionId: string): MsgStore | undefined {
-  return liveSessions.get(sessionId)?.store;
+export function getAnalystStore(sessionId: string, state?: AppState): MsgStore | undefined {
+  const existing = liveSessions.get(sessionId);
+  if (existing) return existing.store;
+
+  // Rehydrate from DB if state is available (e.g. after server restart)
+  if (!state) return undefined;
+  const dbSession = state.db.getAnalystSession(sessionId);
+  if (!dbSession) return undefined;
+
+  const store = new MsgStore();
+  const savedLogs = state.db.getAnalystLogs(sessionId);
+  for (const log of savedLogs) {
+    store.push({ type: log.type as 'stdout', data: log.data });
+  }
+  if (dbSession.agent_session_id) {
+    store.setSessionId(dbSession.agent_session_id);
+  }
+  const session: LiveSession = {
+    id: sessionId, store, child: null, idle: true,
+    lastLogIndex: savedLogs.length,
+  };
+  liveSessions.set(sessionId, session);
+  return store;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,21 +212,10 @@ export function analystRoutes(): Router {
       state.db.updateAnalystSession(sessionIdParam, { profile_id: profileId });
     }
 
-    // Get or create live session
+    // Get or create live session (rehydrates from DB if needed)
+    getAnalystStore(sessionIdParam, state);
     let session = liveSessions.get(sessionIdParam);
-    if (!session) {
-      // Rehydrate from DB logs
-      const store = new MsgStore();
-      const savedLogs = state.db.getAnalystLogs(sessionIdParam);
-      for (const log of savedLogs) {
-        store.push({ type: log.type as 'stdout', data: log.data });
-      }
-      if (dbSession.agent_session_id) {
-        store.setSessionId(dbSession.agent_session_id);
-      }
-      session = { id: sessionIdParam, store, child: null, idle: true, lastLogIndex: savedLogs.length };
-      liveSessions.set(sessionIdParam, session);
-    }
+    if (!session) throw ApiError.notFound('Analyst session could not be restored');
 
     // Wait for current agent to finish if still running
     if (session.child && !session.idle) {

@@ -38,7 +38,7 @@ export function attachWebSocketHandler(server: Server, state: AppState): void {
 
     const analystWsMatch = pathname.match(/^\/api\/analyst\/([^/]+)\/ws$/);
     if (analystWsMatch) {
-      handleAnalystUpgrade(wss, req, socket, head, analystWsMatch[1]);
+      handleAnalystUpgrade(wss, req, socket, head, analystWsMatch[1], state);
       return;
     }
 
@@ -142,9 +142,10 @@ function handleAnalystUpgrade(
   socket: Duplex,
   head: Buffer,
   sessionId: string,
+  state: AppState,
 ): void {
   wss.handleUpgrade(req, socket, head, (ws) => {
-    const store = getAnalystStore(sessionId);
+    const store = getAnalystStore(sessionId, state);
     if (!store) {
       ws.close(4004, 'Analyst session not found');
       return;
