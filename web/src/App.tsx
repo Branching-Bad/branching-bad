@@ -77,7 +77,7 @@ export default function App() {
   const rulesState = useRulesState();
   const memoryState = useMemoryState();
   const glossaryState = useGlossaryState();
-  const analyst = useAnalystState();
+  const analyst = useAnalystState(repo.selectedRepoId);
   const chat = useChatState({
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     streamRef, updateTaskRunState: run.updateTaskRunState, setError,

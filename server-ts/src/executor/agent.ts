@@ -4,7 +4,7 @@ import { createInterface } from 'readline';
 import type { MsgStore } from '../msgStore.js';
 import { isStructuredCliEvent } from './shell.js';
 import { splitCommand } from './command-parser.js';
-import { parseClaudeStreamJson } from './stream-parser.js';
+import { parseClaudeStreamJson, parseGeminiStreamJson } from './stream-parser.js';
 import { parseCodexExecJson } from './codexParser.js';
 
 // ---------------------------------------------------------------------------
@@ -79,15 +79,17 @@ function buildAgentArgs(
     }
     case 'gemini': {
       if (sessionId) {
-        args.push('--resume', sessionId);
+        args.push('-r', sessionId);
       }
       if (useStdinForPrompt) {
         useStdinPipe = true;
         stdinPrompt = prompt;
+        args.push('-p');
       } else {
         args.push('-p', prompt);
       }
       args.push('--approval-mode', 'yolo');
+      args.push('--output-format', 'stream-json');
       break;
     }
     default: {
@@ -131,12 +133,14 @@ function setupStdoutReader(child: ChildProcess, agentKind: string, store: MsgSto
       if (isStructuredCliEvent(line)) return;
     }
 
-    // Best-effort session ID capture from Gemini or other agents
     if (agentKind === 'gemini') {
-      const sessionMatch = line.match(/session[_\s-]?id[:\s]+([a-f0-9-]{36})/i);
-      if (sessionMatch) {
-        store.setSessionId(sessionMatch[1]);
+      const parsed = parseGeminiStreamJson(line);
+      if (parsed) {
+        if (parsed.sessionId) store.setSessionId(parsed.sessionId);
+        if (parsed.msg.data) store.push(parsed.msg);
+        return;
       }
+      if (isStructuredCliEvent(line)) return;
     }
 
     store.push({ type: 'stdout', data: line });

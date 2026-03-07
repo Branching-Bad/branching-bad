@@ -187,3 +187,74 @@ function parseResultMessage(v: any): { msg: LogMsg; sessionId?: string } | undef
     sessionId,
   };
 }
+
+// ---------------------------------------------------------------------------
+// parseGeminiStreamJson
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a single line of Gemini CLI `--output-format stream-json`.
+ * Event types: init, message, tool_use, tool_result, error, result.
+ */
+export function parseGeminiStreamJson(
+  line: string,
+): { msg: LogMsg; sessionId?: string } | undefined {
+  let v: any;
+  try {
+    v = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+
+  const type = v?.type;
+  if (typeof type !== 'string') return undefined;
+
+  switch (type) {
+    case 'init': {
+      const sessionId = typeof v.session_id === 'string' ? v.session_id : undefined;
+      if (sessionId) return { msg: { type: 'agent_text', data: '' }, sessionId };
+      return undefined;
+    }
+    case 'message': {
+      const role = v.role ?? v.message?.role ?? '';
+      const text = v.content ?? v.text ?? v.message?.content ?? '';
+      if (role === 'model' || role === 'assistant') {
+        if (typeof text === 'string' && text) {
+          return { msg: { type: 'agent_text', data: text } };
+        }
+        // Content may be array of parts
+        if (Array.isArray(text)) {
+          for (const part of text) {
+            if (part?.thought) return { msg: { type: 'thinking', data: part.thought } };
+            if (part?.text) return { msg: { type: 'agent_text', data: part.text } };
+          }
+        }
+      }
+      return undefined;
+    }
+    case 'tool_use': {
+      const tool = v.tool_name ?? v.name ?? 'tool';
+      const inputPreview = v.input ? formatToolInputPreview(v.input) : '';
+      return {
+        msg: { type: 'tool_use', data: JSON.stringify({ tool, input_preview: inputPreview }) },
+      };
+    }
+    case 'tool_result': {
+      return parseToolResult(v);
+    }
+    case 'result': {
+      const sessionId = typeof v.session_id === 'string' ? v.session_id : undefined;
+      const text = v.response ?? v.content ?? '';
+      const msg: LogMsg = text
+        ? { type: 'agent_text', data: typeof text === 'string' ? text : JSON.stringify(text) }
+        : { type: 'agent_text', data: '' };
+      return { msg, sessionId };
+    }
+    case 'error': {
+      const errMsg = v.message ?? v.error ?? 'Unknown error';
+      return { msg: { type: 'stderr', data: String(errMsg) } };
+    }
+    default:
+      return undefined;
+  }
+}

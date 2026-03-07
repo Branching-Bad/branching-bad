@@ -70,9 +70,12 @@ export function ExtensionsDrawer({
             return (
               <div key={id} className="rounded-xl border border-border-default bg-surface-50">
                 {/* Section header */}
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setExpanded((prev) => ({ ...prev, [id]: !isExpanded }))}
-                  className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-text-primary hover:bg-surface-200 rounded-t-xl transition"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((prev) => ({ ...prev, [id]: !isExpanded })); } }}
+                  className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-text-primary hover:bg-surface-200 rounded-t-xl transition cursor-pointer"
                 >
                   <div className="flex items-center gap-2">
                     {isExpanded ? <IconChevronUp className="h-3.5 w-3.5 text-text-muted" /> : <IconChevronDown className="h-3.5 w-3.5 text-text-muted" />}
@@ -90,7 +93,7 @@ export function ExtensionsDrawer({
                   >
                     <IconSettings className="h-3.5 w-3.5" />
                   </button>
-                </button>
+                </div>
 
                 {/* Section content */}
                 {isExpanded && (

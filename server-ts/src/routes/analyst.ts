@@ -10,50 +10,90 @@ import { spawnAgent } from '../executor/agent.js';
 import { buildAgentCommand } from './shared.js';
 import { buildAnalystStartPrompt, buildAnalystFollowUpPrompt, type AnalystRepo } from '../services/analystService.js';
 
+/**
+ * Append agent-specific flags to restrict filesystem scope to the given repo paths.
+ */
+function buildScopedCommand(agentCommand: string, repoPaths: string[]): string {
+  const cmd = agentCommand.toLowerCase();
+
+  if (cmd.includes('claude')) {
+    // Claude Code: --add-dir for additional repos (cwd is already primary)
+    if (repoPaths.length > 1) {
+      const extra = repoPaths.slice(1).map((p) => `--add-dir "${p}"`).join(' ');
+      return `${agentCommand} ${extra}`;
+    }
+    return agentCommand;
+  }
+
+  if (cmd.includes('codex')) {
+    // Codex: --writable-root for each repo path
+    const roots = repoPaths.map((p) => `--writable-root "${p}"`).join(' ');
+    return `${agentCommand} ${roots}`;
+  }
+
+  if (cmd.includes('gemini')) {
+    // Gemini: --include-directories for additional repos
+    if (repoPaths.length > 1) {
+      const extra = repoPaths.slice(1).join(',');
+      return `${agentCommand} --include-directories ${extra}`;
+    }
+    return agentCommand;
+  }
+
+  return agentCommand;
+}
+
 // ---------------------------------------------------------------------------
-// Session tracking
+// In-memory process tracking (not persisted — only for live sessions)
 // ---------------------------------------------------------------------------
 
-interface AnalystSession {
+interface LiveSession {
   id: string;
-  repoId: string;
   store: MsgStore;
   child: ChildProcess | null;
   idle: boolean;
+  lastLogIndex: number; // how many logs already saved to DB
 }
 
-const sessions = new Map<string, AnalystSession>();
+const liveSessions = new Map<string, LiveSession>();
 
 export function getAnalystStore(sessionId: string): MsgStore | undefined {
-  return sessions.get(sessionId)?.store;
+  return liveSessions.get(sessionId)?.store;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function monitorChild(session: AnalystSession, child: ChildProcess): void {
+function monitorChild(session: LiveSession, child: ChildProcess): void {
   session.child = child;
   session.idle = false;
-
-  const onExit = () => {
-    session.idle = true;
-    session.child = null;
-  };
-
-  child.on('exit', onExit);
+  child.on('exit', () => { session.idle = true; session.child = null; });
 }
 
-function killChild(session: AnalystSession): Promise<void> {
+function killChild(session: LiveSession): Promise<void> {
   const child = session.child;
   if (!child || child.pid == null) return Promise.resolve();
-
   return new Promise((resolve) => {
-    treeKill(child.pid!, 'SIGTERM', () => {
-      session.child = null;
-      resolve();
-    });
+    treeKill(child.pid!, 'SIGTERM', () => { session.child = null; resolve(); });
   });
+}
+
+/** Flush new logs from MsgStore to DB */
+function flushLogs(state: AppState, session: LiveSession): void {
+  const allLogs = session.store.getHistory();
+  const newLogs = allLogs.slice(session.lastLogIndex);
+  if (newLogs.length === 0) return;
+  state.db.appendAnalystLogs(session.id, newLogs);
+  session.lastLogIndex = allLogs.length;
+}
+
+/** Save agent_session_id if captured */
+function syncAgentSessionId(state: AppState, session: LiveSession): void {
+  const agentSid = session.store.getSessionId();
+  if (agentSid) {
+    state.db.updateAnalystSession(session.id, { agent_session_id: agentSid });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +129,6 @@ export function analystRoutes(): Router {
     const agentCommand = buildAgentCommand(profile);
     if (!agentCommand.trim()) throw ApiError.badRequest('Agent profile has no command');
 
-    // Build multi-repo context
     const repos: AnalystRepo[] = [{ name: repo.name, path: repo.path, repoId }];
     if (Array.isArray(additionalRepoIds)) {
       for (const extraId of additionalRepoIds) {
@@ -103,11 +142,29 @@ export function analystRoutes(): Router {
     store.push({ type: 'user_message', data: message });
 
     const sessionId = randomUUID();
-    const session: AnalystSession = { id: sessionId, repoId: repoId, store, child: null, idle: false };
-    sessions.set(sessionId, session);
 
-    const child = spawnAgent(agentCommand, prompt, repo.path, store);
+    // Persist to DB
+    state.db.createAnalystSession(sessionId, repoId, profileId, message);
+
+    const repoPaths = repos.map((r) => r.path);
+    const scopedCommand = buildScopedCommand(agentCommand, repoPaths);
+
+    const session: LiveSession = { id: sessionId, store, child: null, idle: false, lastLogIndex: 0 };
+    liveSessions.set(sessionId, session);
+
+    const child = spawnAgent(scopedCommand, prompt, repo.path, store);
     monitorChild(session, child);
+
+    // Flush logs periodically while child is alive
+    const flushInterval = setInterval(() => {
+      flushLogs(state, session);
+      syncAgentSessionId(state, session);
+    }, 2000);
+    child.on('exit', () => {
+      clearInterval(flushInterval);
+      flushLogs(state, session);
+      syncAgentSessionId(state, session);
+    });
 
     res.json({ sessionId });
   }));
@@ -119,15 +176,42 @@ export function analystRoutes(): Router {
     const { content, profileId } = req.body as { content?: string; profileId?: string };
 
     if (!content?.trim()) throw ApiError.badRequest('content is required');
+    if (!profileId?.trim()) throw ApiError.badRequest('profileId is required');
 
-    const session = sessions.get(sessionIdParam);
-    if (!session) throw ApiError.notFound('Analyst session not found');
+    const dbSession = state.db.getAnalystSession(sessionIdParam);
+    if (!dbSession) throw ApiError.notFound('Analyst session not found');
+
+    const profile = state.db.getAgentProfileById(profileId);
+    if (!profile) throw ApiError.notFound('Agent profile not found');
+    const agentCommand = buildAgentCommand(profile);
+    if (!agentCommand.trim()) throw ApiError.badRequest('Agent profile has no command');
+
+    // Update profile if changed
+    if (dbSession.profile_id !== profileId) {
+      state.db.updateAnalystSession(sessionIdParam, { profile_id: profileId });
+    }
+
+    // Get or create live session
+    let session = liveSessions.get(sessionIdParam);
+    if (!session) {
+      // Rehydrate from DB logs
+      const store = new MsgStore();
+      const savedLogs = state.db.getAnalystLogs(sessionIdParam);
+      for (const log of savedLogs) {
+        store.push({ type: log.type as 'stdout', data: log.data });
+      }
+      if (dbSession.agent_session_id) {
+        store.setSessionId(dbSession.agent_session_id);
+      }
+      session = { id: sessionIdParam, store, child: null, idle: true, lastLogIndex: savedLogs.length };
+      liveSessions.set(sessionIdParam, session);
+    }
 
     // Wait for current agent to finish if still running
     if (session.child && !session.idle) {
       await new Promise<void>((resolve) => {
         const check = () => {
-          if (session.idle || !session.child) { resolve(); return; }
+          if (session!.idle || !session!.child) { resolve(); return; }
           setTimeout(check, 200);
         };
         check();
@@ -139,31 +223,80 @@ export function analystRoutes(): Router {
     session.store.push({ type: 'turn_separator', data: '' });
     session.store.push({ type: 'user_message', data: content });
 
-    const repo = state.db.getRepoById(session.repoId);
+    const repo = state.db.getRepoById(dbSession.repo_id);
     if (!repo) throw ApiError.notFound('Repo not found');
 
-    if (!profileId?.trim()) throw ApiError.badRequest('profileId is required');
-    const profile = state.db.getAgentProfileById(profileId);
-    if (!profile) throw ApiError.notFound('Agent profile not found');
-    const agentCommand = buildAgentCommand(profile);
-    if (!agentCommand.trim()) throw ApiError.badRequest('Agent profile has no command');
-
+    const scopedCommand = buildScopedCommand(agentCommand, [repo.path]);
     const prompt = buildAnalystFollowUpPrompt(content);
-    const child = spawnAgent(agentCommand, prompt, repo.path, session.store, agentSessionId);
+    const child = spawnAgent(scopedCommand, prompt, repo.path, session.store, agentSessionId);
     monitorChild(session, child);
+
+    const flushInterval = setInterval(() => {
+      flushLogs(state, session!);
+      syncAgentSessionId(state, session!);
+    }, 2000);
+    child.on('exit', () => {
+      clearInterval(flushInterval);
+      flushLogs(state, session!);
+      syncAgentSessionId(state, session!);
+    });
+
+    res.json({ ok: true });
+  }));
+
+  // GET /api/repos/:repo_id/analyst/sessions — list sessions for repo
+  router.get('/api/repos/:repo_id/analyst/sessions', wrap(async (req, res) => {
+    const state = req.app.locals.state as AppState;
+    const repoId = String(req.params.repo_id);
+    const sessions = state.db.listAnalystSessions(repoId);
+    res.json(sessions);
+  }));
+
+  // GET /api/analyst/:session_id/logs — get logs for a session
+  router.get('/api/analyst/:session_id/logs', wrap(async (req, res) => {
+    const state = req.app.locals.state as AppState;
+    const sessionId = String(req.params.session_id);
+
+    const dbSession = state.db.getAnalystSession(sessionId);
+    if (!dbSession) throw ApiError.notFound('Session not found');
+
+    // If live, flush first
+    const live = liveSessions.get(sessionId);
+    if (live) flushLogs(state, live);
+
+    const logs = state.db.getAnalystLogs(sessionId);
+    res.json({ session: dbSession, logs });
+  }));
+
+  // PATCH /api/analyst/:session_id — update session (title, status)
+  router.patch('/api/analyst/:session_id', wrap(async (req, res) => {
+    const state = req.app.locals.state as AppState;
+    const sessionId = String(req.params.session_id);
+    const { title, status } = req.body as { title?: string; status?: string };
+
+    const dbSession = state.db.getAnalystSession(sessionId);
+    if (!dbSession) throw ApiError.notFound('Session not found');
+
+    const updates: Record<string, string> = {};
+    if (title !== undefined) updates.title = title;
+    if (status === 'archived') updates.status = 'archived';
+    state.db.updateAnalystSession(sessionId, updates);
 
     res.json({ ok: true });
   }));
 
   // DELETE /api/analyst/:session_id
   router.delete('/api/analyst/:session_id', wrap(async (req, res) => {
-    const session_id = String(req.params.session_id);
-    const session = sessions.get(session_id);
-    if (!session) { res.status(204).end(); return; }
+    const state = req.app.locals.state as AppState;
+    const sessionId = String(req.params.session_id);
 
-    await killChild(session);
-    sessions.delete(session_id);
+    const session = liveSessions.get(sessionId);
+    if (session) {
+      await killChild(session);
+      liveSessions.delete(sessionId);
+    }
 
+    state.db.deleteAnalystSession(sessionId);
     res.status(204).end();
   }));
 

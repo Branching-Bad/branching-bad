@@ -8,6 +8,7 @@ import { buildAgentArgs } from './agentArgs.js';
 import { emitProgress } from './helpers.js';
 import { parseClaudeStreamLine } from './stream-parsers.js';
 import { extractTextFromClaudeStream, truncateProgressLine } from './stream-extract.js';
+import { parseGeminiStreamJson } from '../executor/stream-parser.js';
 import type { AgentOutput, ProgressCallback } from './types.js';
 
 const DEFAULT_AGENT_TIMEOUT_SECS = 60 * 60;
@@ -32,6 +33,7 @@ export async function invokeAgentCli(
   const binaryLower = binary.toLowerCase();
   const isClaude = binaryLower.includes('claude');
   const isCodex = binaryLower.includes('codex');
+  const isGemini = binaryLower.includes('gemini');
   const extraArgs = parts.slice(1);
 
   const { args, codexLastMessagePath, useStdinPrompt } = buildAgentArgs(
@@ -61,7 +63,7 @@ export async function invokeAgentCli(
   const stderrLines: string[] = [];
   const state = { capturedSessionId: null as string | null, claudeFinalOutput: null as string | null };
 
-  attachStdoutHandler(child, stdoutLines, isClaude, isCodex, progress, state);
+  attachStdoutHandler(child, stdoutLines, isClaude, isCodex, isGemini, progress, state);
   attachStderrHandler(child, stderrLines, progress);
 
   const timeoutSecs = resolveAgentTimeoutSecs();
@@ -70,7 +72,7 @@ export async function invokeAgentCli(
   const stdout = stdoutLines.join('\n');
 
   if (exitCode === 0) {
-    return resolveSuccessOutput(codexLastMessagePath, isClaude, stdout, state);
+    return resolveSuccessOutput(codexLastMessagePath, isClaude, isGemini, stdout, state);
   }
 
   if (codexLastMessagePath) {
@@ -110,6 +112,7 @@ function attachStdoutHandler(
   stdoutLines: string[],
   isClaude: boolean,
   isCodex: boolean,
+  isGemini: boolean,
   progress: ProgressCallback | null,
   state: { capturedSessionId: string | null; claudeFinalOutput: string | null },
 ): void {
@@ -136,10 +139,19 @@ function attachStdoutHandler(
       if (line.trim()) {
         emitProgress(progress, { type: 'stdout', data: truncateProgressLine(line) });
       }
+    } else if (isGemini) {
+      const parsed = parseGeminiStreamJson(line);
+      if (parsed) {
+        if (parsed.sessionId) state.capturedSessionId = parsed.sessionId;
+        if (parsed.msg.data) {
+          emitProgress(progress, parsed.msg);
+        }
+        return;
+      }
+      if (line.trim()) {
+        emitProgress(progress, { type: 'stdout', data: truncateProgressLine(line) });
+      }
     } else {
-      // Best-effort Gemini session ID capture
-      const sessionMatch = line.match(/session[_\s-]?id[:\s]+([a-f0-9-]{36})/i);
-      if (sessionMatch) state.capturedSessionId = sessionMatch[1];
       if (line.trim()) {
         emitProgress(progress, { type: 'stdout', data: truncateProgressLine(line) });
       }
@@ -196,6 +208,7 @@ function waitForExit(
 function resolveSuccessOutput(
   codexLastMessagePath: string | null,
   isClaude: boolean,
+  isGemini: boolean,
   stdout: string,
   state: { capturedSessionId: string | null; claudeFinalOutput: string | null },
 ): AgentOutput {
@@ -220,6 +233,20 @@ function resolveSuccessOutput(
     const extracted = extractTextFromClaudeStream(stdout);
     if (extracted.trim()) {
       return { text: extracted, session_id: state.capturedSessionId };
+    }
+  }
+
+  // Gemini: extract text from stream-json lines
+  if (isGemini) {
+    const texts: string[] = [];
+    for (const line of stdout.split('\n')) {
+      const parsed = parseGeminiStreamJson(line);
+      if (parsed && parsed.msg.type === 'agent_text' && parsed.msg.data) {
+        texts.push(parsed.msg.data);
+      }
+    }
+    if (texts.length > 0) {
+      return { text: texts.join('\n'), session_id: state.capturedSessionId };
     }
   }
 

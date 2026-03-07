@@ -137,6 +137,7 @@ export function useWebSocketStream(url: string | null) {
   }, [url, store]);
 
   const clearLogs = useCallback(() => store.clearLogs(), [store]);
+  const appendLog = useCallback((entry: RunLogEntry) => store.appendLog(entry), [store]);
 
-  return { logs: state.logs, isConnected: state.isConnected, isFinished: state.isFinished, clearLogs };
+  return { logs: state.logs, isConnected: state.isConnected, isFinished: state.isFinished, clearLogs, appendLog };
 }

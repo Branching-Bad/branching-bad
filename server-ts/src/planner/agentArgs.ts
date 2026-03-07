@@ -61,13 +61,15 @@ export function buildAgentArgs(
     codexLastMessagePath = outputFile;
   } else if (binaryLower.includes('gemini')) {
     if (resumeSessionId) {
-      args.push('--resume', resumeSessionId);
+      args.push('-r', resumeSessionId);
     }
     if (useStdinPrompt) {
+      args.push('-p');
       args.push('--approval-mode', 'yolo');
     } else {
       args.push('-p', prompt, '--approval-mode', 'yolo');
     }
+    args.push('--output-format', 'stream-json');
   } else {
     if (!useStdinPrompt) {
       args.push('-p', prompt);

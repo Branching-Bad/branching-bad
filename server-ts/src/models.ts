@@ -31,3 +31,8 @@ export type {
   RepoAgentPreference,
   DiscoveredProfile,
 } from './models/agent.js';
+
+export type {
+  AnalystSession,
+  AnalystLog,
+} from './models/analyst.js';
