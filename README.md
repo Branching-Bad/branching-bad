@@ -14,6 +14,7 @@ Local-first, approval-first coding agent with a pluggable provider system. Creat
 - **Human Approval Gate** — Plans require your approval before the agent starts (or opt into auto-approve)
 - **Multi-Agent Support** — Choose between Claude Code, Codex, Gemini CLI, OpenCode, or Cursor per task
 - **Isolated Execution** — Agent runs in a git worktree, your main branch stays clean
+- **Task Analyst** — AI-powered requirement clarification chat with multi-repo context support, produces structured task definitions
 - **Live Streaming** — Watch agent thinking, tool calls, and results in real-time
 - **Code Review** — Inline diff viewer with file tree, inline comments, and batch review
 - **Review Feedback Loop** — Submit feedback, agent fixes, review again — iterate until satisfied
@@ -121,13 +122,8 @@ Monorepo with two main parts:
 ### Install & Run
 
 ```bash
-# Install dependencies
-npm install
-cd server-ts && npm install && cd ..
-cd web && npm install && cd ..
-
-# Development (runs backend + frontend concurrently)
-npm run dev
+# Install all dependencies and start development
+npm install && npm --prefix server-ts install && npm --prefix web install && npm run dev
 ```
 
 Open http://localhost:5173 — backend runs on http://localhost:4310 (frontend proxies `/api` automatically).
