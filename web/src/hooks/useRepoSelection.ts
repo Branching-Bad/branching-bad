@@ -15,17 +15,35 @@ export function useRepoSelection({
   setInfo: (msg: string) => void;
   setBusy: (v: boolean) => void;
 }) {
-  const [selectedRepoId, setSelectedRepoId] = useState("");
-  const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [selectedRepoId, _setSelectedRepoId] = useState(() => localStorage.getItem("bb:selectedRepoId") ?? "");
+  const [selectedProfileId, _setSelectedProfileId] = useState(() => localStorage.getItem("bb:selectedProfileId") ?? "");
   const [repoPath, setRepoPath] = useState("");
   const [repoName, setRepoName] = useState("");
+
+  const setSelectedRepoId = useCallback((id: string) => {
+    _setSelectedRepoId(id);
+    if (id) localStorage.setItem("bb:selectedRepoId", id);
+    else localStorage.removeItem("bb:selectedRepoId");
+  }, []);
+
+  const setSelectedProfileId = useCallback((id: string) => {
+    _setSelectedProfileId(id);
+    if (id) localStorage.setItem("bb:selectedProfileId", id);
+    else localStorage.removeItem("bb:selectedProfileId");
+  }, []);
 
   const selectedRepo = useMemo(() => repos.find((r) => r.id === selectedRepoId) ?? null, [repos, selectedRepoId]);
   const selectedProfile = useMemo(() => agentProfiles.find((p) => p.id === selectedProfileId) ?? null, [agentProfiles, selectedProfileId]);
 
-  // Auto-select first repo on bootstrap
+  // Auto-select first repo on bootstrap (only if no persisted selection)
   const initRepoId = useCallback((repoList: Repo[]) => {
-    setSelectedRepoId((prev) => (!prev && repoList.length > 0) ? repoList[0].id : prev);
+    if (repoList.length === 0) return;
+    _setSelectedRepoId((prev) => {
+      if (prev && repoList.some((r) => r.id === prev)) return prev;
+      const first = repoList[0].id;
+      localStorage.setItem("bb:selectedRepoId", first);
+      return first;
+    });
   }, []);
 
   const onRepoSubmit = useCallback(async (event: FormEvent) => {
