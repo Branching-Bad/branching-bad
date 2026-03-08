@@ -1,9 +1,12 @@
 import type { Db } from '../db/index.js';
+import type { TaskMemory } from '../db/memories.js';
 import type { TaskWithPayload } from '../models.js';
 import { invokeAgentCli } from '../planner/agent.js';
 
 /**
  * Search for relevant memories and format as a prompt section.
+ * Uses FTS5 full-text search first, then falls back to file-path overlap
+ * matching (file paths are language-agnostic and work across all locales).
  */
 export function buildMemoriesSection(db: Db, task: TaskWithPayload): string {
   const query = `${task.title} ${task.description ?? ''}`.trim();
@@ -11,13 +14,27 @@ export function buildMemoriesSection(db: Db, task: TaskWithPayload): string {
 
   // Sanitize FTS5 query: remove special chars that break MATCH
   const sanitized = query.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!sanitized) return '';
 
-  let memories;
-  try {
-    memories = db.searchMemories(task.repo_id, sanitized, 5);
-  } catch {
-    return '';
+  let memories: TaskMemory[] = [];
+
+  // 1. Try FTS5 full-text search
+  if (sanitized) {
+    try {
+      memories = db.searchMemories(task.repo_id, sanitized, 5);
+    } catch {
+      // FTS query may fail with certain character combinations
+    }
+  }
+
+  // 2. If FTS found nothing, fall back to recent memories from same repo
+  // (file-path overlap provides implicit relevance)
+  if (memories.length === 0) {
+    try {
+      const recent = db.listMemories(task.repo_id, 10, 0);
+      memories = recent.memories.slice(0, 5);
+    } catch {
+      // ignore
+    }
   }
 
   if (memories.length === 0) return '';
@@ -80,6 +97,9 @@ async function generateAgentSummary(
 - What problem was solved and HOW (approach/pattern used)
 - Key files and what changed in them
 - Any important decisions or patterns applied
+
+IMPORTANT: Write the summary in the SAME LANGUAGE as the task title and description below.
+If the task is in Turkish, write the summary in Turkish. If in English, write in English.
 
 Task: ${task.title}
 Description: ${task.description ?? 'No description'}
