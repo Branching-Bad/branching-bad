@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { ApiError } from '../errors.js';
 import type { ChatMessage } from '../models.js';
 import type { AppState } from '../state.js';
@@ -72,8 +73,8 @@ export function sendChatMessage(
     agentCommand,
     prompt: promptWithRules,
     displayContent: content,
-    agentWorkingDir: latestRun.worktree_path ?? repo.path,
-    sessionId: latestRun.agent_session_id,
+    agentWorkingDir: (latestRun.worktree_path && fs.existsSync(latestRun.worktree_path)) ? latestRun.worktree_path : repo.path,
+    sessionId: latestRun.status === 'done' ? latestRun.agent_session_id : null,
     baseSha: latestRun.base_sha,
     runId: run.id,
     taskId: task.id,
@@ -150,8 +151,8 @@ export function dispatchNextQueuedChat(
     agentCommand,
     prompt: promptWithRules,
     displayContent: content,
-    agentWorkingDir: latestRun.worktree_path ?? repo.path,
-    sessionId: latestRun.agent_session_id,
+    agentWorkingDir: (latestRun.worktree_path && fs.existsSync(latestRun.worktree_path)) ? latestRun.worktree_path : repo.path,
+    sessionId: latestRun.status === 'done' ? latestRun.agent_session_id : null,
     baseSha: latestRun.base_sha,
     runId: run.id,
     taskId: task.id,

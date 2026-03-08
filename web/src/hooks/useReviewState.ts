@@ -205,6 +205,50 @@ export function useReviewState({
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [selectedTaskId, reviewText, reviewProfileId, batchLineComments, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
 
+  const editReviewComment = useCallback(async (commentId: string, newText: string) => {
+    if (!selectedTaskId || !newText.trim()) return;
+    setError(""); setBusy(true);
+    try {
+      const payload = await api<{ reviewComment: ReviewComment }>(
+        `/api/tasks/${encodeURIComponent(selectedTaskId)}/reviews/${encodeURIComponent(commentId)}`,
+        { method: "PUT", body: JSON.stringify({ comment: newText.trim() }) },
+      );
+      setReviewComments((prev) => prev.map((rc) => rc.id === commentId ? payload.reviewComment : rc));
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }, [selectedTaskId, setError, setBusy]);
+
+  const deleteReviewComment = useCallback(async (commentId: string) => {
+    if (!selectedTaskId) return;
+    setError(""); setBusy(true);
+    try {
+      await api(
+        `/api/tasks/${encodeURIComponent(selectedTaskId)}/reviews/${encodeURIComponent(commentId)}`,
+        { method: "DELETE" },
+      );
+      setReviewComments((prev) => prev.filter((rc) => rc.id !== commentId));
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }, [selectedTaskId, setError, setBusy]);
+
+  const resendReviewComment = useCallback(async (commentId: string) => {
+    if (!selectedTaskId) return;
+    setError(""); setBusy(true);
+    try {
+      const payload = await api<{ reviewComment: ReviewComment; run: { id: string; status: string } }>(
+        `/api/tasks/${encodeURIComponent(selectedTaskId)}/reviews/${encodeURIComponent(commentId)}/resend`,
+        { method: "POST", body: JSON.stringify({ profileId: reviewProfileId || undefined }) },
+      );
+      setReviewComments((prev) => prev.map((rc) => rc.id === commentId ? { ...payload.reviewComment, status: "processing" as const, result_run_id: payload.run.id } : rc));
+      const reviewRunId = payload.run.id;
+      updateTaskRunState(selectedTaskId, (prev) => ({
+        ...prev, activeRun: { id: reviewRunId, status: "running", branch_name: prev.activeRun?.branch_name ?? "" },
+        runLogs: [], runFinished: false, runResult: null,
+      }));
+      setDetailsTab("run");
+      pollForReviewRun(reviewRunId);
+      setInfo("Review re-sent. Agent is processing...");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }, [selectedTaskId, reviewProfileId, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
+
   const applyToMain = useCallback(async (opts?: ApplyToMainOptions) => {
     if (!selectedTaskId) return;
     setError(""); setInfo(""); setBusy(true); setApplyConflicts([]);
@@ -269,6 +313,7 @@ export function useReviewState({
     applyConflicts,
     handleLineSelect, handleLineSave, handleLineCancel,
     submitReview, submitBatchReview,
+    editReviewComment, deleteReviewComment, resendReviewComment,
     gitStatus,
     applyToMain, pushBranch, createPR, markTaskDone,
   };

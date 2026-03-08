@@ -295,6 +295,9 @@ export default function App() {
           reviewProfileId={review.reviewProfileId}
           onReviewProfileChange={review.setReviewProfileId}
           onPinAsRule={(commentId) => void handlePinAsRule(commentId)}
+          onEditReviewComment={(id, text) => void review.editReviewComment(id, text)}
+          onDeleteReviewComment={(id) => void review.deleteReviewComment(id)}
+          onResendReviewComment={(id) => void review.resendReviewComment(id)}
           chatProfileId={chat.chatProfileId}
           onChatProfileChange={chat.setChatProfileId}
           aiFeedback={plan.aiFeedback}
@@ -347,6 +350,9 @@ export default function App() {
           reviewProfileId={review.reviewProfileId}
           onReviewProfileChange={review.setReviewProfileId}
           onPinAsRule={(commentId) => void handlePinAsRule(commentId)}
+          onEditReviewComment={(id, text) => void review.editReviewComment(id, text)}
+          onDeleteReviewComment={(id) => void review.deleteReviewComment(id)}
+          onResendReviewComment={(id) => void review.resendReviewComment(id)}
         />
       )}
 

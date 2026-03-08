@@ -102,8 +102,12 @@ function resolveAgentTimeoutSecs(): number {
 
 function buildCleanEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
-  delete env['CLAUDECODE'];
-  delete env['CLAUDE_CODE_ENTRYPOINT'];
+  for (const key of Object.keys(env)) {
+    if (key === 'CLAUDECODE' || key.startsWith('CLAUDE_CODE_')) {
+      delete env[key];
+    }
+  }
+  delete env['CLAUDE_AGENT_SDK_VERSION'];
   return env;
 }
 

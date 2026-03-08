@@ -22,6 +22,8 @@ declare module './index.js' {
       status: string,
       resultRunId?: string,
     ): void;
+    updateReviewCommentText(id: string, comment: string): void;
+    deleteReviewComment(id: string): void;
     saveRunDiff(runId: string, diffText: string): void;
     getRunDiff(runId: string): string | null;
   }
@@ -127,6 +129,16 @@ Db.prototype.updateReviewCommentStatus = function (
     db.prepare(
       'UPDATE review_comments SET status = ?, result_run_id = ?, addressed_at = ? WHERE id = ?',
     ).run(status, resultRunId ?? null, addressedAt, id);
+};
+
+Db.prototype.updateReviewCommentText = function (id: string, comment: string): void {
+  const db = this.connect();
+  db.prepare('UPDATE review_comments SET comment = ? WHERE id = ?').run(comment, id);
+};
+
+Db.prototype.deleteReviewComment = function (id: string): void {
+  const db = this.connect();
+  db.prepare('DELETE FROM review_comments WHERE id = ?').run(id);
 };
 
 Db.prototype.saveRunDiff = function (runId: string, diffText: string): void {

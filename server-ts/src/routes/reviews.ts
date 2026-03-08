@@ -9,6 +9,7 @@ import {
 } from '../services/mergeService.js';
 import {
   submitReview,
+  resendReview,
   type SubmitReviewPayload,
 } from '../services/reviewService.js';
 import type { AppState } from '../state.js';
@@ -37,6 +38,64 @@ export function reviewRoutes(): Router {
       const taskId = req.params.task_id as string;
       const comments = state.db.listReviewComments(taskId);
       return res.json({ reviewComments: comments });
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
+  // PUT /api/tasks/:task_id/reviews/:id - edit review comment
+  router.put('/api/tasks/:task_id/reviews/:id', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const taskId = req.params.task_id as string;
+      const id = req.params.id as string;
+      const { comment } = req.body as { comment?: string };
+      if (!comment?.trim()) return ApiError.badRequest('Comment is required.').toResponse(res);
+
+      const rc = state.db.getReviewCommentById(id);
+      if (!rc) return ApiError.notFound('Review comment not found.').toResponse(res);
+      if (rc.task_id !== taskId) return ApiError.badRequest('Comment does not belong to this task.').toResponse(res);
+      if (rc.status === 'addressed') return ApiError.badRequest('Cannot edit an addressed comment.').toResponse(res);
+
+      state.db.updateReviewCommentText(id, comment.trim());
+      const updated = state.db.getReviewCommentById(id);
+      return res.json({ reviewComment: updated });
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
+  // DELETE /api/tasks/:task_id/reviews/:id - delete review comment
+  router.delete('/api/tasks/:task_id/reviews/:id', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const taskId = req.params.task_id as string;
+      const id = req.params.id as string;
+
+      const rc = state.db.getReviewCommentById(id);
+      if (!rc) return ApiError.notFound('Review comment not found.').toResponse(res);
+      if (rc.task_id !== taskId) return ApiError.badRequest('Comment does not belong to this task.').toResponse(res);
+      if (rc.status === 'addressed') return ApiError.badRequest('Cannot delete an addressed comment.').toResponse(res);
+
+      state.db.deleteReviewComment(id);
+      return res.json({ deleted: true });
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
+  // POST /api/tasks/:task_id/reviews/:id/resend - re-send review comment
+  router.post('/api/tasks/:task_id/reviews/:id/resend', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const taskId = req.params.task_id as string;
+      const id = req.params.id as string;
+      const { profileId } = (req.body ?? {}) as { profileId?: string };
+      const result = resendReview(state, taskId, id, profileId);
+      return res.status(202).json(result);
     } catch (e) {
       if (e instanceof ApiError) return e.toResponse(res);
       return ApiError.internal(e).toResponse(res);

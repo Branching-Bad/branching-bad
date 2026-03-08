@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { ApiError } from '../errors.js';
 import { MsgStore as MsgStoreClass } from '../msgStore.js';
 import { getHeadSha } from '../executor/index.js';
@@ -135,7 +136,8 @@ export async function resumeRunInternal(
 
   const profile = resolveAgentProfile(state, payload, task, repo.id);
   const agentCommand = buildAgentCommand(profile);
-  const workingDir = prevRun.worktree_path ?? repo.path;
+  const workingDir = (prevRun.worktree_path && fs.existsSync(prevRun.worktree_path))
+    ? prevRun.worktree_path : repo.path;
   const baseSha = prevRun.base_sha ?? (getHeadSha(repo.path) ?? null);
 
   const run = state.db.createRun(

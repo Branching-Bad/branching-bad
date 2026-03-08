@@ -145,6 +145,14 @@ export function applyWorktreeToBaseUnstaged(
     }
   }
 
+  // If the working tree is dirty (e.g. unstaged changes from a previous
+  // apply-to-main), clean it before merging.  The task branch already
+  // contains these changes, so the squash merge will bring them back.
+  const dirtyCheck = execGit(repoPath, ['status', '--porcelain']);
+  if (dirtyCheck.stdout.trim()) {
+    execGit(repoPath, ['checkout', '--', '.']);
+  }
+
   const merge = execGit(repoPath, ['merge', '--squash', '--no-commit', taskBranch]);
   if (!merge.success) {
     const conflictedFiles = collectConflictFiles(repoPath);

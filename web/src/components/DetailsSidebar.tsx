@@ -43,6 +43,7 @@ export function DetailsSidebar({
   agentProfiles,
   reviewProfileId, onReviewProfileChange,
   onPinAsRule,
+  onEditReviewComment, onDeleteReviewComment, onResendReviewComment,
   chatProfileId, onChatProfileChange,
   aiFeedback, setAiFeedback, aiFeedbackParsed,
   aiFeedbackLoading, aiFeedbackStreamText, aiFeedbackOpen, setAiFeedbackOpen,
@@ -106,6 +107,9 @@ export function DetailsSidebar({
   reviewProfileId?: string;
   onReviewProfileChange?: (v: string) => void;
   onPinAsRule?: (commentId: string) => void;
+  onEditReviewComment?: (commentId: string, newText: string) => void;
+  onDeleteReviewComment?: (commentId: string) => void;
+  onResendReviewComment?: (commentId: string) => void;
   chatProfileId?: string;
   onChatProfileChange?: (v: string) => void;
   aiFeedback?: string;
@@ -892,6 +896,9 @@ export function DetailsSidebar({
                 reviewProfileId={reviewProfileId}
                 onReviewProfileChange={onReviewProfileChange}
                 onPinAsRule={onPinAsRule}
+                onEditReviewComment={onEditReviewComment}
+                onDeleteReviewComment={onDeleteReviewComment}
+                onResendReviewComment={onResendReviewComment}
               />
             )}
           </div>

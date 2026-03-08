@@ -173,14 +173,25 @@ export function spawnAgent(
 
   // Strip env vars that trigger "nested Claude Code session" errors
   const env = { ...process.env };
-  delete env.CLAUDECODE;
-  delete env.CLAUDE_CODE_ENTRYPOINT;
+  for (const key of Object.keys(env)) {
+    if (key === 'CLAUDECODE' || key.startsWith('CLAUDE_CODE_')) {
+      delete env[key];
+    }
+  }
+  delete env.CLAUDE_AGENT_SDK_VERSION;
 
   const child = spawn(bin, args, {
     cwd: workingDir,
     stdio: [useStdinPipe ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     env,
     shell: process.platform === 'win32',
+  });
+
+  // Handle spawn errors (e.g. ENOENT when cmd.exe or binary not found)
+  // to prevent unhandled error events from crashing the process.
+  child.on('error', (err) => {
+    store.pushStderr(`Agent spawn error: ${err.message}`);
+    store.pushFinished(null, 'failed');
   });
 
   if (useStdinPipe && child.stdin) {

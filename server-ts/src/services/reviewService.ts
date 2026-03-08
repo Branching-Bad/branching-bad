@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 import { ApiError } from '../errors.js';
@@ -8,7 +9,27 @@ import {
   loadRulesSection,
   resolveAgentProfile,
 } from '../routes/shared.js';
+import { createWorktree } from '../executor/index.js';
 import { spawnResumeRun } from './agentSpawner.js';
+import { cleanStaleRuns } from './staleRunCleaner.js';
+
+/**
+ * Ensure the agent has a valid worktree to work in.
+ * If the original worktree still exists, reuse it.
+ * If it was removed (e.g. after apply-to-main), recreate it.
+ * For direct-mode tasks (no worktree), return repo root.
+ */
+function ensureWorkingDir(
+  worktreePath: string | null | undefined,
+  branchName: string | null | undefined,
+  repoPath: string,
+): string {
+  if (!worktreePath || !branchName) return repoPath;
+  if (fs.existsSync(worktreePath)) return worktreePath;
+  // Worktree was removed (apply-to-main) — recreate it
+  const wt = createWorktree(repoPath, branchName);
+  return wt.worktreePath;
+}
 
 // -- Payload types --
 
@@ -61,6 +82,7 @@ export function submitReview(
     throw ApiError.notFound('Repo not found.');
   }
 
+  cleanStaleRuns(state, repo.id);
   if (state.db.hasRunningRunForRepo(repo.id)) {
     throw ApiError.conflict('Another run is already active for this repository.');
   }
@@ -132,13 +154,26 @@ export function submitReview(
 
   const rulesSection = loadRulesSection(state.db, task.repo_id);
   const prompt = buildReviewPrompt(lineComments, commentText, rulesSection);
-  const agentWorkingDir = latestRun.worktree_path ?? repo.path;
-  const sessionId = latestRun.agent_session_id;
+  // Only resume session from successful runs — failed runs may have stale/invalid sessions
+  const sessionId = latestRun.status === 'done' ? latestRun.agent_session_id : null;
   const baseSha = latestRun.base_sha;
   const store = new MsgStore();
   state.processManager.registerStore(run.id, store);
 
   setImmediate(async () => {
+    let agentWorkingDir: string;
+    try {
+      agentWorkingDir = ensureWorkingDir(latestRun.worktree_path, latestRun.branch_name, repo.path);
+      if (agentWorkingDir !== repo.path) {
+        state.db.updateRunWorktreePath(run.id, agentWorkingDir);
+      }
+    } catch (e) {
+      store.pushStderr(`Failed to prepare worktree: ${e}`);
+      store.pushFinished(null, 'failed');
+      state.db.updateRunStatus(run.id, 'failed', true);
+      return;
+    }
+
     store.push({ type: 'agent_text', data: 'Starting review feedback run...' });
     await spawnResumeRun(
       agentCommand,
@@ -160,6 +195,90 @@ export function submitReview(
     reviewComment: primaryComment,
     run: { id: run.id, status: run.status },
   };
+}
+
+// -- Re-send an existing review comment --
+
+export function resendReview(
+  state: AppState,
+  taskId: string,
+  commentId: string,
+  profileId?: string,
+): { reviewComment: any; run: { id: string; status: string } } {
+  const rc = state.db.getReviewCommentById(commentId);
+  if (!rc) throw ApiError.notFound('Review comment not found.');
+  if (rc.task_id !== taskId) throw ApiError.badRequest('Comment does not belong to this task.');
+  if (rc.status === 'addressed') throw ApiError.badRequest('Cannot re-send an addressed comment.');
+
+  const task = state.db.getTaskById(taskId);
+  if (!task) throw ApiError.notFound('Task not found.');
+  if (task.status !== 'IN_REVIEW') throw ApiError.badRequest('Task must be in IN_REVIEW status.');
+
+  const latestRun = state.db.getLatestRunByTask(taskId);
+  if (!latestRun) throw ApiError.notFound('No completed run found.');
+
+  const repo = state.db.getRepoById(task.repo_id);
+  if (!repo) throw ApiError.notFound('Repo not found.');
+
+  cleanStaleRuns(state, repo.id);
+  if (state.db.hasRunningRunForRepo(repo.id)) {
+    throw ApiError.conflict('Another run is already active for this repository.');
+  }
+
+  state.db.updateReviewCommentStatus(rc.id, 'processing');
+
+  const profile = resolveAgentProfile(state, profileId, task);
+  const agentCommand = buildAgentCommand(profile);
+
+  const run = state.db.createRun(
+    task.id,
+    latestRun.plan_id,
+    'running',
+    latestRun.branch_name,
+    profile.id,
+    latestRun.worktree_path ?? undefined,
+    latestRun.base_sha ?? undefined,
+  );
+
+  state.db.updateRunReviewCommentId(run.id, rc.id);
+  state.db.updateReviewCommentStatus(rc.id, 'processing', run.id);
+
+  const lineComments: LineCommentPayload[] = rc.file_path
+    ? [{ filePath: rc.file_path, lineStart: rc.line_start!, lineEnd: rc.line_end!, diffHunk: rc.diff_hunk!, text: rc.comment }]
+    : [];
+  const commentText = rc.file_path ? '' : rc.comment;
+
+  const rulesSection = loadRulesSection(state.db, task.repo_id);
+  const prompt = buildReviewPrompt(lineComments, commentText, rulesSection);
+  const sessionId = latestRun.status === 'done' ? latestRun.agent_session_id : null;
+  const baseSha = latestRun.base_sha;
+  const store = new MsgStore();
+  state.processManager.registerStore(run.id, store);
+
+  setImmediate(async () => {
+    let agentWorkingDir: string;
+    try {
+      agentWorkingDir = ensureWorkingDir(latestRun.worktree_path, latestRun.branch_name, repo.path);
+      if (agentWorkingDir !== repo.path) {
+        state.db.updateRunWorktreePath(run.id, agentWorkingDir);
+      }
+    } catch (e) {
+      store.pushStderr(`Failed to prepare worktree: ${e}`);
+      store.pushFinished(null, 'failed');
+      state.db.updateRunStatus(run.id, 'failed', true);
+      return;
+    }
+
+    store.push({ type: 'agent_text', data: 'Re-sending review feedback...' });
+    await spawnResumeRun(
+      agentCommand, prompt, agentWorkingDir, sessionId,
+      run.id, task.id, repo.path, baseSha,
+      state.db, state.processManager, store,
+      { command: agentCommand, isReviewRun: true },
+    );
+  });
+
+  return { reviewComment: rc, run: { id: run.id, status: run.status } };
 }
 
 // -- Build the review feedback prompt --

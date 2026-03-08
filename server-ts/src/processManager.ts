@@ -102,6 +102,15 @@ export class ProcessManager {
     // Listen for exit event directly
     child.on('exit', onExit);
 
+    // Handle spawn errors (e.g. ENOENT) — treat as exit with failure
+    child.on('error', (err) => {
+      const store = this.stores.get(runId);
+      if (store) {
+        store.pushStderr(`Spawn error: ${err.message}`);
+      }
+      onExit(1);
+    });
+
     // Also poll as a fallback in case 'exit' is missed
     const timer = setInterval(() => {
       if (child.exitCode !== null) {

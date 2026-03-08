@@ -199,6 +199,9 @@ export function DiffReviewModal({
   reviewProfileId,
   onReviewProfileChange,
   onPinAsRule,
+  onEditReviewComment,
+  onDeleteReviewComment,
+  onResendReviewComment,
 }: {
   open: boolean;
   onClose: () => void;
@@ -231,6 +234,9 @@ export function DiffReviewModal({
   reviewProfileId?: string;
   onReviewProfileChange?: (v: string) => void;
   onPinAsRule?: (commentId: string) => void;
+  onEditReviewComment?: (commentId: string, newText: string) => void;
+  onDeleteReviewComment?: (commentId: string) => void;
+  onResendReviewComment?: (commentId: string) => void;
 }) {
   const files = useMemo(() => {
     if (!runDiff) return [];
@@ -241,6 +247,8 @@ export function DiffReviewModal({
 
   const [activeFile, setActiveFile] = useState("");
   const [viewType, setViewType] = useState<ViewType>("unified");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
 
   // Resizable file tree width
   const [treeWidth, setTreeWidth] = useState(220);
@@ -488,7 +496,10 @@ export function DiffReviewModal({
             {reviewComments.length > 0 && (
               <div className="space-y-2">
                 <h5 className="text-[11px] font-medium text-text-secondary">Review History</h5>
-                {reviewComments.map((rc) => (
+                {reviewComments.map((rc) => {
+                  const isEditing = editingCommentId === rc.id;
+                  const canModify = rc.status !== "addressed";
+                  return (
                   <div key={rc.id} className="rounded-lg border border-border-strong bg-surface-100 px-3 py-2">
                     <div className="mb-1 flex items-center gap-2">
                       {rc.status === "processing" && (
@@ -517,19 +528,43 @@ export function DiffReviewModal({
                         </span>
                       )}
                       <span className="text-[10px] text-text-muted">{formatDate(rc.created_at)}</span>
-                      {onPinAsRule && (
-                        <button
-                          onClick={() => onPinAsRule(rc.id)}
-                          className="ml-auto rounded-md p-0.5 text-text-muted transition hover:text-brand"
-                          title="Save as repository rule"
-                        >
-                          <IconBookmark className="h-3 w-3" />
-                        </button>
-                      )}
+                      <span className="ml-auto flex items-center gap-1">
+                        {onPinAsRule && (
+                          <button onClick={() => onPinAsRule(rc.id)} className="rounded-md p-0.5 text-text-muted transition hover:text-brand" title="Save as repository rule">
+                            <IconBookmark className="h-3 w-3" />
+                          </button>
+                        )}
+                        {canModify && onResendReviewComment && (
+                          <button onClick={() => onResendReviewComment(rc.id)} className="rounded-md p-0.5 text-text-muted transition hover:text-blue-400" title="Re-send">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                          </button>
+                        )}
+                        {canModify && onEditReviewComment && (
+                          <button onClick={() => { setEditingCommentId(rc.id); setEditingText(rc.comment); }} className="rounded-md p-0.5 text-text-muted transition hover:text-yellow-400" title="Edit">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                        )}
+                        {canModify && onDeleteReviewComment && (
+                          <button onClick={() => onDeleteReviewComment(rc.id)} className="rounded-md p-0.5 text-text-muted transition hover:text-red-400" title="Delete">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </span>
                     </div>
-                    <p className="text-[11px] text-text-secondary">{rc.comment}</p>
+                    {isEditing ? (
+                      <div className="mt-1 flex gap-1">
+                        <textarea value={editingText} onChange={(e) => setEditingText(e.target.value)} className="flex-1 rounded border border-border-strong bg-surface-200 px-2 py-1 text-[11px] text-text-primary outline-none focus:border-brand" rows={2} />
+                        <div className="flex flex-col gap-1">
+                          <button onClick={() => { onEditReviewComment?.(rc.id, editingText); setEditingCommentId(null); }} disabled={!editingText.trim()} className="rounded bg-brand px-2 py-0.5 text-[10px] text-white hover:bg-brand/80 disabled:opacity-50">Save</button>
+                          <button onClick={() => setEditingCommentId(null)} className="rounded bg-surface-300 px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-400">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-text-secondary">{rc.comment}</p>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
