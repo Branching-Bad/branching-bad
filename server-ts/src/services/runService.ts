@@ -34,11 +34,7 @@ export async function startRunInternal(
     throw ApiError.notFound('Repo not found.');
   }
 
-  if (state.db.hasRunningRunForRepo(repo.id)) {
-    throw ApiError.conflict(
-      'Another run is already active for this repository. Wait for it to finish.',
-    );
-  }
+  const parallelRunActive = state.db.hasRunningRunForRepo(repo.id);
 
   const profile = resolveAgentProfile(state, payload, task, repo.id);
   const agentCommand = buildAgentCommand(profile);
@@ -100,7 +96,8 @@ export async function startRunInternal(
     baseSha,
     agentCommand,
     issueKey: task.jira_issue_key,
-    useWorktree: task.use_worktree,
+    useWorktree: task.use_worktree || parallelRunActive,
+    carryDirtyState: task.carry_dirty_state,
     taskTitle: task.title,
     taskDescription: task.description,
     taskRepoId: task.repo_id,
@@ -124,10 +121,6 @@ export async function resumeRunInternal(
 
   const repo = state.db.getRepoById(task.repo_id);
   if (!repo) throw ApiError.notFound('Repo not found.');
-
-  if (state.db.hasRunningRunForRepo(repo.id)) {
-    throw ApiError.conflict('Another run is already active for this repository.');
-  }
 
   const prevRun = state.db.getLatestRunByTask(taskId);
   if (!prevRun?.agent_session_id) {

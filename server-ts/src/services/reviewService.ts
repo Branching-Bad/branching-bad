@@ -9,7 +9,7 @@ import {
   loadRulesSection,
   resolveAgentProfile,
 } from '../routes/shared.js';
-import { createWorktree } from '../executor/index.js';
+import { applyDirtyStateToWorktree, createWorktree } from '../executor/index.js';
 import { spawnResumeRun } from './agentSpawner.js';
 import { cleanStaleRuns } from './staleRunCleaner.js';
 
@@ -23,11 +23,17 @@ function ensureWorkingDir(
   worktreePath: string | null | undefined,
   branchName: string | null | undefined,
   repoPath: string,
+  carryDirtyState?: boolean,
 ): string {
   if (!worktreePath || !branchName) return repoPath;
-  if (fs.existsSync(worktreePath)) return worktreePath;
+  if (fs.existsSync(worktreePath)) {
+    if (carryDirtyState) {
+      applyDirtyStateToWorktree(repoPath, worktreePath);
+    }
+    return worktreePath;
+  }
   // Worktree was removed (apply-to-main) — recreate it
-  const wt = createWorktree(repoPath, branchName);
+  const wt = createWorktree(repoPath, branchName, { carryDirtyState });
   return wt.worktreePath;
 }
 
@@ -46,6 +52,7 @@ export interface SubmitReviewPayload {
   profileId?: string;
   mode?: string;
   lineComments?: LineCommentPayload[];
+  carryDirtyState?: boolean;
 }
 
 // -- Submit review and spawn feedback run --
@@ -83,9 +90,6 @@ export function submitReview(
   }
 
   cleanStaleRuns(state, repo.id);
-  if (state.db.hasRunningRunForRepo(repo.id)) {
-    throw ApiError.conflict('Another run is already active for this repository.');
-  }
 
   const batchId =
     reviewMode === 'batch' && lineComments.length > 0 ? uuidv4() : undefined;
@@ -163,7 +167,7 @@ export function submitReview(
   setImmediate(async () => {
     let agentWorkingDir: string;
     try {
-      agentWorkingDir = ensureWorkingDir(latestRun.worktree_path, latestRun.branch_name, repo.path);
+      agentWorkingDir = ensureWorkingDir(latestRun.worktree_path, latestRun.branch_name, repo.path, payload.carryDirtyState);
       if (agentWorkingDir !== repo.path) {
         state.db.updateRunWorktreePath(run.id, agentWorkingDir);
       }
@@ -221,9 +225,6 @@ export function resendReview(
   if (!repo) throw ApiError.notFound('Repo not found.');
 
   cleanStaleRuns(state, repo.id);
-  if (state.db.hasRunningRunForRepo(repo.id)) {
-    throw ApiError.conflict('Another run is already active for this repository.');
-  }
 
   state.db.updateReviewCommentStatus(rc.id, 'processing');
 
@@ -258,7 +259,7 @@ export function resendReview(
   setImmediate(async () => {
     let agentWorkingDir: string;
     try {
-      agentWorkingDir = ensureWorkingDir(latestRun.worktree_path, latestRun.branch_name, repo.path);
+      agentWorkingDir = ensureWorkingDir(latestRun.worktree_path, latestRun.branch_name, repo.path, task.carry_dirty_state);
       if (agentWorkingDir !== repo.path) {
         state.db.updateRunWorktreePath(run.id, agentWorkingDir);
       }
