@@ -39,6 +39,7 @@ export function useReviewState({
   const [applyConflicts, setApplyConflicts] = useState<string[]>([]);
   const [gitStatus, setGitStatus] = useState<GitStatusInfo | null>(null);
   const [reviewProfileId, setReviewProfileId] = useState("");
+  const [carryDirtyState, setCarryDirtyState] = useState(false);
 
   // Reset review state when task changes
   useEffect(() => {
@@ -110,7 +111,7 @@ export function useReviewState({
     try {
       const payload = await api<{ reviewComment: ReviewComment; run: { id: string; status: string } }>(
         `/api/tasks/${encodeURIComponent(selectedTaskId)}/review`,
-        { method: "POST", body: JSON.stringify({ comment: reviewText.trim(), profileId: reviewProfileId || undefined }) },
+        { method: "POST", body: JSON.stringify({ comment: reviewText.trim(), profileId: reviewProfileId || undefined, carryDirtyState }) },
       );
       setReviewComments((prev) => [...prev, { ...payload.reviewComment, status: "processing", result_run_id: payload.run.id }]);
       setReviewText("");
@@ -123,7 +124,7 @@ export function useReviewState({
       pollForReviewRun(reviewRunId);
       setInfo("Review feedback submitted. Agent is processing...");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedTaskId, reviewText, reviewProfileId, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
+  }, [selectedTaskId, reviewText, reviewProfileId, carryDirtyState, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
 
   const submitLineReviewInstant = useCallback(async () => {
     if (!selectedTaskId || !lineSelection || !draftText.trim()) return;
@@ -136,6 +137,7 @@ export function useReviewState({
           body: JSON.stringify({
             mode: "instant",
             profileId: reviewProfileId || undefined,
+            carryDirtyState,
             lineComments: [{
               filePath: lineSelection.filePath,
               lineStart: lineSelection.lineStart,
@@ -156,7 +158,7 @@ export function useReviewState({
       pollForReviewRun(reviewRunId);
       setInfo("Line review submitted. Agent is processing...");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedTaskId, lineSelection, draftText, reviewProfileId, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
+  }, [selectedTaskId, lineSelection, draftText, reviewProfileId, carryDirtyState, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
 
   const handleLineSave = useCallback(() => {
     if (!lineSelection || !draftText.trim()) return;
@@ -187,6 +189,7 @@ export function useReviewState({
             comment: reviewText.trim() || undefined,
             mode: "batch",
             profileId: reviewProfileId || undefined,
+            carryDirtyState,
             lineComments: batchLineComments,
           }),
         },
@@ -203,7 +206,7 @@ export function useReviewState({
       pollForReviewRun(reviewRunId);
       setInfo("Batch review submitted. Agent is processing...");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }, [selectedTaskId, reviewText, reviewProfileId, batchLineComments, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
+  }, [selectedTaskId, reviewText, reviewProfileId, carryDirtyState, batchLineComments, updateTaskRunState, pollForReviewRun, setDetailsTab, setError, setInfo, setBusy]);
 
   const editReviewComment = useCallback(async (commentId: string, newText: string) => {
     if (!selectedTaskId || !newText.trim()) return;
@@ -302,12 +305,29 @@ export function useReviewState({
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [selectedTaskId, refreshTasks, setError, setInfo, setBusy]);
 
+  const resolveConflicts = useCallback(async (mode: 'agent' | 'manual', files: string[]) => {
+    if (mode === 'manual') return; // user handles manually
+    if (!selectedTaskId) return;
+    setError(""); setBusy(true);
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(selectedTaskId)}/resolve-conflicts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conflictedFiles: files }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to start conflict resolution");
+      setInfo("Conflict resolution agent started.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }, [selectedTaskId, setError, setInfo, setBusy]);
+
   return {
     reviewComments, setReviewComments,
     reviewText, setReviewText,
     runDiff, runDiffLoading,
     reviewMode, setReviewMode,
     reviewProfileId, setReviewProfileId,
+    carryDirtyState, setCarryDirtyState,
     batchLineComments, setBatchLineComments,
     lineSelection, draftText, setDraftText,
     applyConflicts,
@@ -315,6 +335,6 @@ export function useReviewState({
     submitReview, submitBatchReview,
     editReviewComment, deleteReviewComment, resendReviewComment,
     gitStatus,
-    applyToMain, pushBranch, createPR, markTaskDone,
+    applyToMain, pushBranch, createPR, markTaskDone, resolveConflicts,
   };
 }

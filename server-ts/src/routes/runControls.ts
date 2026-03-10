@@ -4,6 +4,7 @@ import { ApiError } from '../errors.js';
 import { resumeRunInternal } from '../services/runService.js';
 import type { AppState } from '../state.js';
 import { broadcastGlobalEvent } from '../websocket.js';
+import { resolveConflicts } from '../services/conflictResolverService.js';
 
 export function runControlRoutes(): Router {
   const router = Router();
@@ -88,6 +89,24 @@ export function runControlRoutes(): Router {
       if (e instanceof ApiError) return e.toResponse(res);
       return ApiError.internal(e).toResponse(res);
     }
+  });
+
+  // POST /api/tasks/:taskId/resolve-conflicts — spawn agent to resolve merge conflicts
+  router.post('/api/tasks/:taskId/resolve-conflicts', async (req: Request, res: Response, next) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const taskId = req.params.taskId as string;
+      const { conflictedFiles } = req.body as { conflictedFiles?: string[] };
+      if (!conflictedFiles?.length) throw ApiError.badRequest('No conflicted files');
+
+      const task = state.db.getTaskById(taskId);
+      if (!task) throw ApiError.notFound('Task not found');
+      const repo = state.db.getRepoById(task.repo_id);
+      if (!repo) throw ApiError.notFound('Repo not found');
+
+      const result = await resolveConflicts(state, repo, task, conflictedFiles);
+      return res.status(202).json(result);
+    } catch (err) { return next(err); }
   });
 
   return router;

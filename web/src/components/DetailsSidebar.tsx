@@ -42,8 +42,10 @@ export function DetailsSidebar({
   customBranchName, setCustomBranchName,
   agentProfiles,
   reviewProfileId, onReviewProfileChange,
+  carryDirtyState, onCarryDirtyStateChange,
   onPinAsRule,
   onEditReviewComment, onDeleteReviewComment, onResendReviewComment,
+  onResolveConflicts,
   chatProfileId, onChatProfileChange,
   aiFeedback, setAiFeedback, aiFeedbackParsed,
   aiFeedbackLoading, aiFeedbackStreamText, aiFeedbackOpen, setAiFeedbackOpen,
@@ -106,10 +108,13 @@ export function DetailsSidebar({
   agentProfiles?: AgentProfile[];
   reviewProfileId?: string;
   onReviewProfileChange?: (v: string) => void;
+  carryDirtyState?: boolean;
+  onCarryDirtyStateChange?: (v: boolean) => void;
   onPinAsRule?: (commentId: string) => void;
   onEditReviewComment?: (commentId: string, newText: string) => void;
   onDeleteReviewComment?: (commentId: string) => void;
   onResendReviewComment?: (commentId: string) => void;
+  onResolveConflicts?: (mode: 'agent' | 'manual', files: string[]) => void;
   chatProfileId?: string;
   onChatProfileChange?: (v: string) => void;
   aiFeedback?: string;
@@ -895,10 +900,13 @@ export function DetailsSidebar({
                 agentProfiles={agentProfiles}
                 reviewProfileId={reviewProfileId}
                 onReviewProfileChange={onReviewProfileChange}
+                carryDirtyState={carryDirtyState}
+                onCarryDirtyStateChange={onCarryDirtyStateChange}
                 onPinAsRule={onPinAsRule}
                 onEditReviewComment={onEditReviewComment}
                 onDeleteReviewComment={onDeleteReviewComment}
                 onResendReviewComment={onResendReviewComment}
+                onResolveConflicts={onResolveConflicts}
               />
             )}
           </div>

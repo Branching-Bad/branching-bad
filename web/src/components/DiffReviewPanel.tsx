@@ -45,9 +45,12 @@ export function DiffReviewPanel({
   reviewProfileId,
   onReviewProfileChange,
   onPinAsRule,
+  carryDirtyState,
+  onCarryDirtyStateChange,
   onEditReviewComment,
   onDeleteReviewComment,
   onResendReviewComment,
+  onResolveConflicts,
 }: {
   selectedTask: Task;
   reviewComments: ReviewComment[];
@@ -79,9 +82,12 @@ export function DiffReviewPanel({
   reviewProfileId?: string;
   onReviewProfileChange?: (v: string) => void;
   onPinAsRule?: (commentId: string) => void;
+  carryDirtyState?: boolean;
+  onCarryDirtyStateChange?: (v: boolean) => void;
   onEditReviewComment?: (commentId: string, newText: string) => void;
   onDeleteReviewComment?: (commentId: string) => void;
   onResendReviewComment?: (commentId: string) => void;
+  onResolveConflicts?: (mode: 'agent' | 'manual', files: string[]) => void;
 }) {
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -119,9 +125,23 @@ export function DiffReviewPanel({
               <li key={f} className="text-[11px] text-red-300">- {f}</li>
             ))}
           </ul>
-          <p className="text-[10px] text-red-400/70">
-            Resolve conflicts on the task branch before applying.
-          </p>
+          <div className="mt-2 flex items-center gap-2 rounded border border-yellow-700 bg-yellow-900/20 px-3 py-2">
+            <span className="text-sm text-yellow-300">
+              {applyConflicts.length} dosyada conflict var
+            </span>
+            <button
+              className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-500"
+              onClick={() => onResolveConflicts?.('agent', applyConflicts)}
+            >
+              Agent Cözsün
+            </button>
+            <button
+              className="rounded border border-zinc-600 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-700"
+              onClick={() => onResolveConflicts?.('manual', applyConflicts)}
+            >
+              Manuel Cözeceğim
+            </button>
+          </div>
         </div>
       )}
 
@@ -212,6 +232,17 @@ export function DiffReviewPanel({
 
       {/* Submit area */}
       <div className="mt-2 flex items-center gap-2">
+        {selectedTask.use_worktree && (
+          <label className="flex items-center gap-1.5 text-[11px] text-text-muted" title="Include uncommitted changes from main into the worktree">
+            <input
+              type="checkbox"
+              checked={carryDirtyState}
+              onChange={(e) => onCarryDirtyStateChange?.(e.target.checked)}
+              className="h-3 w-3 rounded border-border-strong bg-surface-300 accent-brand"
+            />
+            Uncommitted
+          </label>
+        )}
         {agentProfiles && onReviewProfileChange && (
           <AgentProfileSelect profiles={agentProfiles} value={reviewProfileId ?? ""} onChange={onReviewProfileChange} />
         )}

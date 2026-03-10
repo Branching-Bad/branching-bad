@@ -327,6 +327,7 @@ export default function App() {
           onEditReviewComment={(id, text) => void review.editReviewComment(id, text)}
           onDeleteReviewComment={(id) => void review.deleteReviewComment(id)}
           onResendReviewComment={(id) => void review.resendReviewComment(id)}
+          onResolveConflicts={(mode, files) => void review.resolveConflicts(mode, files)}
           chatProfileId={chat.chatProfileId}
           onChatProfileChange={chat.setChatProfileId}
           aiFeedback={plan.aiFeedback}
@@ -384,6 +385,7 @@ export default function App() {
           onEditReviewComment={(id, text) => void review.editReviewComment(id, text)}
           onDeleteReviewComment={(id) => void review.deleteReviewComment(id)}
           onResendReviewComment={(id) => void review.resendReviewComment(id)}
+          onResolveConflicts={(mode, files) => void review.resolveConflicts(mode, files)}
         />
       )}
 
