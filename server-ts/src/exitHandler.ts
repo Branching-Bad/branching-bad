@@ -6,6 +6,7 @@ import { buildAgentCommand } from './routes/shared.js';
 import { runBuildCommand } from './services/buildRunner.js';
 import { attemptBuildRetry } from './services/buildRetry.js';
 import { createMemoryFromRun } from './services/memoryService.js';
+import { broadcastGlobalEvent } from './websocket.js';
 
 /**
  * Handle post-exit cleanup for a child agent process:
@@ -165,6 +166,23 @@ export function handleChildExit(
   // Create memory from successful runs (async, fire-and-forget)
   if (runStatus === 'done') {
     scheduleMemoryCreation(db, taskId, runId);
+  }
+
+  // Broadcast run_finished to global WS subscribers
+  try {
+    const task = db.getTaskById(taskId);
+    if (task) {
+      broadcastGlobalEvent({
+        type: 'run_finished',
+        runId,
+        taskId,
+        repoId: task.repo_id,
+        taskTitle: task.title,
+        status: runStatus,
+      });
+    }
+  } catch {
+    // Ignore broadcast failures
   }
 
   // Push finished to message stream

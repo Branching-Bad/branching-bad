@@ -14,6 +14,7 @@ import {
 } from './runHelpers.js';
 import { spawnRunAgent } from './runAgent.js';
 import { spawnResumeRun } from './agentSpawner.js';
+import { broadcastGlobalEvent } from '../websocket.js';
 
 export type { StartRunPayload } from './runHelpers.js';
 
@@ -83,6 +84,14 @@ export async function startRunInternal(
     },
   };
 
+  broadcastGlobalEvent({
+    type: 'run_started',
+    runId: run.id,
+    taskId: task.id,
+    repoId: repo.id,
+    taskTitle: task.title,
+  });
+
   const store = new MsgStoreClass();
   state.processManager.registerStore(run.id, store);
   persistStoreOutputs(store, state.db, task.id);
@@ -151,6 +160,14 @@ export async function resumeRunInternal(
       agent: { id: profile.id, provider: profile.provider, agent_name: profile.agent_name, model: profile.model },
     },
   };
+
+  broadcastGlobalEvent({
+    type: 'run_started',
+    runId: run.id,
+    taskId: task.id,
+    repoId: repo.id,
+    taskTitle: task.title,
+  });
 
   const store = new MsgStoreClass();
   state.processManager.registerStore(run.id, store);

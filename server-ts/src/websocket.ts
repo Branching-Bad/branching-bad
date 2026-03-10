@@ -1,6 +1,6 @@
 import type { IncomingMessage, Server } from 'http';
 import type { Duplex } from 'stream';
-import { WebSocketServer } from 'ws';
+import { type WebSocket, WebSocketServer } from 'ws';
 
 import { planStoreKey } from './routes/shared.js';
 import {
@@ -11,11 +11,32 @@ import {
 import { getAnalystStore } from './routes/analyst.js';
 import type { AppState } from './state.js';
 
+// ---------------------------------------------------------------------------
+// Global subscriber tracking
+// ---------------------------------------------------------------------------
+
+const globalClients = new Set<WebSocket>();
+
+export function broadcastGlobalEvent(event: {
+  type: 'run_started' | 'run_finished' | 'run_cancelled';
+  runId: string;
+  taskId: string;
+  repoId: string;
+  taskTitle: string;
+  status?: string;
+}): void {
+  const msg = JSON.stringify(event);
+  for (const ws of globalClients) {
+    if (ws.readyState === 1) ws.send(msg); // 1 = OPEN
+  }
+}
+
 /**
  * Attach a WebSocket upgrade handler to the given HTTP server.
  * Routes:
  *   /api/plans/jobs/:job_id/ws  — plan job streaming
  *   /api/runs/:run_id/ws        — run streaming
+ *   /api/ws/global              — global run lifecycle events
  */
 export function attachWebSocketHandler(server: Server, state: AppState): void {
   const wss = new WebSocketServer({ noServer: true });
@@ -39,6 +60,11 @@ export function attachWebSocketHandler(server: Server, state: AppState): void {
     const analystWsMatch = pathname.match(/^\/api\/analyst\/([^/]+)\/ws$/);
     if (analystWsMatch) {
       handleAnalystUpgrade(wss, req, socket, head, analystWsMatch[1], state);
+      return;
+    }
+
+    if (pathname === '/api/ws/global') {
+      handleGlobalUpgrade(wss, req, socket, head);
       return;
     }
 
@@ -151,5 +177,17 @@ function handleAnalystUpgrade(
       return;
     }
     handleStoreWS(ws, store);
+  });
+}
+
+function handleGlobalUpgrade(
+  wss: WebSocketServer,
+  req: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+): void {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    globalClients.add(ws);
+    ws.on('close', () => globalClients.delete(ws));
   });
 }

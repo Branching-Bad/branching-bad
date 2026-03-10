@@ -3,6 +3,7 @@ import { Router, type Request, type Response } from 'express';
 import { ApiError } from '../errors.js';
 import { resumeRunInternal } from '../services/runService.js';
 import type { AppState } from '../state.js';
+import { broadcastGlobalEvent } from '../websocket.js';
 
 export function runControlRoutes(): Router {
   const router = Router();
@@ -42,6 +43,21 @@ export function runControlRoutes(): Router {
 
       const store = state.processManager.getStore(runId);
       if (store) store.pushFinished(null, 'failed');
+
+      try {
+        const task = state.db.getTaskById(run.task_id);
+        if (task) {
+          broadcastGlobalEvent({
+            type: 'run_cancelled',
+            runId,
+            taskId: run.task_id,
+            repoId: task.repo_id,
+            taskTitle: task.title,
+          });
+        }
+      } catch {
+        // Ignore broadcast failures
+      }
 
       return res.json({ status: 'failed', run_id: runId });
     } catch (e) {
