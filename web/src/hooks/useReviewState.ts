@@ -310,13 +310,10 @@ export function useReviewState({
     if (!selectedTaskId) return;
     setError(""); setBusy(true);
     try {
-      const res = await fetch(`/api/tasks/${encodeURIComponent(selectedTaskId)}/resolve-conflicts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conflictedFiles: files }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to start conflict resolution");
+      await api(
+        `/api/tasks/${encodeURIComponent(selectedTaskId)}/resolve-conflicts`,
+        { method: "POST", body: JSON.stringify({ conflictedFiles: files }) },
+      );
       setInfo("Conflict resolution agent started.");
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [selectedTaskId, setError, setInfo, setBusy]);

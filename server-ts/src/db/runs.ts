@@ -6,7 +6,7 @@ declare module './index.js' {
   interface Db {
     createRun(
       taskId: string,
-      planId: string,
+      planId: string | null,
       status: string,
       branchName: string,
       agentProfileId?: string,
@@ -54,7 +54,7 @@ function rowToRun(row: any): Run {
 
 Db.prototype.createRun = function (
   taskId: string,
-  planId: string,
+  planId: string | null,
   status: string,
   branchName: string,
   agentProfileId?: string,

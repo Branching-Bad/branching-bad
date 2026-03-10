@@ -36,16 +36,27 @@ export function useGlobalRuns() {
         try {
           const msg = JSON.parse(event.data as string) as {
             type: string;
-            run?: GlobalActiveRun;
             runId?: string;
+            taskId?: string;
+            repoId?: string;
+            taskTitle?: string;
+            repoName?: string;
             status?: string;
           };
 
-          if (msg.type === "run_started" && msg.run) {
-            setActiveRuns((prev) => {
-              const exists = prev.some((r) => r.runId === msg.run!.runId);
-              return exists ? prev : [...prev, msg.run!];
-            });
+          if (msg.type === "run_started" && msg.runId) {
+            const newRun: GlobalActiveRun = {
+              runId: msg.runId,
+              taskId: msg.taskId ?? "",
+              repoId: msg.repoId ?? "",
+              taskTitle: msg.taskTitle ?? "",
+              repoName: msg.repoName ?? "",
+              status: "running",
+              startedAt: new Date().toISOString(),
+            };
+            setActiveRuns((prev) =>
+              prev.some((r) => r.runId === msg.runId) ? prev : [...prev, newRun],
+            );
           } else if ((msg.type === "run_finished" || msg.type === "run_cancelled") && msg.runId) {
             const newStatus = msg.status as GlobalActiveRun["status"] ?? (msg.type === "run_cancelled" ? "cancelled" : "done");
             setActiveRuns((prev) =>

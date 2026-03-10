@@ -90,6 +90,7 @@ export async function startRunInternal(
     taskId: task.id,
     repoId: repo.id,
     taskTitle: task.title,
+    repoName: repo.name,
   });
 
   const store = new MsgStoreClass();
@@ -167,6 +168,7 @@ export async function resumeRunInternal(
     taskId: task.id,
     repoId: repo.id,
     taskTitle: task.title,
+    repoName: repo.name,
   });
 
   const store = new MsgStoreClass();

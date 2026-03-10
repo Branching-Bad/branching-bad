@@ -18,9 +18,9 @@ declare module './index.js' {
 Db.prototype.getActiveRuns = function (): any[] {
   const db = this.connect();
   return db.prepare(`
-    SELECT r.id, r.task_id, r.status, r.created_at, r.branch_name,
-           t.title as task_title, t.repo_id,
-           rp.path as repo_path, rp.name as repo_name
+    SELECT r.id as runId, r.task_id as taskId, r.status, r.created_at as startedAt, r.branch_name,
+           t.title as taskTitle, t.repo_id as repoId,
+           rp.path as repoPath, rp.name as repoName
     FROM runs r
     INNER JOIN tasks t ON t.id = r.task_id
     INNER JOIN repos rp ON rp.id = t.repo_id

@@ -172,12 +172,14 @@ export function handleChildExit(
   try {
     const task = db.getTaskById(taskId);
     if (task) {
+      const repo = db.getRepoById(task.repo_id);
       broadcastGlobalEvent({
         type: 'run_finished',
         runId,
         taskId,
         repoId: task.repo_id,
         taskTitle: task.title,
+        repoName: repo?.name,
         status: runStatus,
       });
     }

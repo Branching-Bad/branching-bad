@@ -23,6 +23,7 @@ export function broadcastGlobalEvent(event: {
   taskId: string;
   repoId: string;
   taskTitle: string;
+  repoName?: string;
   status?: string;
 }): void {
   const msg = JSON.stringify(event);

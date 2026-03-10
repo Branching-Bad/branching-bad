@@ -33,7 +33,7 @@ export function runControlRoutes(): Router {
         return ApiError.badRequest('Run is not currently running.').toResponse(res);
       }
 
-      const cancelled = state.processManager.cancelRun(runId);
+      const cancelled = await state.processManager.cancelRun(runId);
       if (!cancelled) {
         return ApiError.badRequest('No running process found for this run.').toResponse(res);
       }
@@ -48,12 +48,14 @@ export function runControlRoutes(): Router {
       try {
         const task = state.db.getTaskById(run.task_id);
         if (task) {
+          const repo = state.db.getRepoById(task.repo_id);
           broadcastGlobalEvent({
             type: 'run_cancelled',
             runId,
             taskId: run.task_id,
             repoId: task.repo_id,
             taskTitle: task.title,
+            repoName: repo?.name,
           });
         }
       } catch {

@@ -40,7 +40,7 @@ export async function resolveConflicts(
 
   const run = state.db.createRun(
     task.id,
-    latestRun?.plan_id ?? null as any,
+    latestRun?.plan_id ?? null,
     'running',
     branchName,
     profile.id,

@@ -88,6 +88,8 @@ export default function App() {
   });
   const { visibleRuns, unseenFinished, cancelRun, resumeRun, markSeen } = useGlobalRuns();
   const { toasts, addToast, dismissToast } = useToast();
+  const { selectedRepoId, setSelectedRepoId } = repo;
+  const { setSelectedTaskId } = task;
 
   // ── Event Stream (bridges all domain hooks via WebSocket) ──
   const stream = useEventStream({
@@ -113,15 +115,17 @@ export default function App() {
       });
       markSeen(run.runId);
     }
-  }, [unseenFinished]);
+  }, [unseenFinished, addToast, markSeen]);
 
   // ── Navigate to task from StatusBar / Toast ──
   const handleRunNavigate = useCallback((taskId: string, repoId: string) => {
-    if (repoId !== repo.selectedRepoId) repo.setSelectedRepoId(repoId);
-    task.setSelectedTaskId(taskId);
+    if (repoId !== selectedRepoId) setSelectedRepoId(repoId);
+    setSelectedTaskId(taskId);
+    const runEntry = visibleRuns.find((r) => r.taskId === taskId);
+    if (runEntry) markSeen(runEntry.runId);
     setDetailsOpen(true);
     setDetailsTab("run");
-  }, [repo.selectedRepoId, repo.setSelectedRepoId, task.setSelectedTaskId]);
+  }, [selectedRepoId, setSelectedRepoId, setSelectedTaskId, visibleRuns, markSeen]);
 
   // ── Auto-select first repo on bootstrap ──
   useEffect(() => { repo.initRepoId(boot.repos); }, [boot.repos, repo.initRepoId]);

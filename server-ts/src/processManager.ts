@@ -26,10 +26,10 @@ export class ProcessManager {
     return this.stores.get(runId);
   }
 
-  cancelRun(runId: string): boolean {
+  async cancelRun(runId: string): Promise<boolean> {
     const child = this.children.get(runId);
     if (!child) return false;
-    this.killProcess(runId);
+    await this.killProcess(runId);
     return true;
   }
 

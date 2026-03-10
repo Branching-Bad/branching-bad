@@ -133,13 +133,13 @@ export function DiffReviewPanel({
               className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-500"
               onClick={() => onResolveConflicts?.('agent', applyConflicts)}
             >
-              Agent Cözsün
+              Agent Çözsün
             </button>
             <button
               className="rounded border border-zinc-600 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-700"
               onClick={() => onResolveConflicts?.('manual', applyConflicts)}
             >
-              Manuel Cözeceğim
+              Manuel Çözeceğim
             </button>
           </div>
         </div>
