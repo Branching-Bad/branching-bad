@@ -12,6 +12,7 @@ import { planRoutes } from './routes/plans.js';
 import { planJobRoutes } from './routes/planJobs.js';
 import { planReviewRoutes } from './routes/planReview.js';
 import { runRoutes } from './routes/runs.js';
+import { runControlRoutes } from './routes/runControls.js';
 import { reviewRoutes } from './routes/reviews.js';
 import { agentRoutes } from './routes/agents.js';
 import { chatRoutes } from './routes/chat.js';
@@ -46,6 +47,7 @@ export function createApp(state: AppState): express.Express {
   app.use(planJobRoutes());
   app.use(planReviewRoutes());
   app.use(runRoutes());
+  app.use(runControlRoutes());
   app.use(reviewRoutes());
   app.use(agentRoutes());
   app.use(chatRoutes());

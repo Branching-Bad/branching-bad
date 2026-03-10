@@ -26,6 +26,13 @@ export class ProcessManager {
     return this.stores.get(runId);
   }
 
+  cancelRun(runId: string): boolean {
+    const child = this.children.get(runId);
+    if (!child) return false;
+    this.killProcess(runId);
+    return true;
+  }
+
   killProcess(runId: string): Promise<boolean> {
     const child = this.children.get(runId);
     if (!child || child.pid == null) {

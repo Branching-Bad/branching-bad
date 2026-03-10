@@ -5,6 +5,7 @@ declare module './index.js' {
   interface Db {
     hasRunningRunForRepo(repoId: string): boolean;
     hasRunningRunForTask(taskId: string): boolean;
+    getActiveRuns(): any[];
     failStaleRunningRuns(): number;
     failStaleRunningPlanJobs(): number;
     resetStalePlanGeneratingTasks(): number;
@@ -13,6 +14,20 @@ declare module './index.js' {
     clearAllPipelines(): ClearPipelineResult;
   }
 }
+
+Db.prototype.getActiveRuns = function (): any[] {
+  const db = this.connect();
+  return db.prepare(`
+    SELECT r.id, r.task_id, r.status, r.created_at, r.branch_name,
+           t.title as task_title, t.repo_id,
+           rp.path as repo_path, rp.name as repo_name
+    FROM runs r
+    INNER JOIN tasks t ON t.id = r.task_id
+    INNER JOIN repos rp ON rp.id = t.repo_id
+    WHERE r.status = 'running'
+    ORDER BY r.created_at DESC
+  `).all();
+};
 
 Db.prototype.hasRunningRunForRepo = function (repoId: string): boolean {
   const db = this.connect();
