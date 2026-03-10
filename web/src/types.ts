@@ -11,6 +11,7 @@ export type Task = {
   auto_start: boolean;
   auto_approve_plan: boolean;
   use_worktree: boolean;
+  carry_dirty_state: boolean;
   last_pipeline_error?: string | null;
   last_pipeline_at?: string | null;
   agent_profile_id?: string | null;
@@ -172,3 +173,21 @@ export const EMPTY_TASK_PLAN_STATE: TaskPlanState = {
   planLogs: [],
   planFinished: false,
 };
+
+export interface GlobalActiveRun {
+  runId: string;
+  taskId: string;
+  repoId: string;
+  repoName: string;
+  taskTitle: string;
+  status: 'running' | 'done' | 'failed' | 'cancelled';
+  startedAt: string;
+}
+
+export interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  title: string;
+  taskId: string;
+  repoId: string;
+}
