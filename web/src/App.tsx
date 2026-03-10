@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { api } from "./api";
 import { btnSecondary } from "./components/shared";
 import { IconSettings, IconExtensions, IconAnalyst } from "./components/icons";
@@ -24,6 +24,10 @@ import { useRulesState } from "./hooks/useRulesState";
 import { useMemoryState } from "./hooks/useMemoryState";
 import { useGlossaryState } from "./hooks/useGlossaryState";
 import { useAnalystState } from "./hooks/useAnalystState";
+import { useGlobalRuns } from "./hooks/useGlobalRuns";
+import { useToast } from "./hooks/useToast";
+import { StatusBar } from "./components/StatusBar";
+import { ToastNotification } from "./components/ToastNotification";
 import type { StreamFunctions } from "./hooks/streamTypes";
 
 initProviders();
@@ -82,6 +86,8 @@ export default function App() {
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     streamRef, updateTaskRunState: run.updateTaskRunState, setError,
   });
+  const { visibleRuns, unseenFinished, cancelRun, resumeRun, markSeen } = useGlobalRuns();
+  const { toasts, addToast, dismissToast } = useToast();
 
   // ── Event Stream (bridges all domain hooks via WebSocket) ──
   const stream = useEventStream({
@@ -95,6 +101,27 @@ export default function App() {
     selectedTaskIdRef: task.selectedTaskIdRef,
   });
   useEffect(() => { streamRef.current = stream; }, [stream]);
+
+  // ── Toast for finished runs ──
+  useEffect(() => {
+    for (const run of unseenFinished) {
+      addToast({
+        type: run.status === "done" ? "success" : "error",
+        title: `${run.taskTitle} ${run.status === "done" ? "tamamlandı" : "başarısız"}`,
+        taskId: run.taskId,
+        repoId: run.repoId,
+      });
+      markSeen(run.runId);
+    }
+  }, [unseenFinished]);
+
+  // ── Navigate to task from StatusBar / Toast ──
+  const handleRunNavigate = useCallback((taskId: string, repoId: string) => {
+    if (repoId !== repo.selectedRepoId) repo.setSelectedRepoId(repoId);
+    task.setSelectedTaskId(taskId);
+    setDetailsOpen(true);
+    setDetailsTab("run");
+  }, [repo.selectedRepoId, repo.setSelectedRepoId, task.setSelectedTaskId]);
 
   // ── Auto-select first repo on bootstrap ──
   useEffect(() => { repo.initRepoId(boot.repos); }, [boot.repos, repo.initRepoId]);
@@ -294,6 +321,8 @@ export default function App() {
           agentProfiles={boot.agentProfiles}
           reviewProfileId={review.reviewProfileId}
           onReviewProfileChange={review.setReviewProfileId}
+          carryDirtyState={review.carryDirtyState}
+          onCarryDirtyStateChange={review.setCarryDirtyState}
           onPinAsRule={(commentId) => void handlePinAsRule(commentId)}
           onEditReviewComment={(id, text) => void review.editReviewComment(id, text)}
           onDeleteReviewComment={(id) => void review.deleteReviewComment(id)}
@@ -349,6 +378,8 @@ export default function App() {
           agentProfiles={boot.agentProfiles}
           reviewProfileId={review.reviewProfileId}
           onReviewProfileChange={review.setReviewProfileId}
+          carryDirtyState={review.carryDirtyState}
+          onCarryDirtyStateChange={review.setCarryDirtyState}
           onPinAsRule={(commentId) => void handlePinAsRule(commentId)}
           onEditReviewComment={(id, text) => void review.editReviewComment(id, text)}
           onDeleteReviewComment={(id) => void review.deleteReviewComment(id)}
@@ -473,6 +504,18 @@ export default function App() {
         task={task.selectedTask}
         agentProfiles={boot.agentProfiles}
         onSave={task.saveTaskEdits}
+      />
+
+      <StatusBar
+        runs={visibleRuns}
+        onCancel={cancelRun}
+        onResume={resumeRun}
+        onNavigate={handleRunNavigate}
+      />
+      <ToastNotification
+        toasts={toasts}
+        onDismiss={dismissToast}
+        onNavigate={handleRunNavigate}
       />
     </div>
   );
