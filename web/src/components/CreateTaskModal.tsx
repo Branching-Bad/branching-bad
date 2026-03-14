@@ -12,6 +12,7 @@ export type TaskFormValues = {
   autoApprovePlan: boolean;
   autoStart: boolean;
   useWorktree: boolean;
+  carryDirtyState: boolean;
   agentProfileId: string;
 };
 
@@ -55,12 +56,13 @@ function CreateTaskModalInner({
   const [autoApprovePlan, setAutoApprovePlan] = useState(false);
   const [autoStart, setAutoStart] = useState(false);
   const [useWorktree, setUseWorktree] = useState(true);
+  const [carryDirtyState, setCarryDirtyState] = useState(false);
   const [agentProfileId, setAgentProfileId] = useState("");
 
   const handleSubmit = async () => {
-    await onSubmit({ title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, agentProfileId });
+    await onSubmit({ title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, carryDirtyState, agentProfileId });
     setTitle(""); setDescription(""); setPriority("");
-    setRequirePlan(true); setAutoApprovePlan(false); setAutoStart(false); setUseWorktree(true);
+    setRequirePlan(true); setAutoApprovePlan(false); setAutoStart(false); setUseWorktree(true); setCarryDirtyState(false);
     setAgentProfileId("");
     onClose();
   };
@@ -91,6 +93,7 @@ function CreateTaskModalInner({
             autoApprovePlan={autoApprovePlan} setAutoApprovePlan={setAutoApprovePlan}
             autoStart={autoStart} setAutoStart={setAutoStart}
             useWorktree={useWorktree} setUseWorktree={setUseWorktree}
+            carryDirtyState={carryDirtyState} setCarryDirtyState={setCarryDirtyState}
             agentProfileId={agentProfileId} setAgentProfileId={setAgentProfileId}
             agentProfiles={agentProfiles}
             autoFocus

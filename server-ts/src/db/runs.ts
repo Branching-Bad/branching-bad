@@ -24,6 +24,7 @@ declare module './index.js' {
     updateRunWorktreePath(runId: string, worktreePath: string): void;
     updateRunChatMessageId(runId: string, chatMessageId: string): void;
     updateRunReviewCommentId(runId: string, reviewCommentId: string): void;
+    getRunsWithWorktreeByTask(taskId: string): Array<{ worktree_path: string | null; branch_name: string }>;
   }
 }
 
@@ -185,6 +186,18 @@ Db.prototype.updateRunChatMessageId = function (
       nowIso(),
       runId,
     );
+};
+
+Db.prototype.getRunsWithWorktreeByTask = function (
+  taskId: string,
+): Array<{ worktree_path: string | null; branch_name: string }> {
+  const db = this.connect();
+  return db
+    .prepare(
+      `SELECT DISTINCT worktree_path, branch_name FROM runs
+       WHERE task_id = ? AND (worktree_path IS NOT NULL OR branch_name IS NOT NULL)`,
+    )
+    .all(taskId) as Array<{ worktree_path: string | null; branch_name: string }>;
 };
 
 Db.prototype.updateRunReviewCommentId = function (

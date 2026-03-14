@@ -1,4 +1,5 @@
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { spawnSync } from 'child_process';
 import path from 'path';
 
 import type { WorktreeInfo } from './types.js';
@@ -10,12 +11,32 @@ import { assertGitRepo } from './git-read.js';
 // ---------------------------------------------------------------------------
 
 /** Create a git worktree at `.branching-bad/worktrees/<branchName>/`. */
-export function createWorktree(repoPath: string, branchName: string): WorktreeInfo {
+export function createWorktree(
+  repoPath: string,
+  branchName: string,
+  options?: { carryDirtyState?: boolean },
+): WorktreeInfo {
   assertGitRepo(repoPath);
 
   const worktreeDir = path.join(repoPath, '.branching-bad', 'worktrees', branchName);
   const parentDir = path.dirname(worktreeDir);
   mkdirSync(parentDir, { recursive: true });
+
+  // Capture dirty state before creating worktree (must happen first)
+  let trackedDiff: string | undefined;
+  let untrackedFiles: string[] = [];
+  if (options?.carryDirtyState) {
+    // Combined diff of staged + unstaged for tracked files
+    const headDiff = execGit(repoPath, ['diff', 'HEAD']);
+    if (headDiff.success && headDiff.stdout.trim().length > 0) {
+      trackedDiff = headDiff.stdout;
+    }
+    // List untracked files
+    const utResult = execGit(repoPath, ['ls-files', '--others', '--exclude-standard']);
+    if (utResult.success) {
+      untrackedFiles = utResult.stdout.split('\n').filter((l) => l.trim().length > 0);
+    }
+  }
 
   // Try creating with new branch
   const result = execGit(repoPath, ['worktree', 'add', worktreeDir, '-b', branchName]);
@@ -27,7 +48,62 @@ export function createWorktree(repoPath: string, branchName: string): WorktreeIn
     }
   }
 
+  // Apply dirty state to the new worktree
+  if (trackedDiff) {
+    const applyResult = spawnSync('git', ['-C', worktreeDir, 'apply', '--allow-empty'], {
+      input: trackedDiff,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+    });
+    if (applyResult.status !== 0) {
+      // Non-fatal: log but continue — agent can still work with committed state
+      console.warn(`[worktree] Failed to carry dirty state: ${applyResult.stderr?.trim()}`);
+    }
+  }
+  // Copy untracked files
+  for (const file of untrackedFiles) {
+    const srcPath = path.join(repoPath, file);
+    const destPath = path.join(worktreeDir, file);
+    try {
+      mkdirSync(path.dirname(destPath), { recursive: true });
+      copyFileSync(srcPath, destPath);
+    } catch {
+      // Non-fatal: skip files that can't be copied
+    }
+  }
+
   return { worktreePath: worktreeDir };
+}
+
+/** Apply dirty state (uncommitted changes + untracked files) from repoPath to an existing worktree. */
+export function applyDirtyStateToWorktree(repoPath: string, worktreeDir: string): void {
+  const headDiff = execGit(repoPath, ['diff', 'HEAD']);
+  if (headDiff.success && headDiff.stdout.trim().length > 0) {
+    const applyResult = spawnSync('git', ['-C', worktreeDir, 'apply', '--allow-empty'], {
+      input: headDiff.stdout,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+    });
+    if (applyResult.status !== 0) {
+      console.warn(`[worktree] Failed to apply dirty state: ${applyResult.stderr?.trim()}`);
+    }
+  }
+  const utResult = execGit(repoPath, ['ls-files', '--others', '--exclude-standard']);
+  if (utResult.success) {
+    const untrackedFiles = utResult.stdout.split('\n').filter((l) => l.trim().length > 0);
+    for (const file of untrackedFiles) {
+      const srcPath = path.join(repoPath, file);
+      const destPath = path.join(worktreeDir, file);
+      try {
+        mkdirSync(path.dirname(destPath), { recursive: true });
+        copyFileSync(srcPath, destPath);
+      } catch {
+        // Non-fatal
+      }
+    }
+  }
 }
 
 /** Remove a git worktree, with fallback to manual cleanup. */

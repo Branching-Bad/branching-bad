@@ -243,3 +243,10 @@ Mevcut durumu, referans projeyi (vibe-kanban) ve yazılım geliştirici ihtiyaç
 | **Orta-Yüksek** | Context7 Entegrasyonu, PR Oluşturma, Run Kuyruğu |
 | **Orta** | Terminal, Preview Browser, Filtreleme/Etiketleme, Task Bağımlılıkları, Bildirimler, Jira Geri Yazma |
 | **Düşük-Orta** | Metrikler, Template Sistemi, MCP Server |
+
+---
+
+## References
+
+- **[vibe-kanban](https://github.com/example/vibe-kanban)** — Component pattern inspiration (diff viewer, chat, terminal, PR dialog)
+- **[OpenWork](https://github.com/different-ai/openwork)** — Open-source desktop app for running AI agents, skills, and MCP workflows locally. Tauri + TypeScript + Rust. Local-first, session management with live SSE streaming, skills manager, permission system, template saving.

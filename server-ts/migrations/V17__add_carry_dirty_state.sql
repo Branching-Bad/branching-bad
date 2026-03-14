@@ -1,0 +1,1 @@
+ALTER TABLE tasks ADD COLUMN carry_dirty_state INTEGER NOT NULL DEFAULT 0;

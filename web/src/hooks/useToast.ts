@@ -8,9 +8,6 @@ export function useToast() {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const full: ToastMessage = { ...toast, id };
     setToasts((prev) => [...prev, full]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
   }, []);
 
   const dismissToast = useCallback((id: string) => {

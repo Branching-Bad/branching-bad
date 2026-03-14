@@ -93,7 +93,11 @@ export function getAnalystStore(sessionId: string, state?: AppState): MsgStore |
 function monitorChild(session: LiveSession, child: ChildProcess): void {
   session.child = child;
   session.idle = false;
-  child.on('exit', () => { session.idle = true; session.child = null; });
+  child.on('exit', () => {
+    session.idle = true;
+    session.child = null;
+    session.store.push({ type: 'agent_done', data: '' });
+  });
 }
 
 function killChild(session: LiveSession): Promise<void> {

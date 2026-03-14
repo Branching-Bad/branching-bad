@@ -23,6 +23,7 @@ export function EditTaskModal({
   const [autoApprovePlan, setAutoApprovePlan] = useState(false);
   const [autoStart, setAutoStart] = useState(false);
   const [useWorktree, setUseWorktree] = useState(true);
+  const [carryDirtyState, setCarryDirtyState] = useState(false);
   const [agentProfileId, setAgentProfileId] = useState("");
 
   // Populate form only when a different task is opened (not on every re-render)
@@ -36,6 +37,7 @@ export function EditTaskModal({
     setAutoApprovePlan(task.auto_approve_plan);
     setAutoStart(task.auto_start);
     setUseWorktree(task.use_worktree);
+    setCarryDirtyState(task.carry_dirty_state);
     setAgentProfileId(task.agent_profile_id ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, open]);
@@ -43,7 +45,7 @@ export function EditTaskModal({
   if (!open || !task) return null;
 
   const handleSave = async () => {
-    await onSave(task.id, { title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, agentProfileId });
+    await onSave(task.id, { title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, carryDirtyState, agentProfileId });
     onClose();
   };
 
@@ -70,6 +72,7 @@ export function EditTaskModal({
             autoApprovePlan={autoApprovePlan} setAutoApprovePlan={setAutoApprovePlan}
             autoStart={autoStart} setAutoStart={setAutoStart}
             useWorktree={useWorktree} setUseWorktree={setUseWorktree}
+            carryDirtyState={carryDirtyState} setCarryDirtyState={setCarryDirtyState}
             agentProfileId={agentProfileId} setAgentProfileId={setAgentProfileId}
             agentProfiles={agentProfiles}
             autoFocus

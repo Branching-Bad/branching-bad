@@ -11,7 +11,8 @@ export type LogMsg =
   | { type: 'tool_result'; data: string }
   | { type: 'finished'; data: string }
   | { type: 'user_message'; data: string }
-  | { type: 'turn_separator'; data: '' };
+  | { type: 'turn_separator'; data: '' }
+  | { type: 'agent_done'; data: '' };
 
 export class MsgStore {
   private history: LogMsg[] = [];

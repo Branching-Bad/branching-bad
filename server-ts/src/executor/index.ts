@@ -21,6 +21,7 @@ export {
 } from './git-read.js';
 
 export {
+  applyDirtyStateToWorktree,
   createWorktree,
   ghCreatePr,
   gitCommitAll,

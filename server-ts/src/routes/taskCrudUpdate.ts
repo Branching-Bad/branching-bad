@@ -1,6 +1,9 @@
+import { existsSync } from 'fs';
 import { Router, type Request, type Response } from 'express';
 
 import { ApiError } from '../errors.js';
+import { removeWorktree } from '../executor/index.js';
+import { execGit } from '../executor/shell.js';
 import type { AppState } from '../state.js';
 import { enqueueAutostartIfEnabled, isTodoLaneStatus } from './shared.js';
 
@@ -12,6 +15,7 @@ interface UpdateTaskPayload {
   autoStart?: boolean;
   autoApprovePlan?: boolean;
   useWorktree?: boolean;
+  carryDirtyState?: boolean;
   agentProfileId?: string | null;
 }
 
@@ -57,6 +61,7 @@ export function taskCrudUpdateRoutes(): Router {
       const autoApprovePlan = payload.autoApprovePlan ?? task.auto_approve_plan;
       const autoStart = payload.autoStart ?? task.auto_start;
       const useWorktree = payload.useWorktree ?? task.use_worktree;
+      const carryDirtyState = payload.carryDirtyState ?? task.carry_dirty_state;
       const agentProfileId = resolveNullableField(payload.agentProfileId, task.agent_profile_id);
 
       state.db.updateTaskDetails(
@@ -68,6 +73,7 @@ export function taskCrudUpdateRoutes(): Router {
         autoStart,
         autoApprovePlan,
         useWorktree,
+        carryDirtyState,
         agentProfileId,
       );
 
@@ -110,6 +116,24 @@ export function taskCrudUpdateRoutes(): Router {
       }
 
       state.db.updateTaskStatus(task.id, status);
+
+      // Clean up ALL worktrees + branches when task is archived
+      if (status.toUpperCase() === 'ARCHIVED') {
+        const repo = state.db.getRepoById(task.repo_id);
+        if (repo) {
+          const worktreeRuns = state.db.getRunsWithWorktreeByTask(task.id);
+          const cleanedBranches = new Set<string>();
+          for (const run of worktreeRuns) {
+            if (run.worktree_path && existsSync(run.worktree_path)) {
+              removeWorktree(repo.path, run.worktree_path);
+            }
+            if (run.branch_name && !cleanedBranches.has(run.branch_name)) {
+              cleanedBranches.add(run.branch_name);
+              execGit(repo.path, ['branch', '-D', run.branch_name]);
+            }
+          }
+        }
+      }
 
       const updated = state.db.getTaskById(task.id);
       if (!updated) {

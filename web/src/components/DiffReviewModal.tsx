@@ -246,7 +246,11 @@ export function DiffReviewModal({
 }) {
   const files = useMemo(() => {
     if (!runDiff) return [];
-    try { return parseDiff(runDiff); } catch { return []; }
+    try {
+      return parseDiff(runDiff).filter(
+        (f) => !f.oldPath?.startsWith('.branching-bad') && !f.newPath?.startsWith('.branching-bad'),
+      );
+    } catch { return []; }
   }, [runDiff]);
 
   const tree = useMemo(() => buildTree(files, batchLineComments), [files, batchLineComments]);

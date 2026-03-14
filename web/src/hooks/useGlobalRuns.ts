@@ -2,12 +2,25 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../api";
 import type { GlobalActiveRun } from "../types";
 
-export function useGlobalRuns() {
+interface RunFinishedEvent {
+  runId: string;
+  taskId: string;
+  repoId: string;
+  taskTitle: string;
+  status: GlobalActiveRun["status"];
+}
+
+interface UseGlobalRunsOptions {
+  onRunFinished?: (event: RunFinishedEvent) => void;
+}
+
+export function useGlobalRuns({ onRunFinished }: UseGlobalRunsOptions = {}) {
   const [activeRuns, setActiveRuns] = useState<GlobalActiveRun[]>([]);
-  const [seenRunIds, setSeenRunIds] = useState<Set<string>>(new Set());
   const wsRef = useRef<WebSocket | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
+  const onRunFinishedRef = useRef(onRunFinished);
+  useEffect(() => { onRunFinishedRef.current = onRunFinished; }, [onRunFinished]);
 
   // Fetch initial active runs on mount
   useEffect(() => {
@@ -64,6 +77,14 @@ export function useGlobalRuns() {
                 r.runId === msg.runId ? { ...r, status: newStatus } : r,
               ),
             );
+            // Fire toast callback directly from WS event
+            onRunFinishedRef.current?.({
+              runId: msg.runId,
+              taskId: msg.taskId ?? "",
+              repoId: msg.repoId ?? "",
+              taskTitle: msg.taskTitle ?? "",
+              status: newStatus,
+            });
           }
         } catch { /* ignore malformed messages */ }
       };
@@ -109,22 +130,14 @@ export function useGlobalRuns() {
     } catch { /* best-effort */ }
   }, []);
 
-  const markSeen = useCallback((runId: string) => {
-    setSeenRunIds((prev) => new Set([...prev, runId]));
+  const removeRun = useCallback((runId: string) => {
+    setActiveRuns((prev) => prev.filter((r) => r.runId !== runId));
   }, []);
 
-  // visibleRuns = running + cancelled/failed + completed-but-unseen
-  const visibleRuns = activeRuns.filter((r) => {
-    if (r.status === "running") return true;
-    if (r.status === "cancelled" || r.status === "failed") return true;
-    if (r.status === "done" && !seenRunIds.has(r.runId)) return true;
-    return false;
-  });
-
-  // unseenFinished = done/failed runs not yet seen (for toast triggering)
-  const unseenFinished = activeRuns.filter(
-    (r) => (r.status === "done" || r.status === "failed") && !seenRunIds.has(r.runId),
+  // visibleRuns = running + cancelled/failed + recently finished
+  const visibleRuns = activeRuns.filter((r) =>
+    r.status === "running" || r.status === "cancelled" || r.status === "failed" || r.status === "done",
   );
 
-  return { visibleRuns, unseenFinished, cancelRun, resumeRun, markSeen };
+  return { visibleRuns, cancelRun, resumeRun, removeRun };
 }

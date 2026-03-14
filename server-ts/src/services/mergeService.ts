@@ -63,6 +63,12 @@ export function applyToMain(
     throw ApiError.badRequest('Task must be in IN_REVIEW or DONE status to apply changes.');
   }
 
+  // Prevent apply while an agent is actively running in the worktree
+  const activeRun = state.db.getLatestRunByTask(taskId);
+  if (activeRun?.status === 'running') {
+    throw ApiError.badRequest('Cannot apply while an agent run is active. Cancel the run first.');
+  }
+
   if (!task.use_worktree) {
     return {
       applied: true,

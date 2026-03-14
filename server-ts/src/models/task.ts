@@ -13,6 +13,7 @@ export interface TaskWithPayload {
   auto_start: boolean;
   auto_approve_plan: boolean;
   use_worktree: boolean;
+  carry_dirty_state: boolean;
   last_pipeline_error: string | null;
   last_pipeline_at: string | null;
   agent_profile_id: string | null;
@@ -34,6 +35,7 @@ export interface CreateTaskPayload {
   autoStart?: boolean;
   autoApprovePlan?: boolean;
   useWorktree?: boolean;
+  carryDirtyState?: boolean;
   agentProfileId?: string;
 }
 

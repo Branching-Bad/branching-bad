@@ -50,11 +50,48 @@ export function useMemoryState() {
     await loadMemories(repoId, query, pageNum);
   }, [loadMemories]);
 
+  const exportMemories = useCallback((repoId: string) => {
+    if (!repoId || memories.length === 0) return;
+    const payload = {
+      type: "memories",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      memories: memories.map((m) => ({
+        title: m.title,
+        summary: m.summary,
+        files_changed: m.files_changed,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "memories.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [memories]);
+
+  const importMemories = useCallback(async (
+    repoId: string,
+    file: File,
+    strategy: "skip" | "update",
+  ): Promise<{ created: number; updated: number; skipped: number }> => {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const items = Array.isArray(data.memories) ? data.memories : Array.isArray(data) ? data : [];
+    const res = await api<{ created: number; updated: number; skipped: number }>("/api/memories/import", {
+      method: "POST",
+      body: JSON.stringify({ repoId, strategy, memories: items }),
+    });
+    await loadMemories(repoId);
+    return res;
+  }, [loadMemories]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return {
     memories, total, page, totalPages, loading,
     searchQuery, setSearchQuery,
-    loadMemories, deleteMemory,
+    loadMemories, deleteMemory, exportMemories, importMemories,
   };
 }

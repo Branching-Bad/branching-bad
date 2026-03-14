@@ -22,6 +22,7 @@ declare module './index.js' {
       autoStart: boolean,
       autoApprovePlan: boolean,
       useWorktree: boolean,
+      carryDirtyState: boolean,
       agentProfileId?: string,
     ): void;
     updateTaskPr(taskId: string, prUrl: string, prNumber?: number): void;
@@ -45,6 +46,7 @@ function rowToTask(row: any): TaskWithPayload {
     auto_start: !!row.auto_start,
     auto_approve_plan: !!row.auto_approve_plan,
     use_worktree: !!row.use_worktree,
+    carry_dirty_state: !!row.carry_dirty_state,
     last_pipeline_error: row.last_pipeline_error,
     last_pipeline_at: row.last_pipeline_at,
     agent_profile_id: row.agent_profile_id,
@@ -57,7 +59,7 @@ function rowToTask(row: any): TaskWithPayload {
 }
 
 const TASK_COLS =
-  'id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, last_pipeline_error, last_pipeline_at, agent_profile_id, pr_url, pr_number, payload_json, created_at, updated_at';
+  'id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, carry_dirty_state, last_pipeline_error, last_pipeline_at, agent_profile_id, pr_url, pr_number, payload_json, created_at, updated_at';
 
 Db.prototype.listTasksByRepo = function (repoId: string): TaskWithPayload[] {
   const db = this.connect();
@@ -92,6 +94,7 @@ Db.prototype.createManualTask = function (payload: CreateTaskPayload): TaskWithP
     const autoStart = payload.autoStart ?? false;
     const autoApprovePlan = payload.autoApprovePlan ?? false;
     const useWorktree = payload.useWorktree ?? true;
+    const carryDirtyState = payload.carryDirtyState ?? false;
 
     const maxLocal = db
       .prepare(
@@ -114,8 +117,8 @@ Db.prototype.createManualTask = function (payload: CreateTaskPayload): TaskWithP
       `INSERT INTO tasks (
          id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title,
          description, assignee, status, priority, source, require_plan, auto_start,
-         auto_approve_plan, use_worktree, agent_profile_id, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at
-       ) VALUES (?, ?, NULL, NULL, ?, ?, ?, NULL, ?, ?, 'manual', ?, ?, ?, ?, ?, NULL, NULL, '{}', ?, ?)`,
+         auto_approve_plan, use_worktree, carry_dirty_state, agent_profile_id, last_pipeline_error, last_pipeline_at, payload_json, created_at, updated_at
+       ) VALUES (?, ?, NULL, NULL, ?, ?, ?, NULL, ?, ?, 'manual', ?, ?, ?, ?, ?, ?, NULL, NULL, '{}', ?, ?)`,
     ).run(
       id,
       payload.repoId,
@@ -128,6 +131,7 @@ Db.prototype.createManualTask = function (payload: CreateTaskPayload): TaskWithP
       autoStart ? 1 : 0,
       autoApprovePlan ? 1 : 0,
       useWorktree ? 1 : 0,
+      carryDirtyState ? 1 : 0,
       payload.agentProfileId ?? null,
       ts,
       ts,
@@ -166,11 +170,12 @@ Db.prototype.updateTaskDetails = function (
   autoStart: boolean,
   autoApprovePlan: boolean,
   useWorktree: boolean,
+  carryDirtyState: boolean,
   agentProfileId?: string,
 ): void {
   const db = this.connect();
     db.prepare(
-      'UPDATE tasks SET title = ?, description = ?, priority = ?, require_plan = ?, auto_start = ?, auto_approve_plan = ?, use_worktree = ?, agent_profile_id = ?, updated_at = ? WHERE id = ?',
+      'UPDATE tasks SET title = ?, description = ?, priority = ?, require_plan = ?, auto_start = ?, auto_approve_plan = ?, use_worktree = ?, carry_dirty_state = ?, agent_profile_id = ?, updated_at = ? WHERE id = ?',
     ).run(
       title,
       description ?? null,
@@ -179,6 +184,7 @@ Db.prototype.updateTaskDetails = function (
       autoStart ? 1 : 0,
       autoApprovePlan ? 1 : 0,
       useWorktree ? 1 : 0,
+      carryDirtyState ? 1 : 0,
       agentProfileId ?? null,
       nowIso(),
       taskId,

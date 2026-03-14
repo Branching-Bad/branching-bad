@@ -26,15 +26,17 @@ export function assertGitRepo(repoPath: string): void {
  * Capture all changes in a working directory: unstaged, staged, and committed.
  * `baseSha` is the commit the branch was forked from.
  */
+const DIFF_EXCLUDE = [':(exclude).branching-bad'];
+
 export function captureDiffWithBase(repoPath: string, baseSha?: string): string {
-  const unstaged = gitOutput(repoPath, ['diff', '--', '.']);
+  const unstaged = gitOutput(repoPath, ['diff', '--', '.', ...DIFF_EXCLUDE]);
   if (unstaged.trim().length > 0) return unstaged;
 
-  const staged = gitOutput(repoPath, ['diff', '--cached']);
+  const staged = gitOutput(repoPath, ['diff', '--cached', '--', '.', ...DIFF_EXCLUDE]);
   if (staged.trim().length > 0) return staged;
 
   if (baseSha) {
-    const committed = gitOutput(repoPath, ['diff', baseSha, 'HEAD']);
+    const committed = gitOutput(repoPath, ['diff', baseSha, 'HEAD', '--', '.', ...DIFF_EXCLUDE]);
     if (committed.trim().length > 0) return committed;
   }
 

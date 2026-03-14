@@ -95,7 +95,7 @@ export function useTaskState({
   const createManualTask = useCallback(async (fields: {
     title: string; description: string; priority: string;
     requirePlan: boolean; autoApprovePlan: boolean; autoStart: boolean;
-    useWorktree: boolean; agentProfileId: string;
+    useWorktree: boolean; carryDirtyState: boolean; agentProfileId: string;
   }) => {
     if (!selectedRepoId || !fields.title.trim()) return;
     setBusy(true); setError("");
@@ -108,6 +108,7 @@ export function useTaskState({
           priority: fields.priority || undefined, requirePlan: fields.requirePlan,
           autoApprovePlan: fields.autoApprovePlan, autoStart: fields.autoStart,
           useWorktree: fields.useWorktree,
+          carryDirtyState: fields.carryDirtyState,
           agentProfileId: fields.agentProfileId || undefined,
         }),
       });
@@ -119,7 +120,7 @@ export function useTaskState({
   const saveTaskEdits = useCallback(async (taskId: string, fields: {
     title: string; description: string; priority: string;
     requirePlan: boolean; autoApprovePlan: boolean; autoStart: boolean;
-    useWorktree: boolean; agentProfileId: string;
+    useWorktree: boolean; carryDirtyState: boolean; agentProfileId: string;
   }) => {
     if (!taskId || !fields.title.trim()) return;
     setBusy(true); setError("");
@@ -131,6 +132,7 @@ export function useTaskState({
           priority: fields.priority || null, requirePlan: fields.requirePlan,
           autoApprovePlan: fields.autoApprovePlan, autoStart: fields.autoStart,
           useWorktree: fields.useWorktree,
+          carryDirtyState: fields.carryDirtyState,
           agentProfileId: fields.agentProfileId || null,
         }),
       });

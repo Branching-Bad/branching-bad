@@ -1,7 +1,17 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { RunLogEntry } from "../types";
 import { LogEntry } from "./LogEntry";
+
+const HIDDEN_DB_EVENTS = new Set(["tasklist_progress", "working_tree_diff", "run_finished"]);
+
+function isHiddenEntry(entry: RunLogEntry): boolean {
+  if (entry.type !== "db_event") return false;
+  try {
+    const parsed = JSON.parse(entry.data) as { type?: string };
+    return HIDDEN_DB_EVENTS.has(parsed.type ?? "");
+  } catch { return false; }
+}
 
 export function LogViewer({
   logs,
@@ -12,17 +22,18 @@ export function LogViewer({
   className?: string;
   emptyMessage?: string;
 }) {
+  const filteredLogs = useMemo(() => logs.filter((e) => !isHiddenEntry(e)), [logs]);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
-  const prevCountRef = useRef(logs.length);
+  const prevCountRef = useRef(filteredLogs.length);
 
   useEffect(() => {
-    if (!atBottom && logs.length > prevCountRef.current) {
-      setUnreadCount((prev) => prev + (logs.length - prevCountRef.current));
+    if (!atBottom && filteredLogs.length > prevCountRef.current) {
+      setUnreadCount((prev) => prev + (filteredLogs.length - prevCountRef.current));
     }
-    prevCountRef.current = logs.length;
-  }, [logs.length, atBottom]);
+    prevCountRef.current = filteredLogs.length;
+  }, [filteredLogs.length, atBottom]);
 
   const handleAtBottomChange = useCallback((bottom: boolean) => {
     setAtBottom(bottom);
@@ -36,7 +47,7 @@ export function LogViewer({
     setUnreadCount(0);
   }, []);
 
-  if (logs.length === 0) {
+  if (filteredLogs.length === 0) {
     return (
       <div className={`rounded-lg border border-border-strong bg-surface-0 px-3 py-2 text-[11px] leading-relaxed ${className}`}>
         <p className="py-8 text-center text-text-muted">{emptyMessage}</p>
@@ -48,7 +59,7 @@ export function LogViewer({
     <div className={`relative rounded-lg border border-border-strong bg-surface-0 text-[11px] leading-relaxed ${className}`}>
       <Virtuoso
         ref={virtuosoRef}
-        data={logs}
+        data={filteredLogs}
         increaseViewportBy={{ top: 200, bottom: 400 }}
         followOutput={atBottom ? "smooth" : false}
         atBottomStateChange={handleAtBottomChange}

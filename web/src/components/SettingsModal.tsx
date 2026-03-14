@@ -4,6 +4,7 @@ import type { Repo, AgentProfile, RepositoryRule } from "../types";
 import type { TaskMemory } from "../hooks/useMemoryState";
 import type { GlossaryTerm } from "../hooks/useGlossaryState";
 import { GlossaryPanel } from "./GlossaryPanel";
+import { ImportDialog } from "./ImportDialog";
 import { api } from "../api";
 import { IconX, IconRefresh, IconFolder } from "./icons";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
@@ -264,6 +265,8 @@ export function SettingsModal({
   onLoadMemories, onDeleteMemory,
   glossaryTerms, glossaryLoading,
   onAddGlossaryTerm, onUpdateGlossaryTerm, onDeleteGlossaryTerm,
+  onExportGlossary, onImportGlossary,
+  onExportMemories, onImportMemories,
 }: {
   open: boolean; onClose: () => void;
   repos: Repo[]; agentProfiles: AgentProfile[];
@@ -301,6 +304,10 @@ export function SettingsModal({
   onAddGlossaryTerm?: (repoId: string, term: string, description: string) => Promise<void>;
   onUpdateGlossaryTerm?: (id: string, term: string, description: string, repoId: string) => Promise<void>;
   onDeleteGlossaryTerm?: (id: string, repoId: string) => Promise<void>;
+  onExportGlossary?: (repoId: string) => void;
+  onImportGlossary?: (repoId: string, file: File, strategy: "skip" | "update") => Promise<{ created: number; updated: number; skipped: number }>;
+  onExportMemories?: (repoId: string) => void;
+  onImportMemories?: (repoId: string, file: File, strategy: "skip" | "update") => Promise<{ created: number; updated: number; skipped: number }>;
 }) {
   const [tab, setTab] = useState("repo");
   const [branches, setBranches] = useState<string[]>([]);
@@ -309,6 +316,7 @@ export function SettingsModal({
   const [optimizeProfileId, setOptimizeProfileId] = useState("");
   const [optimizeInstruction, setOptimizeInstruction] = useState("");
   const [optimizeScope, setOptimizeScope] = useState<"global" | "repo">("global");
+  const [memoryImportOpen, setMemoryImportOpen] = useState(false);
   const selectedRepo = repos.find((r) => r.id === selectedRepoId);
 
   useEffect(() => {
@@ -622,6 +630,8 @@ export function SettingsModal({
                 onAdd={onAddGlossaryTerm ?? (async () => {})}
                 onUpdate={onUpdateGlossaryTerm ?? (async () => {})}
                 onDelete={onDeleteGlossaryTerm ?? (async () => {})}
+                onExport={onExportGlossary}
+                onImport={onImportGlossary}
               />
             )}
 
@@ -649,6 +659,37 @@ export function SettingsModal({
                   </button>
                   </div>
                 </div>
+
+                {(onExportMemories || onImportMemories) && selectedRepoId && (
+                  <div className="flex gap-2">
+                    {onExportMemories && (
+                      <button
+                        onClick={() => onExportMemories(selectedRepoId)}
+                        disabled={(memories ?? []).length === 0}
+                        className={`${btnSecondary} !px-3 !py-1.5 !text-[11px]`}
+                      >
+                        Export JSON
+                      </button>
+                    )}
+                    {onImportMemories && (
+                      <button
+                        onClick={() => setMemoryImportOpen(true)}
+                        className={`${btnSecondary} !px-3 !py-1.5 !text-[11px]`}
+                      >
+                        Import JSON
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {onImportMemories && (
+                  <ImportDialog
+                    open={memoryImportOpen}
+                    title="Import Memories"
+                    onClose={() => setMemoryImportOpen(false)}
+                    onImport={(file, strategy) => onImportMemories(selectedRepoId, file, strategy)}
+                  />
+                )}
 
                 {!selectedRepoId && (
                   <p className="text-[11px] text-text-muted italic">Select a repository to view memories.</p>

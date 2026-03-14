@@ -9,6 +9,7 @@ export function TaskFormFields({
   autoApprovePlan, setAutoApprovePlan,
   autoStart, setAutoStart,
   useWorktree, setUseWorktree,
+  carryDirtyState, setCarryDirtyState,
   agentProfileId, setAgentProfileId,
   agentProfiles,
   autoFocus,
@@ -20,6 +21,7 @@ export function TaskFormFields({
   autoApprovePlan: boolean; setAutoApprovePlan: (v: boolean) => void;
   autoStart: boolean; setAutoStart: (v: boolean) => void;
   useWorktree: boolean; setUseWorktree: (v: boolean) => void;
+  carryDirtyState: boolean; setCarryDirtyState: (v: boolean) => void;
   agentProfileId: string; setAgentProfileId: (v: string) => void;
   agentProfiles: AgentProfile[];
   autoFocus?: boolean;
@@ -95,6 +97,17 @@ export function TaskFormFields({
           />
           Worktree
         </label>
+        {useWorktree && (
+          <label className="flex items-center gap-2 text-xs text-text-secondary pl-5">
+            <input
+              type="checkbox"
+              checked={carryDirtyState}
+              onChange={(e) => setCarryDirtyState(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-border-strong bg-surface-300 accent-brand"
+            />
+            Include uncommitted
+          </label>
+        )}
       </div>
 
       {/* Sag content */}

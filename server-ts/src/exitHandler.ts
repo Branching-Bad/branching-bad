@@ -148,8 +148,16 @@ export function handleChildExit(
     // Ignore
   }
 
-  // Only update task status if not a review run (task stays IN_REVIEW)
-  if (!reviewCommentId) {
+  // Skip task status update for review runs and conflict resolution runs
+  const isConflictResolution = (() => {
+    try {
+      const events = db.listRunEvents(runId);
+      const startEvent = events.find((e) => e.type === 'run_started');
+      return startEvent?.payload?.conflictResolution === true;
+    } catch { return false; }
+  })();
+
+  if (!reviewCommentId && !isConflictResolution) {
     try {
       db.updateTaskStatus(taskId, taskStatus);
     } catch {

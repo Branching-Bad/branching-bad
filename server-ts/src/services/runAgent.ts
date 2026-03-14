@@ -27,6 +27,7 @@ export interface SpawnRunAgentParams {
   agentCommand: string;
   issueKey: string;
   useWorktree: boolean;
+  carryDirtyState: boolean;
   taskTitle: string;
   taskDescription: string | null;
   taskRepoId: string;
@@ -42,7 +43,7 @@ export interface SpawnRunAgentParams {
 export function spawnRunAgent(state: AppState, params: SpawnRunAgentParams): void {
   const {
     store, runId, taskId, repoPath, branchName, baseSha,
-    agentCommand, issueKey, useWorktree, taskTitle, taskDescription,
+    agentCommand, issueKey, useWorktree, carryDirtyState, taskTitle, taskDescription,
     taskRepoId, executionPlanMarkdown, executionPlanVersion, executionTasklistJson,
   } = params;
   const db = state.db;
@@ -55,7 +56,7 @@ export function spawnRunAgent(state: AppState, params: SpawnRunAgentParams): voi
       store.push({ type: 'agent_text', data: 'Creating worktree for isolated execution...' });
 
       try {
-        const wtInfo = createWorktree(repoPath, branchName);
+        const wtInfo = createWorktree(repoPath, branchName, { carryDirtyState });
         agentWorkingDir = wtInfo.worktreePath;
         db.updateRunWorktreePath(runId, wtInfo.worktreePath);
         store.push({ type: 'agent_text', data: `Worktree ready at: ${wtInfo.worktreePath}` });

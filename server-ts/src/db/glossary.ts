@@ -16,6 +16,7 @@ declare module './index.js' {
     deleteGlossaryTerm(id: string): void;
     listGlossaryTerms(repoId: string): GlossaryTerm[];
     searchGlossaryTerms(repoId: string, query: string, limit?: number): GlossaryTerm[];
+    findGlossaryTermByName(repoId: string, term: string): GlossaryTerm | null;
   }
 }
 
@@ -63,6 +64,17 @@ Db.prototype.listGlossaryTerms = function (repoId: string): GlossaryTerm[] {
     'SELECT * FROM glossary_terms WHERE repo_id = ? ORDER BY term ASC',
   ).all(repoId) as any[];
   return rows.map(rowToTerm);
+};
+
+Db.prototype.findGlossaryTermByName = function (
+  repoId: string,
+  term: string,
+): GlossaryTerm | null {
+  const db = this.connect();
+  const row = db.prepare(
+    'SELECT * FROM glossary_terms WHERE repo_id = ? AND LOWER(term) = LOWER(?) LIMIT 1',
+  ).get(repoId, term) as any;
+  return row ? rowToTerm(row) : null;
 };
 
 Db.prototype.searchGlossaryTerms = function (

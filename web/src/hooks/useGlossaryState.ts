@@ -47,5 +47,38 @@ export function useGlossaryState() {
     await loadTerms(repoId);
   }, [loadTerms]);
 
-  return { terms, loading, loadTerms, addTerm, updateTerm, deleteTerm };
+  const exportTerms = useCallback((repoId: string) => {
+    if (!repoId || terms.length === 0) return;
+    const payload = {
+      type: "glossary",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      terms: terms.map((t) => ({ term: t.term, description: t.description })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "glossary.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [terms]);
+
+  const importTerms = useCallback(async (
+    repoId: string,
+    file: File,
+    strategy: "skip" | "update",
+  ): Promise<{ created: number; updated: number; skipped: number }> => {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const terms = Array.isArray(data.terms) ? data.terms : Array.isArray(data) ? data : [];
+    const res = await api<{ created: number; updated: number; skipped: number }>("/api/glossary/import", {
+      method: "POST",
+      body: JSON.stringify({ repoId, strategy, terms }),
+    });
+    await loadTerms(repoId);
+    return res;
+  }, [loadTerms]);
+
+  return { terms, loading, loadTerms, addTerm, updateTerm, deleteTerm, exportTerms, importTerms };
 }

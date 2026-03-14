@@ -2,25 +2,36 @@
 // Conflict resolver service — spawns an agent to resolve git merge conflicts
 // ---------------------------------------------------------------------------
 
+import { existsSync } from 'fs';
 import { MsgStore } from '../msgStore.js';
-import { getHeadSha } from '../executor/index.js';
+import { detectBaseBranchWithDefault, getHeadSha } from '../executor/index.js';
 import type { AppState } from '../state.js';
 import { buildAgentCommand, persistStoreOutputs, resolveAgentProfile } from '../routes/shared.js';
 import { broadcastGlobalEvent } from '../websocket.js';
 import { spawnResumeRun } from './agentSpawner.js';
 
-function buildConflictPrompt(conflictedFiles: string[]): string {
-  const fileList = conflictedFiles.map((f) => `  - ${f}`).join('\n');
+function buildConflictPrompt(
+  conflictedFiles: string[],
+  taskBranch: string,
+  baseBranch: string,
+): string {
+  const fileList = conflictedFiles.map((f) => `- ${f}`).join('\n');
+
   return [
-    'You are resolving git merge conflicts. The following files have conflict markers:\n',
+    `Merge conflicts while merging branch '${taskBranch}' into '${baseBranch}'.`,
+    '',
+    `Files with conflicts:`,
     fileList,
-    '\nRules:',
-    '1. Open each conflicted file and resolve the conflicts',
-    '2. PRESERVE changes from BOTH sides — both branches contain critical work',
-    '3. Remove all conflict markers: <<<<<<<, =======, >>>>>>>',
-    '4. Produce the correct merged result that incorporates both sides\' intent',
+    '',
+    `The branch '${taskBranch}' contains the intended changes. Run \`git diff ${baseBranch}...${taskBranch}\` to see what needs to be applied.`,
+    '',
+    'Instructions:',
+    '1. Read each conflicted file in the working tree',
+    '2. Compare with the version on the task branch to understand intended changes',
+    '3. If the file has conflict markers (<<<<<<< ======= >>>>>>>), resolve them preserving both sides',
+    '4. If the file has no conflict markers, apply the intended changes from the task branch manually',
     '5. Do NOT run git add or git commit — leave files as unstaged changes',
-    '6. If a conflict is ambiguous, prefer including both changes rather than losing either',
+    '6. Do NOT delete the task branch or modify any other files',
   ].join('\n');
 }
 
@@ -32,8 +43,13 @@ export async function resolveConflicts(
 ): Promise<{ runId: string }> {
   const latestRun = state.db.getLatestRunByTask(task.id);
   const branchName = latestRun?.branch_name ?? '';
-  const worktreePath = latestRun?.worktree_path ?? undefined;
   const baseSha = latestRun?.base_sha ?? (getHeadSha(repo.path) ?? null);
+
+  // After apply-to-main, worktree+branch are deleted — conflicts are in repo.path.
+  // Only use worktree path if it actually still exists on disk.
+  const worktreePath = latestRun?.worktree_path ?? undefined;
+  const worktreeExists = worktreePath ? existsSync(worktreePath) : false;
+  const effectiveWorktreePath = worktreeExists ? worktreePath : undefined;
 
   const profile = resolveAgentProfile(state, undefined, task as any);
   const agentCommand = buildAgentCommand(profile);
@@ -44,11 +60,11 @@ export async function resolveConflicts(
     'running',
     branchName,
     profile.id,
-    worktreePath,
+    effectiveWorktreePath,
     baseSha ?? undefined,
   );
 
-  state.db.updateTaskStatus(task.id, 'IN_PROGRESS');
+  // No status change — conflict resolution runs in whatever status the task is in
 
   state.db.addRunEvent(run.id, 'run_started', {
     branchName,
@@ -75,8 +91,9 @@ export async function resolveConflicts(
   state.processManager.registerStore(run.id, store);
   persistStoreOutputs(store, state.db, task.id);
 
-  const prompt = buildConflictPrompt(conflictedFiles);
-  const agentWorkingDir = worktreePath ?? repo.path;
+  const baseBranch = detectBaseBranchWithDefault(repo.path, state.db.getRepoById(repo.id)?.default_branch);
+  const prompt = buildConflictPrompt(conflictedFiles, branchName, baseBranch);
+  const agentWorkingDir = effectiveWorktreePath ?? repo.path;
 
   setImmediate(() => {
     store.push({ type: 'agent_text', data: 'Starting conflict resolution agent...' });

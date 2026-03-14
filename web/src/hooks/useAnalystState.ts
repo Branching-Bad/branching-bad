@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { RunLogEntry } from "../types";
 import { api } from "../api";
 import { useWebSocketStream } from "./useWebSocketStream";
@@ -47,7 +47,7 @@ function extractTitle(logs: RunLogEntry[]): string | null {
 export function useAnalystState(repoId: string | null) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [profileId, setProfileId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [sendingHttp, setSendingHttp] = useState(false);
   const [history, setHistory] = useState<AnalystHistoryEntry[]>([]);
   const [viewingHistoryId, setViewingHistoryId] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -56,6 +56,24 @@ export function useAnalystState(repoId: string | null) {
 
   const wsUrl = sessionId ? `/api/analyst/${sessionId}/ws` : null;
   const { logs, isConnected, clearLogs, appendLog } = useWebSocketStream(wsUrl);
+
+  // Derive streaming state from WS events.
+  // agent_done = agent finished a turn. If logs have no agent_done at all
+  // (legacy sessions) we assume idle unless HTTP is in flight.
+  const wsLoading = useMemo(() => {
+    if (!sessionId || logs.length === 0) return false;
+    // Check if this session has ever seen agent_done (new sessions will)
+    const hasAgentDone = logs.some((l) => l.type === 'agent_done');
+    if (!hasAgentDone) return false; // legacy session — rely on sendingHttp only
+    // New session: check last significant event
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const t = logs[i].type;
+      if (t === 'agent_done') return false;
+      if (t === 'agent_text' || t === 'thinking' || t === 'tool_use' || t === 'tool_result') return true;
+      if (t === 'user_message') return true;
+    }
+    return false;
+  }, [sessionId, logs]);
 
   // Load persisted sessions on repo change
   useEffect(() => {
@@ -107,7 +125,7 @@ export function useAnalystState(repoId: string | null) {
 
   const startSession = useCallback(async (rid: string, message: string, additionalRepoIds?: string[]) => {
     setViewingHistoryId(null);
-    setLoading(true);
+    setSendingHttp(true);
     try {
       const body: Record<string, unknown> = { message, profileId: profileIdRef.current };
       if (additionalRepoIds?.length) body.additionalRepoIds = additionalRepoIds;
@@ -117,20 +135,20 @@ export function useAnalystState(repoId: string | null) {
       );
       setSessionId(res.sessionId);
     } finally {
-      setLoading(false);
+      setSendingHttp(false);
     }
   }, []);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!sessionId) return;
-    setLoading(true);
+    setSendingHttp(true);
     try {
       await api(`/api/analyst/${sessionId}/message`, {
         method: "POST",
         body: JSON.stringify({ content, profileId: profileIdRef.current }),
       });
     } finally {
-      setLoading(false);
+      setSendingHttp(false);
     }
   }, [sessionId]);
 
@@ -221,7 +239,7 @@ export function useAnalystState(repoId: string | null) {
     sessionId,
     profileId,
     setProfileId,
-    loading,
+    loading: sendingHttp || wsLoading,
     logs,
     isConnected,
     history,

@@ -3,10 +3,10 @@ import type { AgentProfile, Repo, RunLogEntry } from "../types";
 import type { AnalystHistoryEntry } from "../hooks/useAnalystState";
 import { IconX, IconAnalyst } from "./icons";
 import { AgentProfileSelect } from "./AgentProfileSelect";
-import { LogViewer } from "./LogViewer";
+import { AnalystChat } from "./AnalystChat";
 import { btnPrimary, btnSecondary } from "./shared";
 
-const ANALYST_VISIBLE_TYPES = new Set(["thinking", "agent_text", "user_message", "turn_separator"]);
+const ANALYST_VISIBLE_TYPES = new Set(["thinking", "agent_text", "user_message", "turn_separator", "tool_use", "tool_result", "agent_done"]);
 
 function Spinner({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -266,7 +266,7 @@ export function TaskAnalystModal({
                   </div>
                 </div>
               ) : (
-                <LogViewer logs={filteredLogs} className="h-full" />
+                <AnalystChat logs={filteredLogs} className="h-full" isStreaming={loading} />
               )}
             </div>
 

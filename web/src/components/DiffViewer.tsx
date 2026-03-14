@@ -73,7 +73,9 @@ export function DiffViewer({
   const files = useMemo(() => {
     if (!diffText) return [];
     try {
-      return parseDiff(diffText);
+      return parseDiff(diffText).filter(
+        (f) => !f.oldPath?.startsWith('.branching-bad') && !f.newPath?.startsWith('.branching-bad'),
+      );
     } catch {
       return [];
     }

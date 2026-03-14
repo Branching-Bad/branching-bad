@@ -86,8 +86,17 @@ export default function App() {
     selectedTaskId: task.selectedTaskId, selectedRepoId: repo.selectedRepoId,
     streamRef, updateTaskRunState: run.updateTaskRunState, setError,
   });
-  const { visibleRuns, unseenFinished, cancelRun, resumeRun, markSeen } = useGlobalRuns();
   const { toasts, addToast, dismissToast } = useToast();
+  const { visibleRuns, cancelRun, resumeRun, removeRun } = useGlobalRuns({
+    onRunFinished: (ev) => {
+      addToast({
+        type: ev.status === "done" ? "success" : "error",
+        title: `${ev.taskTitle} ${ev.status === "done" ? "tamamlandı" : "başarısız"}`,
+        taskId: ev.taskId,
+        repoId: ev.repoId,
+      });
+    },
+  });
   const { selectedRepoId, setSelectedRepoId } = repo;
   const { setSelectedTaskId } = task;
 
@@ -104,28 +113,14 @@ export default function App() {
   });
   useEffect(() => { streamRef.current = stream; }, [stream]);
 
-  // ── Toast for finished runs ──
-  useEffect(() => {
-    for (const run of unseenFinished) {
-      addToast({
-        type: run.status === "done" ? "success" : "error",
-        title: `${run.taskTitle} ${run.status === "done" ? "tamamlandı" : "başarısız"}`,
-        taskId: run.taskId,
-        repoId: run.repoId,
-      });
-      markSeen(run.runId);
-    }
-  }, [unseenFinished, addToast, markSeen]);
-
   // ── Navigate to task from StatusBar / Toast ──
   const handleRunNavigate = useCallback((taskId: string, repoId: string) => {
     if (repoId !== selectedRepoId) setSelectedRepoId(repoId);
     setSelectedTaskId(taskId);
-    const runEntry = visibleRuns.find((r) => r.taskId === taskId);
-    if (runEntry) markSeen(runEntry.runId);
+    removeRun(taskId);
     setDetailsOpen(true);
     setDetailsTab("run");
-  }, [selectedRepoId, setSelectedRepoId, setSelectedTaskId, visibleRuns, markSeen]);
+  }, [selectedRepoId, setSelectedRepoId, setSelectedTaskId, removeRun]);
 
   // ── Auto-select first repo on bootstrap ──
   useEffect(() => { repo.initRepoId(boot.repos); }, [boot.repos, repo.initRepoId]);
@@ -477,6 +472,10 @@ export default function App() {
         onAddGlossaryTerm={glossaryState.addTerm}
         onUpdateGlossaryTerm={glossaryState.updateTerm}
         onDeleteGlossaryTerm={glossaryState.deleteTerm}
+        onExportGlossary={glossaryState.exportTerms}
+        onImportGlossary={glossaryState.importTerms}
+        onExportMemories={memoryState.exportMemories}
+        onImportMemories={memoryState.importMemories}
         onClearOutputs={async () => {
           await api("/api/outputs", { method: "DELETE" });
           setInfo("All output logs cleared.");

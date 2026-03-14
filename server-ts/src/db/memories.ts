@@ -27,6 +27,8 @@ declare module './index.js' {
     getMemoriesByTask(taskId: string): TaskMemory[];
     hasMemoriesForTask(taskId: string): boolean;
     deleteMemory(id: string): void;
+    findMemoryByTitle(repoId: string, title: string): TaskMemory | null;
+    updateMemorySummary(id: string, summary: string, filesChanged: string[]): void;
   }
 }
 
@@ -112,4 +114,26 @@ Db.prototype.hasMemoriesForTask = function (taskId: string): boolean {
 Db.prototype.deleteMemory = function (id: string): void {
   const db = this.connect();
   db.prepare('DELETE FROM task_memories WHERE id = ?').run(id);
+};
+
+Db.prototype.findMemoryByTitle = function (
+  repoId: string,
+  title: string,
+): TaskMemory | null {
+  const db = this.connect();
+  const row = db.prepare(
+    'SELECT * FROM task_memories WHERE repo_id = ? AND LOWER(title) = LOWER(?) LIMIT 1',
+  ).get(repoId, title) as any;
+  return row ? rowToMemory(row) : null;
+};
+
+Db.prototype.updateMemorySummary = function (
+  id: string,
+  summary: string,
+  filesChanged: string[],
+): void {
+  const db = this.connect();
+  db.prepare(
+    'UPDATE task_memories SET summary = ?, files_changed = ? WHERE id = ?',
+  ).run(summary, JSON.stringify(filesChanged), id);
 };

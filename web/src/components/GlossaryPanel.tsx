@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { GlossaryTerm } from "../hooks/useGlossaryState";
+import { ImportDialog } from "./ImportDialog";
 import { IconX } from "./icons";
-import { inputClass, btnPrimary } from "./shared";
+import { inputClass, btnPrimary, btnSecondary } from "./shared";
 
 export function GlossaryPanel({
   terms,
@@ -10,6 +11,8 @@ export function GlossaryPanel({
   onAdd,
   onUpdate,
   onDelete,
+  onExport,
+  onImport,
 }: {
   terms: GlossaryTerm[];
   loading: boolean;
@@ -17,12 +20,15 @@ export function GlossaryPanel({
   onAdd: (repoId: string, term: string, description: string) => Promise<void>;
   onUpdate: (id: string, term: string, description: string, repoId: string) => Promise<void>;
   onDelete: (id: string, repoId: string) => Promise<void>;
+  onExport?: (repoId: string) => void;
+  onImport?: (repoId: string, file: File, strategy: "skip" | "update") => Promise<{ created: number; updated: number; skipped: number }>;
 }) {
   const [newTerm, setNewTerm] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTerm, setEditTerm] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleAdd = async () => {
     if (!newTerm.trim() || !newDesc.trim() || !selectedRepoId) return;
@@ -75,6 +81,37 @@ export function GlossaryPanel({
           </button>
         </div>
       </div>
+
+      {(onExport || onImport) && (
+        <div className="flex gap-2">
+          {onExport && (
+            <button
+              onClick={() => onExport(selectedRepoId)}
+              disabled={terms.length === 0}
+              className={`${btnSecondary} !px-3 !py-1.5 !text-[11px]`}
+            >
+              Export JSON
+            </button>
+          )}
+          {onImport && (
+            <button
+              onClick={() => setImportOpen(true)}
+              className={`${btnSecondary} !px-3 !py-1.5 !text-[11px]`}
+            >
+              Import JSON
+            </button>
+          )}
+        </div>
+      )}
+
+      {onImport && (
+        <ImportDialog
+          open={importOpen}
+          title="Import Glossary"
+          onClose={() => setImportOpen(false)}
+          onImport={(file, strategy) => onImport(selectedRepoId, file, strategy)}
+        />
+      )}
 
       {loading && <p className="text-[11px] text-text-muted">Loading...</p>}
 

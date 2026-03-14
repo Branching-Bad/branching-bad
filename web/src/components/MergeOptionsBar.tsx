@@ -19,7 +19,7 @@ export function MergeOptionsBar({
   onCreatePR?: () => void;
   onMarkTaskDone: () => void;
 }) {
-  const [autoCommit, setAutoCommit] = useState(false);
+  const [autoCommit, setAutoCommit] = useState(true);
   const [commitMessage, setCommitMessage] = useState("");
   const [strategy, setStrategy] = useState<MergeStrategy>("squash");
 

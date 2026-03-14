@@ -32,6 +32,72 @@ export function memoryRoutes(): Router {
     }
   });
 
+  // GET /api/memories/export?repoId=...
+  router.get('/api/memories/export', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const repoId = String(req.query.repoId ?? '');
+      if (!repoId) return ApiError.badRequest('repoId is required.').toResponse(res);
+
+      const result = state.db.listMemories(repoId, 10000, 0);
+      const payload = {
+        type: 'memories',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        memories: result.memories.map((m) => ({
+          title: m.title,
+          summary: m.summary,
+          files_changed: m.files_changed,
+        })),
+      };
+      res.setHeader('Content-Disposition', 'attachment; filename="memories.json"');
+      return res.json(payload);
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
+  // POST /api/memories/import — body: { repoId, strategy: "skip"|"update", memories: [{title,summary,files_changed}] }
+  router.post('/api/memories/import', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const { repoId, strategy, memories } = req.body as {
+        repoId?: string;
+        strategy?: 'skip' | 'update';
+        memories?: { title: string; summary: string; files_changed?: string[] }[];
+      };
+      if (!repoId?.trim()) return ApiError.badRequest('repoId is required.').toResponse(res);
+      if (!Array.isArray(memories)) return ApiError.badRequest('memories array is required.').toResponse(res);
+      const mode = strategy === 'update' ? 'update' : 'skip';
+
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (const entry of memories) {
+        if (!entry.title?.trim() || !entry.summary?.trim()) { skipped++; continue; }
+        const existing = state.db.findMemoryByTitle(repoId, entry.title.trim());
+        if (existing) {
+          if (mode === 'update') {
+            state.db.updateMemorySummary(existing.id, entry.summary.trim(), entry.files_changed ?? []);
+            updated++;
+          } else {
+            skipped++;
+          }
+        } else {
+          state.db.insertTaskMemory(repoId, '', '', entry.title.trim(), entry.summary.trim(), entry.files_changed ?? []);
+          created++;
+        }
+      }
+
+      return res.json({ created, updated, skipped });
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
   // GET /api/memories/task/:taskId — get memories for a specific task
   router.get('/api/memories/task/:taskId', (req: Request, res: Response) => {
     const state = req.app.locals.state as AppState;
