@@ -17,15 +17,25 @@ import type { AppState } from './state.js';
 
 const globalClients = new Set<WebSocket>();
 
-export function broadcastGlobalEvent(event: {
-  type: 'run_started' | 'run_finished' | 'run_cancelled';
-  runId: string;
-  taskId: string;
-  repoId: string;
-  taskTitle: string;
-  repoName?: string;
-  status?: string;
-}): void {
+export type GlobalEvent =
+  | {
+      type: 'run_started' | 'run_finished' | 'run_cancelled';
+      runId: string;
+      taskId: string;
+      repoId: string;
+      taskTitle: string;
+      repoName?: string;
+      status?: string;
+    }
+  | {
+      type: 'task_applied';
+      taskId: string;
+      strategy: string;
+      committed: boolean;
+      filesChanged: number;
+    };
+
+export function broadcastGlobalEvent(event: GlobalEvent): void {
   const msg = JSON.stringify(event);
   for (const ws of globalClients) {
     if (ws.readyState === 1) ws.send(msg); // 1 = OPEN

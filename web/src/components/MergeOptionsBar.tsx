@@ -10,6 +10,7 @@ export function MergeOptionsBar({
   onPushBranch,
   onCreatePR,
   onMarkTaskDone,
+  onArchiveTask,
 }: {
   selectedTask: Task;
   gitStatus?: GitStatusInfo | null;
@@ -18,6 +19,7 @@ export function MergeOptionsBar({
   onPushBranch?: () => void;
   onCreatePR?: () => void;
   onMarkTaskDone: () => void;
+  onArchiveTask?: () => void;
 }) {
   const [autoCommit, setAutoCommit] = useState(true);
   const [commitMessage, setCommitMessage] = useState("");
@@ -53,6 +55,15 @@ export function MergeOptionsBar({
             className="rounded-md border border-status-success/40 bg-status-success-soft px-3 py-1 text-xs font-medium text-status-success transition hover:bg-status-success/20 disabled:bg-surface-300/50 disabled:border-border-default disabled:text-text-muted disabled:cursor-not-allowed"
           >
             Mark as Done
+          </button>
+        )}
+        {selectedTask.status === "DONE" && onArchiveTask && (
+          <button
+            onClick={onArchiveTask}
+            disabled={busy}
+            className="rounded-md border border-border-strong bg-surface-100 px-3 py-1 text-xs font-medium text-text-muted transition hover:bg-surface-200"
+          >
+            Archive
           </button>
         )}
       </div>

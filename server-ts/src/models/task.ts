@@ -51,6 +51,18 @@ export interface UpsertTasksResult {
   transitions: UpsertTaskTransition[];
 }
 
+export interface TaskDefaults {
+  id: number;
+  repo_id: string;
+  provider_name: string | null;
+  require_plan: boolean;
+  auto_start: boolean;
+  auto_approve_plan: boolean;
+  use_worktree: boolean;
+  carry_dirty_state: boolean;
+  priority: string | null;
+}
+
 export interface JiraIssueForTask {
   jira_issue_key: string;
   title: string;

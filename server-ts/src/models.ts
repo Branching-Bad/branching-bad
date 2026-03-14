@@ -8,6 +8,7 @@ export type {
   UpsertTaskTransition,
   UpsertTasksResult,
   JiraIssueForTask,
+  TaskDefaults,
 } from './models/task.js';
 
 export type {

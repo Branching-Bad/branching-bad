@@ -37,6 +37,7 @@ export function DiffReviewPanel({
   onPushBranch,
   onCreatePR,
   onMarkTaskDone,
+  onArchiveTask,
   onLineSelect,
   onLineSave,
   onLineCancel,
@@ -74,6 +75,7 @@ export function DiffReviewPanel({
   onPushBranch?: () => void;
   onCreatePR?: () => void;
   onMarkTaskDone: () => void;
+  onArchiveTask?: () => void;
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
   onLineCancel: () => void;
@@ -112,6 +114,7 @@ export function DiffReviewPanel({
         onPushBranch={onPushBranch}
         onCreatePR={onCreatePR}
         onMarkTaskDone={onMarkTaskDone}
+        onArchiveTask={onArchiveTask}
       />
 
       {/* Conflict display */}

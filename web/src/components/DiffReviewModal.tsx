@@ -192,6 +192,7 @@ export function DiffReviewModal({
   onPushBranch,
   onCreatePR,
   onMarkTaskDone,
+  onArchiveTask,
   onLineSelect,
   onLineSave,
   onLineCancel,
@@ -230,6 +231,7 @@ export function DiffReviewModal({
   onPushBranch?: () => void;
   onCreatePR?: () => void;
   onMarkTaskDone: () => void;
+  onArchiveTask?: () => void;
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
   onLineCancel: () => void;
@@ -374,6 +376,7 @@ export function DiffReviewModal({
               onPushBranch={onPushBranch}
               onCreatePR={onCreatePR}
               onMarkTaskDone={onMarkTaskDone}
+              onArchiveTask={onArchiveTask}
             />
 
             {/* Mode toggle */}

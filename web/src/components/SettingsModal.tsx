@@ -5,6 +5,7 @@ import type { TaskMemory } from "../hooks/useMemoryState";
 import type { GlossaryTerm } from "../hooks/useGlossaryState";
 import { GlossaryPanel } from "./GlossaryPanel";
 import { ImportDialog } from "./ImportDialog";
+import { TaskDefaultsSection } from "./TaskDefaultsSection";
 import { api } from "../api";
 import { IconX, IconRefresh, IconFolder } from "./icons";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
@@ -472,6 +473,9 @@ export function SettingsModal({
                     repo={selectedRepo}
                     onSave={(cmd) => void handleBuildCommandSave(cmd)}
                   />
+                )}
+                {selectedRepo && (
+                  <TaskDefaultsSection repoId={selectedRepo.id} />
                 )}
                 <div className="rounded-xl border border-border-default bg-surface-200 p-5">
                   <h3 className="mb-3 text-sm font-medium text-text-secondary">Add New Repository</h3>

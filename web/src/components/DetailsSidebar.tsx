@@ -32,7 +32,7 @@ export function DetailsSidebar({
   onEditTask, onDeleteTask,
   onCreatePlan, onPlanAction, onValidateTasklist, onSaveManualRevision,
   onStartRun, onResumeRun, onStopRun,
-  onSubmitReview, onSubmitBatchReview, onApplyToMain, onPushBranch, onCreatePR, onMarkTaskDone,
+  onSubmitReview, onSubmitBatchReview, onApplyToMain, onPushBranch, onCreatePR, onMarkTaskDone, onArchiveTask,
   onLineSelect, onLineSave, onLineCancel,
   onRequeueAutostart, onClearTaskPipeline,
   chatMessages, chatQueuedCount,
@@ -93,6 +93,7 @@ export function DetailsSidebar({
   onPushBranch?: () => void;
   onCreatePR?: () => void;
   onMarkTaskDone: () => void;
+  onArchiveTask?: () => void;
   onLineSelect: (filePath: string, lineStart: number, lineEnd: number, hunk: string, anchorKey: string) => void;
   onLineSave: () => void;
   onLineCancel: () => void;
@@ -893,6 +894,7 @@ export function DetailsSidebar({
                 onPushBranch={onPushBranch}
                 onCreatePR={onCreatePR}
                 onMarkTaskDone={onMarkTaskDone}
+                onArchiveTask={onArchiveTask}
                 onLineSelect={onLineSelect}
                 onLineSave={onLineSave}
                 onLineCancel={onLineCancel}

@@ -191,11 +191,24 @@ export function useTaskState({
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [refreshTasks, setBusy, setError, setInfo]);
 
+  const archiveTask = useCallback(async () => {
+    if (!selectedTask) return;
+    setBusy(true); setError("");
+    try {
+      await api(`/api/tasks/${selectedTask.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "ARCHIVED" }),
+      });
+      await refreshTasks();
+      setInfo("Task archived.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }, [selectedTask, refreshTasks, setBusy, setError, setInfo]);
+
   return {
     tasks, setTasks, selectedTaskId, setSelectedTaskId,
     selectedTask, groupedTasks, selectedTaskIdRef,
     statusFromLane, refreshTasks,
     createManualTask, saveTaskEdits, deleteTask,
-    requeueAutostart, clearTaskPipeline, clearAllPipelines,
+    requeueAutostart, clearTaskPipeline, clearAllPipelines, archiveTask,
   };
 }

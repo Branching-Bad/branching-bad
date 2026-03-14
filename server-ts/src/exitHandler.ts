@@ -24,9 +24,13 @@ export function handleChildExit(
   pm?: ProcessManager,
 ): void {
   let exitCode = _exitCode;
-  // Commit any uncommitted changes
+  // Commit any uncommitted changes (use task title for a meaningful commit message)
   try {
-    gitCommitAll(workingDir, 'agent: apply changes');
+    const taskForCommit = db.getTaskById(taskId);
+    const commitMsg = taskForCommit
+      ? `run #${runId.slice(0, 8)}: ${taskForCommit.title}`
+      : 'agent: apply changes';
+    gitCommitAll(workingDir, commitMsg);
   } catch {
     // Ignore commit failures (no changes, etc.)
   }

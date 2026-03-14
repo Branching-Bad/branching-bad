@@ -96,6 +96,15 @@ export default function App() {
         repoId: ev.repoId,
       });
     },
+    onTaskApplied: (ev) => {
+      void task.refreshTasks();
+      addToast({
+        type: "success",
+        title: `Changes applied to main (${ev.filesChanged} file${ev.filesChanged === 1 ? "" : "s"})`,
+        taskId: ev.taskId,
+        repoId: "",
+      });
+    },
   });
   const { selectedRepoId, setSelectedRepoId } = repo;
   const { setSelectedTaskId } = task;
@@ -306,6 +315,7 @@ export default function App() {
           onPushBranch={() => void review.pushBranch()}
           onCreatePR={() => void review.createPR()}
           onMarkTaskDone={() => void review.markTaskDone()}
+          onArchiveTask={() => void task.archiveTask()}
           onLineSelect={review.handleLineSelect}
           onLineSave={review.handleLineSave}
           onLineCancel={review.handleLineCancel}
@@ -372,6 +382,7 @@ export default function App() {
           onPushBranch={() => void review.pushBranch()}
           onCreatePR={() => void review.createPR()}
           onMarkTaskDone={() => void review.markTaskDone()}
+          onArchiveTask={() => void task.archiveTask()}
           onLineSelect={review.handleLineSelect}
           onLineSave={review.handleLineSave}
           onLineCancel={review.handleLineCancel}
@@ -502,6 +513,7 @@ export default function App() {
         agentProfiles={boot.agentProfiles}
         onSubmit={task.createManualTask} repoName={repo.selectedRepo?.name ?? "selected repo"}
         prefill={taskPrefill}
+        repoId={repo.selectedRepoId || undefined}
       />
 
       <EditTaskModal

@@ -114,6 +114,18 @@ export type ChatMessage = {
   status: "sent" | "queued" | "dispatched";
   created_at: string;
 };
+export type TaskDefaults = {
+  id: number;
+  repo_id: string;
+  provider_name: string | null;
+  require_plan: boolean;
+  auto_start: boolean;
+  auto_approve_plan: boolean;
+  use_worktree: boolean;
+  carry_dirty_state: boolean;
+  priority: string | null;
+};
+
 export type RepositoryRule = {
   id: string;
   repo_id: string | null;

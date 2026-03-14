@@ -10,17 +10,27 @@ interface RunFinishedEvent {
   status: GlobalActiveRun["status"];
 }
 
-interface UseGlobalRunsOptions {
-  onRunFinished?: (event: RunFinishedEvent) => void;
+interface TaskAppliedEvent {
+  taskId: string;
+  strategy: string;
+  committed: boolean;
+  filesChanged: number;
 }
 
-export function useGlobalRuns({ onRunFinished }: UseGlobalRunsOptions = {}) {
+interface UseGlobalRunsOptions {
+  onRunFinished?: (event: RunFinishedEvent) => void;
+  onTaskApplied?: (event: TaskAppliedEvent) => void;
+}
+
+export function useGlobalRuns({ onRunFinished, onTaskApplied }: UseGlobalRunsOptions = {}) {
   const [activeRuns, setActiveRuns] = useState<GlobalActiveRun[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
   const onRunFinishedRef = useRef(onRunFinished);
+  const onTaskAppliedRef = useRef(onTaskApplied);
   useEffect(() => { onRunFinishedRef.current = onRunFinished; }, [onRunFinished]);
+  useEffect(() => { onTaskAppliedRef.current = onTaskApplied; }, [onTaskApplied]);
 
   // Fetch initial active runs on mount
   useEffect(() => {
@@ -55,6 +65,9 @@ export function useGlobalRuns({ onRunFinished }: UseGlobalRunsOptions = {}) {
             taskTitle?: string;
             repoName?: string;
             status?: string;
+            strategy?: string;
+            committed?: boolean;
+            filesChanged?: number;
           };
 
           if (msg.type === "run_started" && msg.runId) {
@@ -84,6 +97,13 @@ export function useGlobalRuns({ onRunFinished }: UseGlobalRunsOptions = {}) {
               repoId: msg.repoId ?? "",
               taskTitle: msg.taskTitle ?? "",
               status: newStatus,
+            });
+          } else if (msg.type === "task_applied" && msg.taskId) {
+            onTaskAppliedRef.current?.({
+              taskId: msg.taskId,
+              strategy: msg.strategy ?? "squash",
+              committed: msg.committed ?? false,
+              filesChanged: msg.filesChanged ?? 0,
             });
           }
         } catch { /* ignore malformed messages */ }

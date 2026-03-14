@@ -90,11 +90,12 @@ Db.prototype.createManualTask = function (payload: CreateTaskPayload): TaskWithP
     const id = uuidv4();
     const ts = nowIso();
     const status = payload.status ?? 'To Do';
-    const requirePlan = payload.requirePlan ?? true;
-    const autoStart = payload.autoStart ?? false;
-    const autoApprovePlan = payload.autoApprovePlan ?? false;
-    const useWorktree = payload.useWorktree ?? true;
-    const carryDirtyState = payload.carryDirtyState ?? false;
+    const defaults = this.resolveTaskDefaults(payload.repoId);
+    const requirePlan = payload.requirePlan ?? defaults.require_plan ?? true;
+    const autoStart = payload.autoStart ?? defaults.auto_start ?? false;
+    const autoApprovePlan = payload.autoApprovePlan ?? defaults.auto_approve_plan ?? false;
+    const useWorktree = payload.useWorktree ?? defaults.use_worktree ?? true;
+    const carryDirtyState = payload.carryDirtyState ?? defaults.carry_dirty_state ?? false;
 
     const maxLocal = db
       .prepare(

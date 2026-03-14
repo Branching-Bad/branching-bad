@@ -1,8 +1,9 @@
-import { useState } from "react";
-import type { AgentProfile } from "../types";
+import { useState, useEffect } from "react";
+import type { AgentProfile, TaskDefaults } from "../types";
 import { IconX } from "./icons";
 import { btnPrimary, btnSecondary } from "./shared";
 import { TaskFormFields } from "./TaskFormFields";
+import { api } from "../api";
 
 export type TaskFormValues = {
   title: string;
@@ -21,12 +22,14 @@ export function CreateTaskModal({
   agentProfiles,
   onSubmit, repoName,
   prefill,
+  repoId,
 }: {
   open: boolean; onClose: () => void; busy: boolean;
   agentProfiles: AgentProfile[];
   onSubmit: (fields: TaskFormValues) => Promise<void>;
   repoName: string;
   prefill?: { title: string; description: string } | null;
+  repoId?: string;
 }) {
   if (!open) return null;
 
@@ -36,18 +39,20 @@ export function CreateTaskModal({
       agentProfiles={agentProfiles}
       onSubmit={onSubmit} repoName={repoName}
       prefill={prefill}
+      repoId={repoId}
     />
   );
 }
 
 function CreateTaskModalInner({
-  onClose, busy, agentProfiles, onSubmit, repoName, prefill,
+  onClose, busy, agentProfiles, onSubmit, repoName, prefill, repoId,
 }: {
   onClose: () => void; busy: boolean;
   agentProfiles: AgentProfile[];
   onSubmit: (fields: TaskFormValues) => Promise<void>;
   repoName: string;
   prefill?: { title: string; description: string } | null;
+  repoId?: string;
 }) {
   const [title, setTitle] = useState(prefill?.title ?? "");
   const [description, setDescription] = useState(prefill?.description ?? "");
@@ -58,6 +63,22 @@ function CreateTaskModalInner({
   const [useWorktree, setUseWorktree] = useState(true);
   const [carryDirtyState, setCarryDirtyState] = useState(false);
   const [agentProfileId, setAgentProfileId] = useState("");
+
+  useEffect(() => {
+    if (!repoId) return;
+    api<{ defaults: TaskDefaults | null }>(`/api/repos/${encodeURIComponent(repoId)}/task-defaults/resolve`)
+      .then((res) => {
+        if (res.defaults) {
+          setRequirePlan(res.defaults.require_plan);
+          setAutoApprovePlan(res.defaults.auto_approve_plan);
+          setAutoStart(res.defaults.auto_start);
+          setUseWorktree(res.defaults.use_worktree);
+          setCarryDirtyState(res.defaults.carry_dirty_state);
+          if (res.defaults.priority) setPriority(res.defaults.priority);
+        }
+      })
+      .catch(() => {});
+  }, [repoId]);
 
   const handleSubmit = async () => {
     await onSubmit({ title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, carryDirtyState, agentProfileId });

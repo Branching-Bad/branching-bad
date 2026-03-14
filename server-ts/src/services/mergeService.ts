@@ -10,6 +10,8 @@ import {
   gitPush,
   hasGhCli,
 } from '../executor/index.js';
+import { execGit } from '../executor/shell.js';
+import { broadcastGlobalEvent } from '../websocket.js';
 import type { Repo, Run, TaskWithPayload } from '../models.js';
 import type { AppState } from '../state.js';
 
@@ -120,6 +122,24 @@ export function applyToMain(
       gitCommitAll(repo.path, msg);
       committed = true;
     }
+
+    // Reset worktree branch to base for clean followup work
+    if (run.worktree_path) {
+      const wtCheck = execGit(run.worktree_path, ['rev-parse', '--git-dir']);
+      if (wtCheck.success) {
+        execGit(run.worktree_path, ['reset', '--hard', baseBranch]);
+      }
+    }
+
+    // Broadcast task_applied to all global WS subscribers
+    broadcastGlobalEvent({
+      type: 'task_applied',
+      taskId,
+      strategy,
+      committed,
+      filesChanged: applyResult.result.filesChanged,
+    });
+
     return {
       applied: true,
       filesChanged: applyResult.result.filesChanged,
