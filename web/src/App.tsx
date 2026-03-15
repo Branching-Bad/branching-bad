@@ -91,7 +91,7 @@ export default function App() {
     onRunFinished: (ev) => {
       addToast({
         type: ev.status === "done" ? "success" : "error",
-        title: `${ev.taskTitle} ${ev.status === "done" ? "tamamlandı" : "başarısız"}`,
+        title: `${ev.taskTitle} ${ev.status === "done" ? "completed" : "failed"}`,
         taskId: ev.taskId,
         repoId: ev.repoId,
       });

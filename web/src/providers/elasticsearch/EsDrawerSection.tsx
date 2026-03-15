@@ -230,7 +230,7 @@ export function EsDrawerSection({
       <textarea
         className="w-full rounded-md border border-border-strong bg-surface-300 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted resize-none"
         rows={2}
-        placeholder="trace-id abc123 için hatayı bul..."
+        placeholder="Find error for trace-id abc123..."
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
       />

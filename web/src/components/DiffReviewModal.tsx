@@ -416,19 +416,19 @@ export function DiffReviewModal({
                 </ul>
                 <div className="mt-2 flex items-center gap-2 rounded border border-yellow-700 bg-yellow-900/20 px-3 py-2">
                   <span className="text-sm text-yellow-300">
-                    {applyConflicts.length} dosyada conflict var
+                    {applyConflicts.length} file(s) have conflicts
                   </span>
                   <button
                     className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-500"
                     onClick={() => onResolveConflicts?.('agent', applyConflicts)}
                   >
-                    Agent Çözsün
+                    Let Agent Resolve
                   </button>
                   <button
                     className="rounded border border-zinc-600 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-700"
                     onClick={() => onResolveConflicts?.('manual', applyConflicts)}
                   >
-                    Manuel Çözeceğim
+                    Resolve Manually
                   </button>
                 </div>
               </div>
@@ -517,7 +517,7 @@ export function DiffReviewModal({
                   disabled={busy || (batchLineComments.length === 0 && !reviewText.trim())}
                   className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand/80 disabled:bg-surface-400 disabled:text-text-muted disabled:cursor-not-allowed"
                 >
-                  Review Gonder ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
+                  Submit Review ({batchLineComments.length + (reviewText.trim() ? 1 : 0)} comment)
                 </button>
               ) : (
                 <button

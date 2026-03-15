@@ -268,7 +268,7 @@ export function DetailsSidebar({
                     onClick={onClearTaskPipeline}
                     disabled={busy}
                     className="rounded-md border border-border-default bg-surface-secondary px-2.5 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-200 disabled:bg-surface-300/50 disabled:text-text-muted/40 disabled:cursor-not-allowed"
-                    title="Takılmış plan job ve autostart job'ları temizle, task'ı TODO'ya döndür"
+                    title="Clear stuck plan jobs and autostart jobs, reset task to TODO"
                   >
                     Clear Pipeline
                   </button>
@@ -281,7 +281,7 @@ export function DetailsSidebar({
                   onClick={onClearTaskPipeline}
                   disabled={busy}
                   className="rounded-md border border-border-default bg-surface-secondary px-2.5 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-200 disabled:bg-surface-300/50 disabled:text-text-muted/40 disabled:cursor-not-allowed"
-                  title="Takılmış pipeline'ı temizle, task'ı TODO'ya döndür"
+                  title="Clear stuck pipeline, reset task to TODO"
                 >
                   Clear Pipeline
                 </button>

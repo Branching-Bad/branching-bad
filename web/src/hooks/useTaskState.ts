@@ -171,7 +171,7 @@ export function useTaskState({
       if (result.plan_jobs_failed > 0) parts.push(`${result.plan_jobs_failed} plan job`);
       if (result.autostart_jobs_failed > 0) parts.push(`${result.autostart_jobs_failed} autostart job`);
       if (result.task_reset) parts.push("task status reset");
-      setInfo(parts.length > 0 ? `Pipeline temizlendi: ${parts.join(", ")}` : "Temizlenecek bir şey yoktu.");
+      setInfo(parts.length > 0 ? `Pipeline cleared: ${parts.join(", ")}` : "Nothing to clean.");
       await refreshTasks();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [selectedTask, refreshTasks, setBusy, setError, setInfo]);
@@ -186,7 +186,7 @@ export function useTaskState({
       if (result.plan_jobs_failed > 0) parts.push(`${result.plan_jobs_failed} plan job`);
       if (result.autostart_jobs_failed > 0) parts.push(`${result.autostart_jobs_failed} autostart job`);
       if (result.task_reset) parts.push("task status reset");
-      setInfo(parts.length > 0 ? `Tüm pipeline temizlendi: ${parts.join(", ")}` : "Temizlenecek bir şey yoktu.");
+      setInfo(parts.length > 0 ? `All pipelines cleared: ${parts.join(", ")}` : "Nothing to clean.");
       await refreshTasks();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }, [refreshTasks, setBusy, setError, setInfo]);

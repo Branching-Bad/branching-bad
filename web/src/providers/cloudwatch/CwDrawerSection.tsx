@@ -230,7 +230,7 @@ export function CwDrawerSection({
       <textarea
         className="w-full rounded-md border border-border-strong bg-surface-300 px-3 py-2 text-xs text-text-primary placeholder:text-text-muted resize-none"
         rows={2}
-        placeholder="tenant 12345 çek oluşturulamıyor..."
+        placeholder="tenant 12345 deployment failed..."
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
       />
