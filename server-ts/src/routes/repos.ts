@@ -68,7 +68,7 @@ export function repoRoutes(): Router {
         return ApiError.notFound('Repo not found.').toResponse(res);
       }
 
-      const body = req.body as { defaultBranch?: string; name?: string; buildCommand?: string | null };
+      const body = req.body as { defaultBranch?: string; name?: string; buildCommand?: string | null; queueMode?: boolean };
 
       if (body.defaultBranch) {
         const branch = body.defaultBranch.trim();
@@ -87,6 +87,10 @@ export function repoRoutes(): Router {
       if (body.buildCommand !== undefined) {
         const cmd = body.buildCommand?.trim() || null;
         state.db.updateRepoBuildCommand(repo.id, cmd);
+      }
+
+      if (body.queueMode !== undefined) {
+        state.db.updateRepoQueueMode(repo.id, body.queueMode);
       }
 
       const updated = state.db.getRepoById(repoId);

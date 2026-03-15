@@ -27,7 +27,7 @@ export async function processAutostartJob(
     return;
   }
 
-  if (!isTodoLaneStatus(task.status)) {
+  if (!isTodoLaneStatus(task.status) && task.status.trim().toUpperCase() !== 'PLAN_APPROVED') {
     state.db.completeAutostartJob(job.id);
     return;
   }

@@ -4,6 +4,7 @@ export interface Repo {
   path: string;
   default_branch: string;
   build_command: string | null;
+  queue_mode: boolean;
   created_at: string;
   updated_at: string;
 }

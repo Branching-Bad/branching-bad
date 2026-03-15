@@ -1,5 +1,5 @@
 /* ─── Types ─── */
-export type Repo = { id: string; name: string; path: string; default_branch: string; build_command: string | null };
+export type Repo = { id: string; name: string; path: string; default_branch: string; build_command: string | null; queue_mode?: boolean };
 export type AgentProfile = {
   id: string; provider: string; agent_name: string;
   model: string; command: string; source: string; discovery_kind: string;
@@ -17,6 +17,7 @@ export type Task = {
   agent_profile_id?: string | null;
   pr_url?: string | null;
   pr_number?: number | null;
+  sort_order?: number;
   source?: string; updated_at: string;
 };
 export type Plan = {

@@ -6,6 +6,7 @@ import { buildAgentCommand } from './routes/shared.js';
 import { runBuildCommand } from './services/buildRunner.js';
 import { attemptBuildRetry } from './services/buildRetry.js';
 import { createMemoryFromRun } from './services/memoryService.js';
+import { queueAutoApply, enqueueNextQueueTask, scheduleQueueRetry } from './services/queueService.js';
 import { broadcastGlobalEvent } from './websocket.js';
 
 /**
@@ -166,6 +167,27 @@ export function handleChildExit(
       db.updateTaskStatus(taskId, taskStatus);
     } catch {
       // Ignore
+    }
+
+    // Queue mode: auto-apply on success, retry on failure
+    try {
+      const qTask = db.getTaskById(taskId);
+      if (qTask) {
+        const qRepo = db.getRepoById(qTask.repo_id);
+        if (qRepo?.queue_mode) {
+          if (runStatus === 'done') {
+            const applied = queueAutoApply(db, taskId, runId);
+            if (applied) {
+              db.updateTaskStatus(taskId, 'DONE');
+            }
+            setImmediate(() => enqueueNextQueueTask(db, qTask.repo_id));
+          } else {
+            scheduleQueueRetry(db, taskId, qTask.repo_id);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`Queue processing failed for task ${taskId}:`, e);
     }
   }
 

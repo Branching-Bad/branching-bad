@@ -20,6 +20,7 @@ export interface TaskWithPayload {
   source: string;
   pr_url: string | null;
   pr_number: number | null;
+  sort_order: number;
   payload: any;
   created_at: string;
   updated_at: string;

@@ -10,10 +10,6 @@ import type { AppState } from '../state.js';
 const TODO_LANE_STATUSES = new Set([
   'TO DO',
   'TODO',
-  'PLAN_GENERATING',
-  'PLAN_DRAFTED',
-  'PLAN_APPROVED',
-  'PLAN_REVISE_REQUESTED',
   'FAILED',
   'CANCELLED',
 ]);

@@ -53,6 +53,22 @@ export function taskCrudRoutes(): Router {
     }
   });
 
+  // PUT /api/repos/:repo_id/tasks/reorder
+  router.put('/api/repos/:repo_id/tasks/reorder', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const { taskIds } = req.body as { taskIds: string[] };
+      if (!Array.isArray(taskIds)) {
+        return ApiError.badRequest('taskIds array is required.').toResponse(res);
+      }
+      state.db.reorderTasks(taskIds);
+      return res.json({ ok: true });
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
+
   // DELETE /api/tasks/:task_id - delete task
   router.delete('/api/tasks/:task_id', (req: Request, res: Response) => {
     const state = req.app.locals.state as AppState;

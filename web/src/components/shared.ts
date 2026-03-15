@@ -20,7 +20,7 @@ export function laneFromStatus(status: string): LaneKey {
   if (upper === "IN_PROGRESS") return "inprogress";
   if (upper === "FAILED") return "todo";
   if (upper === "CANCELLED") return "todo";
-  if (upper === "PLAN_GENERATING" || upper === "PLAN_DRAFTED" || upper === "PLAN_APPROVED" || upper === "PLAN_REVISE_REQUESTED") return "todo";
+  if (upper === "PLAN_GENERATING" || upper === "PLAN_DRAFTED" || upper === "PLAN_APPROVED" || upper === "PLAN_REVISE_REQUESTED") return "inprogress";
   const n = status.toLowerCase();
   if (n.includes("done")) return "done";
   if (n.includes("review")) return "inreview";

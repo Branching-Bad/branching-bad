@@ -27,7 +27,7 @@ export function createWorktree(
   let untrackedFiles: string[] = [];
   if (options?.carryDirtyState) {
     // Combined diff of staged + unstaged for tracked files
-    const headDiff = execGit(repoPath, ['diff', 'HEAD']);
+    const headDiff = execGit(repoPath, ['diff', '--binary', 'HEAD']);
     if (headDiff.success && headDiff.stdout.trim().length > 0) {
       trackedDiff = headDiff.stdout;
     }
@@ -78,7 +78,7 @@ export function createWorktree(
 
 /** Apply dirty state (uncommitted changes + untracked files) from repoPath to an existing worktree. */
 export function applyDirtyStateToWorktree(repoPath: string, worktreeDir: string): void {
-  const headDiff = execGit(repoPath, ['diff', 'HEAD']);
+  const headDiff = execGit(repoPath, ['diff', '--binary', 'HEAD']);
   if (headDiff.success && headDiff.stdout.trim().length > 0) {
     const applyResult = spawnSync('git', ['-C', worktreeDir, 'apply', '--allow-empty'], {
       input: headDiff.stdout,

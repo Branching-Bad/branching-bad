@@ -273,6 +273,20 @@ export default function App() {
           onError={setError}
           agentProfiles={boot.agentProfiles}
           taskRunStates={run.taskRunStates}
+          queueMode={repo.selectedRepo?.queue_mode}
+          onToggleQueueMode={async () => {
+            if (!repo.selectedRepo) return;
+            const newMode = !repo.selectedRepo.queue_mode;
+            try {
+              await api(`/api/repos/${encodeURIComponent(repo.selectedRepo.id)}`, {
+                method: "PATCH",
+                body: JSON.stringify({ queueMode: newMode }),
+              });
+              void boot.bootstrap();
+            } catch (err) {
+              setError((err as Error).message);
+            }
+          }}
         />
       </main>
 

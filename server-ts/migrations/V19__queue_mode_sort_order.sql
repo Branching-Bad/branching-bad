@@ -1,0 +1,3 @@
+ALTER TABLE repos ADD COLUMN queue_mode INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE tasks ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+UPDATE tasks SET sort_order = rowid;

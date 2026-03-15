@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Task, ReviewComment, LineComment, ApplyToMainOptions, GitStatusInfo, AgentProfile } from "../types";
 import { AgentProfileSelect } from "./AgentProfileSelect";
 import { DiffViewer } from "./DiffViewer";
@@ -93,6 +93,8 @@ export function DiffReviewPanel({
 }) {
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [conflictResolving, setConflictResolving] = useState(false);
+  useEffect(() => { if (applyConflicts.length === 0) setConflictResolving(false); }, [applyConflicts.length]);
   return (
     <div className="rounded-xl border border-border-default bg-surface-200 p-3">
       {/* Header */}
@@ -133,13 +135,18 @@ export function DiffReviewPanel({
               {applyConflicts.length} file(s) have conflicts
             </span>
             <button
-              className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-500"
-              onClick={() => onResolveConflicts?.('agent', applyConflicts)}
+              className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={conflictResolving || busy}
+              onClick={() => {
+                setConflictResolving(true);
+                onResolveConflicts?.('agent', applyConflicts);
+              }}
             >
-              Let Agent Resolve
+              {conflictResolving ? "Resolving..." : "Let Agent Resolve"}
             </button>
             <button
-              className="rounded border border-zinc-600 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-700"
+              className="rounded border border-zinc-600 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={conflictResolving}
               onClick={() => onResolveConflicts?.('manual', applyConflicts)}
             >
               Resolve Manually
