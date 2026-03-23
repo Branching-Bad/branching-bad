@@ -26,6 +26,7 @@ export function KanbanBoard({
   taskRunStates,
   queueMode,
   onToggleQueueMode,
+  toolbarContent,
 }: {
   groupedTasks: Record<LaneKey, Task[]>;
   selectedTaskId: string;
@@ -39,6 +40,7 @@ export function KanbanBoard({
   taskRunStates?: Record<string, TaskRunState>;
   queueMode?: boolean;
   onToggleQueueMode?: () => void;
+  toolbarContent?: React.ReactNode;
 }) {
   const [dragOverLane, setDragOverLane] = useState<LaneKey | null>(null);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
@@ -153,19 +155,22 @@ export function KanbanBoard({
   return (
     <section className="space-y-5">
       {/* Queue toolbar */}
-      {onToggleQueueMode && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onToggleQueueMode}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border transition ${
-              queueMode
-                ? "border-brand bg-brand/10 text-brand"
-                : "border-border-strong bg-surface-300 text-text-muted"
-            }`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${queueMode ? "bg-brand animate-pulse" : "bg-text-muted"}`} />
-            Queue Mode
-          </button>
+      {(onToggleQueueMode || toolbarContent) && (
+        <div className="flex items-start gap-2">
+          {onToggleQueueMode && (
+            <button
+              onClick={onToggleQueueMode}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border transition ${
+                queueMode
+                  ? "border-brand bg-brand/10 text-brand"
+                  : "border-border-strong bg-surface-300 text-text-muted"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${queueMode ? "bg-brand animate-pulse" : "bg-text-muted"}`} />
+              Queue Mode
+            </button>
+          )}
+          {toolbarContent}
         </div>
       )}
       {/* ── Kanban columns ── */}

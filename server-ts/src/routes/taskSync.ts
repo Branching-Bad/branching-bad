@@ -34,9 +34,14 @@ export function taskSyncRoutes(): Router {
       }
 
       const config = JSON.parse(account.config_json || '{}');
+      const bindingConfig = JSON.parse(binding.config_json || '{}');
       const baseUrl = config.base_url ?? '';
       const email = config.email ?? '';
       const apiToken = config.api_token ?? '';
+      const sprintId =
+        bindingConfig.sprint_id != null && String(bindingConfig.sprint_id).trim()
+          ? String(bindingConfig.sprint_id)
+          : null;
 
       const jiraProvider = state.registry.get('jira');
       if (!jiraProvider) {
@@ -50,7 +55,9 @@ export function taskSyncRoutes(): Router {
         .listTasksByRepo(payload.repoId)
         .some((task) => task.source === 'jira');
 
-      const rawIssues = await client.fetchAssignedBoardIssues(resource.external_id);
+      const rawIssues = sprintId
+        ? await client.fetchAssignedSprintIssues(resource.external_id, sprintId)
+        : await client.fetchAssignedBoardIssues(resource.external_id);
       const issues = rawIssues.map((i) => ({
         jira_issue_key: i.jiraIssueKey,
         title: i.title,
