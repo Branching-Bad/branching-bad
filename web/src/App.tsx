@@ -12,6 +12,7 @@ import { DiffReviewModal } from "./components/DiffReviewModal";
 import { PlanExpandModal } from "./components/PlanExpandModal";
 import { TaskAnalystModal } from "./components/TaskAnalystModal";
 import { initProviders } from "./providers/init";
+import { JiraSprintQuickSwitch } from "./providers/jira/JiraSprintQuickSwitch";
 import { useEventStream } from "./hooks/useEventStream";
 import { useBootstrap } from "./hooks/useBootstrap";
 import { useRepoSelection } from "./hooks/useRepoSelection";
@@ -49,6 +50,18 @@ export default function App() {
   const [taskPrefill, setTaskPrefill] = useState<{ title: string; description: string } | null>(null);
 
   // ── Stream function ref (breaks circular dep between hooks and useEventStream) ──
+  useEffect(() => {
+    if (!info) return;
+    const timer = window.setTimeout(() => setInfo(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [info]);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = window.setTimeout(() => setError(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [error]);
+
   const streamRef = useRef<StreamFunctions | null>(null);
 
   // ── Domain Hooks ──
@@ -287,6 +300,17 @@ export default function App() {
               setError((err as Error).message);
             }
           }}
+          toolbarContent={
+            <JiraSprintQuickSwitch
+              selectedRepoId={repo.selectedRepoId}
+              busy={busy}
+              onBusyChange={setBusy}
+              onError={setError}
+              onInfo={setInfo}
+              onTasksRefresh={task.refreshTasks}
+              refreshHint={`${info}|${error}|${extensionsOpen}`}
+            />
+          }
         />
       </main>
 
@@ -456,6 +480,8 @@ export default function App() {
         providerMetas={boot.providerMetas}
         providerItemCounts={boot.providerItemCounts}
         busy={busy}
+        error={error}
+        info={info}
         onBusyChange={setBusy}
         onTasksRefresh={task.refreshTasks}
         onError={setError}

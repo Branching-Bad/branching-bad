@@ -20,6 +20,15 @@ export interface JiraIssueForTask {
   payload: unknown;
 }
 
+export interface JiraSprint {
+  id: string;
+  name: string;
+  state: string;
+  startDate: string | null;
+  endDate: string | null;
+  goal: string | null;
+}
+
 // ── Client ──
 
 export class JiraClient {
@@ -75,39 +84,59 @@ export class JiraClient {
   ): Promise<JiraIssueForTask[]> {
     const defaultJql =
       'assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC';
-    const payload = await this.getJson(
+    return this.fetchIssuesPaginated(
       `/rest/agile/1.0/board/${boardId}/issue`,
-      {
-        maxResults: '100',
-        fields: 'summary,description,status,priority,assignee,updated',
-        jql: jql ?? defaultJql,
-      },
+      jql ?? defaultJql,
     );
-    const issues = Array.isArray(payload.issues) ? payload.issues : [];
+  }
 
-    return issues.map((issue: any) => {
-      const key = String(issue.key ?? '');
-      const fields = issue.fields ?? {};
+  async fetchBoardSprints(boardId: string): Promise<JiraSprint[]> {
+    const all: JiraSprint[] = [];
+    const maxResults = 50;
+    let startAt = 0;
 
-      const title = String(fields.summary ?? key);
-      const description = mapDescription(fields.description);
-      const assignee =
-        fields.assignee?.displayName ??
-        fields.assignee?.emailAddress ??
-        null;
-      const status = mapStatus(fields.status);
-      const priority = fields.priority?.name ?? null;
+    for (;;) {
+      const payload = await this.getJson(
+        `/rest/agile/1.0/board/${boardId}/sprint`,
+        {
+          startAt: String(startAt),
+          maxResults: String(maxResults),
+          state: 'active,future',
+        },
+      );
+      const values = Array.isArray(payload.values) ? payload.values : [];
+      for (const item of values) {
+        const id = item.id != null ? String(item.id) : '';
+        if (!id) continue;
+        all.push({
+          id,
+          name: String(item.name ?? 'Unnamed sprint'),
+          state: String(item.state ?? 'unknown'),
+          startDate: item.startDate ? String(item.startDate) : null,
+          endDate: item.endDate ? String(item.endDate) : null,
+          goal: item.goal ? String(item.goal) : null,
+        });
+      }
 
-      return {
-        jiraIssueKey: key,
-        title,
-        description,
-        assignee: assignee ? String(assignee) : null,
-        status,
-        priority: priority ? String(priority) : null,
-        payload: issue,
-      };
-    });
+      const isLast = payload.isLast ?? values.length < maxResults;
+      if (isLast || values.length < maxResults) break;
+      startAt += maxResults;
+    }
+
+    return all;
+  }
+
+  async fetchAssignedSprintIssues(
+    boardId: string,
+    sprintId: string,
+    jql?: string,
+  ): Promise<JiraIssueForTask[]> {
+    const defaultJql =
+      'assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC';
+    return this.fetchIssuesPaginated(
+      `/rest/agile/1.0/board/${boardId}/sprint/${sprintId}/issue`,
+      jql ?? defaultJql,
+    );
   }
 
   private async getJson(
@@ -138,6 +167,31 @@ export class JiraClient {
 
     return response.json();
   }
+
+  private async fetchIssuesPaginated(
+    endpoint: string,
+    jql: string,
+  ): Promise<JiraIssueForTask[]> {
+    const all: JiraIssueForTask[] = [];
+    const maxResults = 100;
+    let startAt = 0;
+
+    for (;;) {
+      const payload = await this.getJson(endpoint, {
+        startAt: String(startAt),
+        maxResults: String(maxResults),
+        fields: 'summary,description,status,priority,assignee,updated',
+        jql,
+      });
+      const issues = Array.isArray(payload.issues) ? payload.issues : [];
+      all.push(...issues.map(mapIssue));
+
+      if (issues.length < maxResults) break;
+      startAt += maxResults;
+    }
+
+    return all;
+  }
 }
 
 // ── Helpers ──
@@ -149,19 +203,44 @@ export function clientFromConfig(config: Record<string, unknown>): JiraClient {
   return new JiraClient(baseUrl, email, apiToken);
 }
 
+function mapIssue(issue: any): JiraIssueForTask {
+  const key = String(issue.key ?? '');
+  const fields = issue.fields ?? {};
+
+  const title = String(fields.summary ?? key);
+  const description = mapDescription(fields.description);
+  const assignee =
+    fields.assignee?.displayName ??
+    fields.assignee?.emailAddress ??
+    null;
+  const status = mapStatus(fields.status);
+  const priority = fields.priority?.name ?? null;
+
+  return {
+    jiraIssueKey: key,
+    title,
+    description,
+    assignee: assignee ? String(assignee) : null,
+    status,
+    priority: priority ? String(priority) : null,
+    payload: issue,
+  };
+}
+
 function mapStatus(raw: any): string {
   const category = raw?.statusCategory?.key;
+  const name = typeof raw?.name === 'string' ? raw.name : '';
+  const normalizedName = name.toLowerCase().replace(/ /g, '_');
   switch (category) {
     case 'done':
       return 'done';
-    case 'indeterminate':
-      return 'inprogress';
     case 'new':
       return 'todo';
+    case 'indeterminate':
+      return normalizedName || 'inprogress';
     default: {
-      const name = raw?.name;
-      if (typeof name === 'string') {
-        return name.toLowerCase().replace(/ /g, '_');
+      if (normalizedName) {
+        return normalizedName;
       }
       return 'unknown';
     }

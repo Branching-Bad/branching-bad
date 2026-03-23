@@ -21,6 +21,7 @@ import { fsRoutes } from './routes/fs.js';
 import { providerRoutes } from './provider/routes.js';
 import { cloudwatchRoutes } from './provider/cloudwatch/routes.js';
 import { elasticsearchRoutes } from './provider/elasticsearch/routes.js';
+import { jiraRoutes } from './provider/jira/routes.js';
 import { sonarqubeRoutes } from './provider/sonarqube/routes.js';
 import { memoryRoutes } from './routes/memories.js';
 import { glossaryRoutes } from './routes/glossary.js';
@@ -57,6 +58,7 @@ export function createApp(state: AppState): express.Express {
   app.use(providerRoutes());
   app.use(cloudwatchRoutes());
   app.use(elasticsearchRoutes());
+  app.use(jiraRoutes());
   app.use(sonarqubeRoutes());
   app.use(memoryRoutes());
   app.use(glossaryRoutes());

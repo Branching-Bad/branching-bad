@@ -7,6 +7,8 @@ export function ProviderSettingsModal({
   providerMetas,
   selectedRepoId,
   busy,
+  error,
+  info,
   onBusyChange,
   onError,
   onInfo,
@@ -17,6 +19,8 @@ export function ProviderSettingsModal({
   providerMetas: ProviderMeta[];
   selectedRepoId: string;
   busy: boolean;
+  error: string;
+  info: string;
   onBusyChange: (v: boolean) => void;
   onError: (msg: string) => void;
   onInfo: (msg: string) => void;
@@ -39,6 +43,20 @@ export function ProviderSettingsModal({
           </button>
         </div>
         <div className="max-h-[420px] overflow-y-auto px-6 py-4">
+          {(error || info) && (
+            <div className="mb-4 space-y-2">
+              {error && (
+                <div className="rounded-xl border border-error-border bg-error-bg px-3 py-2 text-sm text-error-text">
+                  {error}
+                </div>
+              )}
+              {info && (
+                <div className="rounded-xl border border-info-border bg-info-bg px-3 py-2 text-sm text-info-text">
+                  {info}
+                </div>
+              )}
+            </div>
+          )}
           <SettingsTab
             selectedRepoId={selectedRepoId}
             busy={busy}
