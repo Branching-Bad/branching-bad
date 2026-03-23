@@ -456,6 +456,8 @@ export default function App() {
         providerMetas={boot.providerMetas}
         providerItemCounts={boot.providerItemCounts}
         busy={busy}
+        error={error}
+        info={info}
         onBusyChange={setBusy}
         onTasksRefresh={task.refreshTasks}
         onError={setError}

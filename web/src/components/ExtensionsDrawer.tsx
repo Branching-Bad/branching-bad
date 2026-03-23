@@ -11,6 +11,8 @@ export function ExtensionsDrawer({
   providerMetas,
   providerItemCounts,
   busy,
+  error,
+  info,
   onBusyChange,
   onTasksRefresh,
   onError,
@@ -23,6 +25,8 @@ export function ExtensionsDrawer({
   providerMetas: ProviderMeta[];
   providerItemCounts: Record<string, number>;
   busy: boolean;
+  error: string;
+  info: string;
   onBusyChange: (v: boolean) => void;
   onTasksRefresh: () => void;
   onError: (msg: string) => void;
@@ -60,6 +64,20 @@ export function ExtensionsDrawer({
 
         {/* Provider sections */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {(error || info) && (
+            <div className="space-y-2">
+              {error && (
+                <div className="rounded-xl border border-error-border bg-error-bg px-3 py-2 text-sm text-error-text">
+                  {error}
+                </div>
+              )}
+              {info && (
+                <div className="rounded-xl border border-info-border bg-info-bg px-3 py-2 text-sm text-info-text">
+                  {info}
+                </div>
+              )}
+            </div>
+          )}
           {providers.map(([id, ui]) => {
             const meta = providerMetas.find((m) => m.id === id);
             const displayName = meta?.displayName ?? id;
@@ -125,6 +143,8 @@ export function ExtensionsDrawer({
           providerMetas={providerMetas}
           selectedRepoId={selectedRepoId}
           busy={busy}
+          error={error}
+          info={info}
           onBusyChange={onBusyChange}
           onError={onError}
           onInfo={onInfo}
