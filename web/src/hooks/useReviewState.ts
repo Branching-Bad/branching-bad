@@ -327,7 +327,7 @@ export function useReviewState({
     carryDirtyState, setCarryDirtyState,
     batchLineComments, setBatchLineComments,
     lineSelection, draftText, setDraftText,
-    applyConflicts,
+    applyConflicts, setApplyConflicts,
     handleLineSelect, handleLineSave, handleLineCancel,
     submitReview, submitBatchReview,
     editReviewComment, deleteReviewComment, resendReviewComment,

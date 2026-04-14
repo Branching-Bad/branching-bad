@@ -18,28 +18,32 @@ function buildConflictPrompt(
   const fileList = conflictedFiles.map((f) => `- ${f}`).join('\n');
 
   return [
-    `Merge conflicts while merging branch '${taskBranch}' into '${baseBranch}'.`,
+    `Merge conflict markers are in the working tree of '${baseBranch}' (the current directory).`,
+    `The task branch '${taskBranch}' holds the intended task changes.`,
     '',
-    `Files with conflicts:`,
+    'Conflicted files (current working directory):',
     fileList,
     '',
-    `The branch '${taskBranch}' contains the intended changes. The working tree (${baseBranch}) may also have uncommitted changes that MUST be preserved.`,
+    'Each marker block has this shape (labels are literal in the file):',
+    `  <<<<<<< main       — content already present in ${baseBranch}'s working tree (existing work to keep)`,
+    '  ||||||| ancestor   — the common ancestor (may be absent; ignore if not shown)',
+    `  >>>>>>> task       — content the task ('${taskBranch}') wants to introduce`,
     '',
-    'Instructions:',
-    '1. For each conflicted file, read THREE versions:',
-    `   a. The current working tree version (may have uncommitted changes from previous work)`,
-    `   b. The committed version: \`git show ${baseBranch}:<file>\``,
-    `   c. The task branch version: \`git show ${taskBranch}:<file>\``,
-    '2. The final result MUST include ALL of the following:',
-    `   a. Everything in the committed ${baseBranch} version (the base)`,
-    '   b. All uncommitted changes already in the working tree (preserve existing dirty state)',
-    `   c. All changes from ${taskBranch} that are not yet in the working tree`,
-    '3. If the file has conflict markers (<<<<<<< ======= >>>>>>>), resolve them by merging both sides',
-    '4. Write the merged result to the working tree file',
-    '5. Do NOT run git add or git commit — leave files as unstaged changes',
-    '6. Do NOT delete the task branch or modify any other files',
+    'HARD RULES:',
+    '1. For every conflicted file, produce ONE coherent version that contains the UNION of both sides:',
+    '   keep the existing work AND apply the task change. Merge them into valid, compiling source.',
+    '2. The final file content must be PURE SOURCE CODE only. It MUST NOT contain any of these tokens',
+    '   anywhere in the file, not even in comments or strings:',
+    '     `<<<<<<<`   `=======`   `|||||||`   `>>>>>>>`',
+    '   If you output a file that still contains any of these, the merge is considered FAILED.',
+    '3. Do not add commentary, explanation, TODO notes, or markdown. Write code exactly as it would',
+    '   appear in a clean source file — nothing above, below, or inside the file that is not real code.',
+    '4. Leave files UNSTAGED. Do NOT run `git add`, `git commit`, `git merge`, `git stash`, or any',
+    '   git command that rewrites history, staging, or branches.',
+    '5. Do not touch any file that is not in the list above.',
     '',
-    'CRITICAL: Never discard uncommitted working tree changes. They represent previously applied work that has not been committed yet.',
+    'Self-check before finishing: for each file you edited, confirm zero occurrences of `<<<<<<<`,',
+    '`=======`, `|||||||`, or `>>>>>>>`. If any remain, fix them before exiting.',
   ].join('\n');
 }
 
@@ -53,11 +57,13 @@ export async function resolveConflicts(
   const branchName = latestRun?.branch_name ?? '';
   const baseSha = latestRun?.base_sha ?? (getHeadSha(repo.path) ?? null);
 
-  // After apply-to-main, worktree+branch are deleted — conflicts are in repo.path.
-  // Only use worktree path if it actually still exists on disk.
+  // Conflict markers from applyWorktreeToBaseUnstaged live in the main repo's
+  // working tree, so the agent resolves there. The worktree path is still
+  // recorded on the run (so Done-flow cleanup finds it later) but the agent
+  // does NOT cd into it.
   const worktreePath = latestRun?.worktree_path ?? undefined;
   const worktreeExists = worktreePath ? existsSync(worktreePath) : false;
-  const effectiveWorktreePath = worktreeExists ? worktreePath : undefined;
+  const recordedWorktreePath = worktreeExists ? worktreePath : undefined;
 
   const profile = resolveAgentProfile(state, undefined, task as any);
   const agentCommand = buildAgentCommand(profile);
@@ -68,7 +74,7 @@ export async function resolveConflicts(
     'running',
     branchName,
     profile.id,
-    effectiveWorktreePath,
+    recordedWorktreePath,
     baseSha ?? undefined,
   );
 
@@ -101,7 +107,7 @@ export async function resolveConflicts(
 
   const baseBranch = detectBaseBranchWithDefault(repo.path, state.db.getRepoById(repo.id)?.default_branch);
   const prompt = buildConflictPrompt(conflictedFiles, branchName, baseBranch);
-  const agentWorkingDir = effectiveWorktreePath ?? repo.path;
+  const agentWorkingDir = repo.path;
 
   setImmediate(() => {
     store.push({ type: 'agent_text', data: 'Starting conflict resolution agent...' });

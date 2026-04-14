@@ -12,6 +12,7 @@ import {
   resendReview,
   type SubmitReviewPayload,
 } from '../services/reviewService.js';
+import { finalizeTaskDone } from '../services/taskLifecycle.js';
 import type { AppState } from '../state.js';
 
 export function reviewRoutes(): Router {
@@ -102,7 +103,7 @@ export function reviewRoutes(): Router {
     }
   });
 
-  // POST /api/tasks/:task_id/complete - mark task as done
+  // POST /api/tasks/:task_id/complete - apply changes to main and mark task as done
   router.post('/api/tasks/:task_id/complete', (req: Request, res: Response) => {
     const state = req.app.locals.state as AppState;
     try {
@@ -115,6 +116,11 @@ export function reviewRoutes(): Router {
 
       if (task.status !== 'IN_REVIEW') {
         return ApiError.badRequest('Task must be in IN_REVIEW status to complete.').toResponse(res);
+      }
+
+      const result = finalizeTaskDone(state, taskId);
+      if (!result.ok) {
+        return res.status(409).json({ conflict: true, conflictedFiles: result.conflictedFiles });
       }
 
       state.db.updateTaskStatus(taskId, 'DONE');

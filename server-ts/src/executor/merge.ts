@@ -1,4 +1,8 @@
 import { spawnSync } from 'child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import os from 'os';
+import path from 'path';
+
 import type { ApplyOutcome } from './types.js';
 import { collectConflictFiles, execGit } from './shell.js';
 // Note: removeWorktree is NOT called here — worktree cleanup happens only on ARCHIVE
@@ -169,15 +173,17 @@ export function applyWorktreeToBaseUnstaged(
 
   const wtCheck = execGit(worktreePath, ['rev-parse', '--git-dir']);
   if (wtCheck.success) {
-    // Worktree exists — commit any uncommitted changes, then diff via HEAD
+    // Worktree exists — commit any uncommitted changes, then diff against main tip.
     const wtStatus = execGit(worktreePath, ['status', '--porcelain']);
     if (wtStatus.success && wtStatus.stdout.trim()) {
       execGit(worktreePath, ['add', '-A']);
       execGit(worktreePath, ['commit', '-m', 'agent: apply uncommitted changes']);
     }
 
-    // `baseBranch...HEAD` = changes on HEAD since common ancestor with baseBranch
-    const diff = execGit(worktreePath, ['diff', `${baseBranch}...HEAD`]);
+    // Two-dot: diff from main tip to task HEAD. This yields only the net delta
+    // the task introduces over the current main, so changes main already has
+    // (e.g. resolved by a prior task) are not replayed.
+    const diff = execGit(worktreePath, ['diff', `${baseBranch}..HEAD`]);
     if (!diff.success) {
       return { ok: false, error: `failed to generate diff: ${diff.stderr.trim()}` };
     }
@@ -188,7 +194,7 @@ export function applyWorktreeToBaseUnstaged(
     if (!branchCheck.success) {
       return { ok: false, error: `Branch ${taskBranch} not found and worktree is gone. Re-run the task.` };
     }
-    const diff = execGit(repoPath, ['diff', `${baseBranch}...${taskBranch}`]);
+    const diff = execGit(repoPath, ['diff', `${baseBranch}..${taskBranch}`]);
     if (!diff.success) {
       return { ok: false, error: `failed to generate diff: ${diff.stderr.trim()}` };
     }
@@ -199,9 +205,9 @@ export function applyWorktreeToBaseUnstaged(
     return { ok: true, result: { filesChanged: 0, baseBranch } };
   }
 
-  // Apply patch to working tree. Unlike `git merge --squash`, `git apply`
-  // does NOT require a clean tree — main's dirty state is preserved.
-  const applyResult = applyPatchSafe(repoPath, patchContent);
+  // Apply via stash-then-pop so main's existing dirty state is preserved via
+  // git's 3-way merge, and `git apply` sees a clean working tree.
+  const applyResult = applyPatchPreservingDirty(repoPath, patchContent);
 
   if (!applyResult.ok) {
     execGit(repoPath, ['reset', 'HEAD']);
@@ -209,54 +215,148 @@ export function applyWorktreeToBaseUnstaged(
     return applyResult;
   }
 
-  // Unstage anything --3way may have staged so changes appear as unstaged
+  // Unstage anything git may have staged so changes appear as unstaged
   execGit(repoPath, ['reset', 'HEAD']);
 
   return { ok: true, result: { filesChanged: applyResult.filesChanged, baseBranch } };
 }
 
 // ---------------------------------------------------------------------------
-// applyPatchSafe — robust patch application
+// applyPatchPreservingDirty — apply patch while preserving main's dirty state
 // ---------------------------------------------------------------------------
 
 /**
- * Try bulk `git apply` first. If it fails, apply per-file patches:
- * plain apply for new files, --3way for modifications (creates conflict markers).
+ * Stash any uncommitted state on the target, apply the patch to the clean
+ * working tree, then pop the stash so git's 3-way merge reintegrates the
+ * pre-existing dirty state. If the pop surfaces conflicts, the conflicted
+ * files are reported and the markers are left in place for resolution.
+ *
+ * The patch is assumed to be a two-dot diff against the target's current
+ * HEAD, so plain `git apply` is sufficient.
  */
 type ApplyPatchResult =
   | { ok: true; filesChanged: number }
   | { ok: false; conflict: { conflictedFiles: string[] } }
   | { ok: false; error: string };
 
-function applyPatchSafe(repoPath: string, patchContent: string): ApplyPatchResult {
-  // Fast path: try plain apply (handles new files, untracked, no-conflict cases)
-  const bulk = gitApply(repoPath, patchContent, false);
-  if (bulk.status === 0) {
-    return { ok: true, filesChanged: countPatchFiles(patchContent) };
+/**
+ * Per-file 3-way reconciliation: for each file the patch touches, snapshot its
+ * current (possibly-dirty) content, reset it to HEAD, apply the patch to a
+ * clean tree, then merge the original dirty content back in via `git merge-file`.
+ * Conflicts are written as `<<<<<<<` markers in the working tree file and the
+ * file is reported in `conflictedFiles`.
+ */
+function applyPatchPreservingDirty(repoPath: string, patchContent: string): ApplyPatchResult {
+  const patchFiles = extractFilesFromPatch(patchContent);
+  if (patchFiles.length === 0) {
+    return { ok: true, filesChanged: 0 };
   }
 
-  // Slow path: apply per-file. --3way partially applies but fails on files
-  // not in index (new files). Per-file approach handles each case correctly.
-  const filePatches = splitPatchByFile(patchContent);
-  const failedFiles: string[] = [];
+  // Snapshot current (ours) + HEAD (base) for each patch-touched file.
+  const ours = new Map<string, string | null>();
+  const base = new Map<string, string | null>();
+  const dirtyFiles = new Set<string>();
 
-  for (const { file, content } of filePatches) {
-    const plain = gitApply(repoPath, content, false);
-    if (plain.status === 0) continue;
+  for (const rel of patchFiles) {
+    const abs = path.join(repoPath, rel);
+    ours.set(rel, existsSync(abs) ? readFileSync(abs, 'utf-8') : null);
 
-    const threeWay = gitApply(repoPath, content, true);
-    if (threeWay.status === 0) continue;
+    const show = execGit(repoPath, ['show', `HEAD:${rel}`]);
+    base.set(rel, show.success ? show.stdout : null);
 
-    failedFiles.push(file);
+    if ((ours.get(rel) ?? null) !== (base.get(rel) ?? null)) {
+      dirtyFiles.add(rel);
+    }
   }
 
-  if (failedFiles.length > 0) {
-    const conflictedFiles = collectConflictFiles(repoPath);
-    const files = conflictedFiles.length > 0 ? conflictedFiles : failedFiles;
-    return { ok: false, conflict: { conflictedFiles: files } };
+  // Reset tracked files (in the paths the patch touches) to HEAD so apply sees
+  // a clean context. Untracked files elsewhere are untouched.
+  const checkoutArgs = ['checkout', 'HEAD', '--', ...patchFiles];
+  execGit(repoPath, checkoutArgs);
+
+  const apply = gitApply(repoPath, patchContent, false);
+  if (apply.status !== 0) {
+    restoreDirty(repoPath, patchFiles, ours);
+    return { ok: false, error: `git apply failed: ${apply.stderr?.toString().trim() ?? 'unknown error'}` };
   }
 
-  return { ok: true, filesChanged: filePatches.length };
+  if (dirtyFiles.size === 0) {
+    return { ok: true, filesChanged: patchFiles.length };
+  }
+
+  const conflictedFiles: string[] = [];
+  for (const rel of dirtyFiles) {
+    const abs = path.join(repoPath, rel);
+    const theirs = existsSync(abs) ? readFileSync(abs, 'utf-8') : '';
+    const result = mergeThreeWay(ours.get(rel) ?? '', base.get(rel) ?? '', theirs);
+
+    if (result === null) {
+      restoreDirty(repoPath, patchFiles, ours);
+      return { ok: false, error: `merge-file failed for ${rel}` };
+    }
+    writeFileSync(abs, result.content);
+    if (result.conflicts > 0) conflictedFiles.push(rel);
+  }
+
+  if (conflictedFiles.length > 0) {
+    return { ok: false, conflict: { conflictedFiles } };
+  }
+  return { ok: true, filesChanged: patchFiles.length };
+}
+
+function extractFilesFromPatch(patch: string): string[] {
+  const files: string[] = [];
+  for (const line of patch.split('\n')) {
+    const m = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (m) files.push(m[2]);
+  }
+  return files;
+}
+
+function restoreDirty(
+  repoPath: string,
+  files: string[],
+  ours: Map<string, string | null>,
+): void {
+  for (const rel of files) {
+    const abs = path.join(repoPath, rel);
+    const snap = ours.get(rel) ?? null;
+    if (snap === null) {
+      if (existsSync(abs)) rmSync(abs, { force: true });
+    } else {
+      writeFileSync(abs, snap);
+    }
+  }
+}
+
+/**
+ * 3-way merge via `git merge-file -p`. Exit 0 = clean merge, positive = number of
+ * conflicts, negative = tool error. Returns null on tool error.
+ */
+function mergeThreeWay(
+  oursContent: string,
+  baseContent: string,
+  theirsContent: string,
+): { content: string; conflicts: number } | null {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'bb-merge-'));
+  try {
+    const oursPath = path.join(tmp, 'ours');
+    const basePath = path.join(tmp, 'base');
+    const theirsPath = path.join(tmp, 'theirs');
+    writeFileSync(oursPath, oursContent);
+    writeFileSync(basePath, baseContent);
+    writeFileSync(theirsPath, theirsContent);
+
+    const res = spawnSync(
+      'git',
+      ['merge-file', '-p', '-L', 'main', '-L', 'ancestor', '-L', 'task', oursPath, basePath, theirsPath],
+      { encoding: 'utf-8', shell: process.platform === 'win32' },
+    );
+    if (res.status === null || res.status < 0) return null;
+    return { content: res.stdout, conflicts: res.status };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 function gitApply(repoPath: string, patch: string, threeWay: boolean) {
@@ -268,31 +368,6 @@ function gitApply(repoPath: string, patch: string, threeWay: boolean) {
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: process.platform === 'win32',
   });
-}
-
-function splitPatchByFile(patch: string): { file: string; content: string }[] {
-  const parts: { file: string; content: string }[] = [];
-  const lines = patch.split('\n');
-  let current: string[] = [];
-  let currentFile = '';
-
-  for (const line of lines) {
-    if (line.startsWith('diff --git ')) {
-      if (current.length > 0 && currentFile) {
-        parts.push({ file: currentFile, content: current.join('\n') + '\n' });
-      }
-      current = [line];
-      const match = line.match(/diff --git a\/(.*) b\/(.*)/);
-      currentFile = match ? match[2] : '';
-    } else {
-      current.push(line);
-    }
-  }
-  if (current.length > 0 && currentFile) {
-    parts.push({ file: currentFile, content: current.join('\n') + '\n' });
-  }
-
-  return parts;
 }
 
 function countPatchFiles(patch: string): number {

@@ -131,26 +131,34 @@ export function DiffReviewPanel({
             ))}
           </ul>
           <div className="mt-2 flex items-center gap-2 rounded border border-status-caution/50 bg-status-caution/10 px-3 py-2">
-            <span className="text-sm text-status-caution">
-              {applyConflicts.length} file(s) have conflicts
-            </span>
-            <button
-              className="rounded bg-brand px-3 py-1 text-sm text-white hover:bg-brand/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={conflictResolving || busy}
-              onClick={() => {
-                setConflictResolving(true);
-                onResolveConflicts?.('agent', applyConflicts);
-              }}
-            >
-              {conflictResolving ? "Resolving..." : "Let Agent Resolve"}
-            </button>
-            <button
-              className="rounded border border-border-strong px-3 py-1 text-sm text-text-secondary hover:bg-surface-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={conflictResolving}
-              onClick={() => onResolveConflicts?.('manual', applyConflicts)}
-            >
-              Resolve Manually
-            </button>
+            {conflictResolving ? (
+              <span className="flex items-center gap-2 text-sm text-status-caution">
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-status-caution/30 border-t-status-caution" />
+                Agent resolving conflicts… (will update when done)
+              </span>
+            ) : (
+              <>
+                <span className="text-sm text-status-caution">
+                  {applyConflicts.length} file(s) have conflicts
+                </span>
+                <button
+                  className="rounded bg-brand px-3 py-1 text-sm text-white hover:bg-brand/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={busy}
+                  onClick={() => {
+                    setConflictResolving(true);
+                    onResolveConflicts?.('agent', applyConflicts);
+                  }}
+                >
+                  Let Agent Resolve
+                </button>
+                <button
+                  className="rounded border border-border-strong px-3 py-1 text-sm text-text-secondary hover:bg-surface-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => onResolveConflicts?.('manual', applyConflicts)}
+                >
+                  Resolve Manually
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -1,9 +1,7 @@
-import { existsSync } from 'fs';
 import { Router, type Request, type Response } from 'express';
 
 import { ApiError } from '../errors.js';
-import { removeWorktree } from '../executor/index.js';
-import { execGit } from '../executor/shell.js';
+import { cleanupTaskWorktrees, finalizeTaskDone } from '../services/taskLifecycle.js';
 import type { AppState } from '../state.js';
 import { enqueueAutostartIfEnabled, isTodoLaneStatus } from './shared.js';
 
@@ -115,23 +113,28 @@ export function taskCrudUpdateRoutes(): Router {
         return ApiError.notFound('Task not found.').toResponse(res);
       }
 
+      const upperStatus = status.toUpperCase();
+      const isTransitionToDone = upperStatus === 'DONE' && task.status.toUpperCase() !== 'DONE';
+
+      // Done transition: apply worktree changes to main as unstaged (no commit),
+      // then clean up worktree + branch. On conflict, reject the status change
+      // and surface conflict info for the frontend resolution modal.
+      if (isTransitionToDone) {
+        const result = finalizeTaskDone(state, task.id);
+        if (!result.ok) {
+          return res
+            .status(409)
+            .json({ conflict: true, conflictedFiles: result.conflictedFiles });
+        }
+      }
+
       state.db.updateTaskStatus(task.id, status);
 
-      // Clean up ALL worktrees + branches when task is archived
-      if (status.toUpperCase() === 'ARCHIVED') {
+      // Cleanup: delete worktree + branch on ARCHIVED transitions (Done already cleaned up above).
+      if (upperStatus === 'ARCHIVED') {
         const repo = state.db.getRepoById(task.repo_id);
         if (repo) {
-          const worktreeRuns = state.db.getRunsWithWorktreeByTask(task.id);
-          const cleanedBranches = new Set<string>();
-          for (const run of worktreeRuns) {
-            if (run.worktree_path && existsSync(run.worktree_path)) {
-              removeWorktree(repo.path, run.worktree_path);
-            }
-            if (run.branch_name && !cleanedBranches.has(run.branch_name)) {
-              cleanedBranches.add(run.branch_name);
-              execGit(repo.path, ['branch', '-D', run.branch_name]);
-            }
-          }
+          cleanupTaskWorktrees(state, task.id, repo.path);
         }
       }
 

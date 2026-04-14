@@ -108,6 +108,17 @@ export default function App() {
         taskId: ev.taskId,
         repoId: ev.repoId,
       });
+      // Clear any pending conflict-resolution UI for the selected task — the
+      // agent run finishing means markers have been addressed (or the run
+      // failed; either way the stale modal should go away).
+      if (ev.taskId === task.selectedTaskIdRef.current && review.applyConflicts.length > 0) {
+        review.setApplyConflicts([]);
+        if (ev.status === "done") {
+          setInfo("Conflicts resolved — drag to Done again to finalize.");
+        } else {
+          setError("Conflict resolver failed. Check run logs or resolve manually.");
+        }
+      }
     },
     onTaskApplied: (ev) => {
       void task.refreshTasks();
@@ -284,6 +295,13 @@ export default function App() {
           statusFromLane={task.statusFromLane}
           setTasks={task.setTasks}
           onError={setError}
+          onConflict={(taskId, files) => {
+            task.setSelectedTaskId(taskId);
+            setDetailsOpen(true);
+            setDetailsTab("review");
+            review.setApplyConflicts(files);
+            setError("Changes conflict with main. Resolve in the review panel.");
+          }}
           agentProfiles={boot.agentProfiles}
           taskRunStates={run.taskRunStates}
           queueMode={repo.selectedRepo?.queue_mode}

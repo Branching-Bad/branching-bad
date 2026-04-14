@@ -61,10 +61,6 @@ export function applyToMain(
     throw ApiError.notFound('Task not found.');
   }
 
-  if (task.status !== 'IN_REVIEW' && task.status !== 'DONE') {
-    throw ApiError.badRequest('Task must be in IN_REVIEW or DONE status to apply changes.');
-  }
-
   // Prevent apply while an agent is actively running in the worktree
   const activeRun = state.db.getLatestRunByTask(taskId);
   if (activeRun?.status === 'running') {

@@ -22,6 +22,7 @@ export function KanbanBoard({
   statusFromLane,
   setTasks,
   onError,
+  onConflict,
   agentProfiles,
   taskRunStates,
   queueMode,
@@ -36,6 +37,7 @@ export function KanbanBoard({
   statusFromLane: (lane: LaneKey) => string;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   onError: (msg: string) => void;
+  onConflict?: (taskId: string, conflictedFiles: string[]) => void;
   agentProfiles: AgentProfile[];
   taskRunStates?: Record<string, TaskRunState>;
   queueMode?: boolean;
@@ -140,10 +142,23 @@ export function KanbanBoard({
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
 
     try {
-      await api(`/api/tasks/${taskId}/status`, {
+      const res = await fetch(`/api/tasks/${taskId}/status`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.conflict) {
+          setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: task.status } : t));
+          onConflict?.(taskId, Array.isArray(data.conflictedFiles) ? data.conflictedFiles : []);
+          return;
+        }
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? `Status update failed (${res.status})`);
+      }
     } catch (err) {
       setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: task.status } : t));
       onError((err as Error).message);

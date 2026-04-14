@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'fs';
+import path from 'path';
+
 import type { Db } from './db/index.js';
 import { captureDiffWithBase } from './executor/index.js';
 import type { MsgStore } from './msgStore.js';
@@ -7,7 +10,25 @@ import { runBuildCommand } from './services/buildRunner.js';
 import { attemptBuildRetry } from './services/buildRetry.js';
 import { createMemoryFromRun } from './services/memoryService.js';
 import { queueAutoApply, enqueueNextQueueTask, scheduleQueueRetry } from './services/queueService.js';
+import { finalizeAfterConflictResolution } from './services/taskLifecycle.js';
 import { broadcastGlobalEvent } from './websocket.js';
+
+const CONFLICT_MARKER_RE = /^(<{7,}|={7,}|>{7,}|\|{7,})(\s|$)/m;
+
+function filesStillContainingMarkers(repoPath: string, files: string[]): string[] {
+  const remaining: string[] = [];
+  for (const rel of files) {
+    const abs = path.join(repoPath, rel);
+    if (!existsSync(abs)) continue;
+    try {
+      const content = readFileSync(abs, 'utf-8');
+      if (CONFLICT_MARKER_RE.test(content)) {
+        remaining.push(rel);
+      }
+    } catch { /* unreadable — skip */ }
+  }
+  return remaining;
+}
 
 /**
  * Handle post-exit cleanup for a child agent process:
@@ -111,6 +132,32 @@ export function handleChildExit(
     // Ignore
   }
 
+  // Identify conflict-resolution runs early — we may need to override exitCode
+  // if the agent finished successfully but left conflict markers behind.
+  const conflictRunInfo = (() => {
+    try {
+      const events = db.listRunEvents(runId);
+      const startEvent = events.find((e) => e.type === 'run_started');
+      if (startEvent?.payload?.conflictResolution !== true) return null;
+      const files = startEvent.payload.conflictedFiles;
+      return Array.isArray(files) ? (files as string[]) : [];
+    } catch { return null; }
+  })();
+
+  // Defensive: a conflict-resolution agent that exits 0 but leaves any of the
+  // marker tokens in a previously-conflicted file has not actually resolved
+  // the conflict. Force a failure so the user sees an error instead of a
+  // silently-broken file.
+  if (exitCode === 0 && conflictRunInfo && conflictRunInfo.length > 0) {
+    const stillConflicted = filesStillContainingMarkers(repoPath, conflictRunInfo);
+    if (stillConflicted.length > 0) {
+      try {
+        db.addRunEvent(runId, 'conflict_unresolved', { files: stillConflicted });
+      } catch { /* ignore */ }
+      exitCode = 1;
+    }
+  }
+
   // Determine final status
   let runStatus: string;
   let taskStatus: string;
@@ -144,13 +191,29 @@ export function handleChildExit(
   }
 
   // Skip task status update for review runs and conflict resolution runs
-  const isConflictResolution = (() => {
+  const isConflictResolution = conflictRunInfo !== null;
+
+  // Conflict-resolution success: the agent's resolved tree IS the final state.
+  // Auto-finalize the task (worktree+branch cleanup + status=DONE) so the user
+  // doesn't have to drag-to-Done again (which would re-run the apply pipeline
+  // and re-introduce the same conflict).
+  if (isConflictResolution && runStatus === 'done') {
     try {
-      const events = db.listRunEvents(runId);
-      const startEvent = events.find((e) => e.type === 'run_started');
-      return startEvent?.payload?.conflictResolution === true;
-    } catch { return false; }
-  })();
+      finalizeAfterConflictResolution(db, taskId, repoPath);
+      db.addRunEvent(runId, 'conflict_resolved_done', {});
+    } catch (e) {
+      console.error('finalizeAfterConflictResolution failed:', e);
+    }
+    try {
+      broadcastGlobalEvent({
+        type: 'task_applied',
+        taskId,
+        strategy: 'conflict-resolved',
+        committed: false,
+        filesChanged: conflictRunInfo?.length ?? 0,
+      });
+    } catch { /* non-fatal */ }
+  }
 
   if (!reviewCommentId && !isConflictResolution) {
     try {
