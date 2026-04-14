@@ -88,6 +88,14 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
     ent.append('text').attr('class', 'kind').attr('x', 10).attr('y', 44).attr('fill', '#94a3b8').attr('font-size', 10);
     ent.append('circle').attr('class', 'status').attr('cx', NODE_W - 15).attr('cy', 15).attr('r', 6);
 
+    // anchor circles
+    ent.append('circle').attr('class', 'anchor-out')
+      .attr('cx', NODE_W).attr('cy', NODE_H / 2).attr('r', 6)
+      .attr('fill', '#64748b').style('cursor', 'crosshair');
+    ent.append('circle').attr('class', 'anchor-in')
+      .attr('cx', 0).attr('cy', NODE_H / 2).attr('r', 6)
+      .attr('fill', '#64748b');
+
     const merged = ent.merge(nodeSel as any);
     merged
       .attr('transform', (d) => `translate(${d.position.x},${d.position.y})`)
@@ -100,9 +108,15 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
     merged.select('text.kind').text((d) => d.kind);
     merged.select('circle.status').attr('fill', (d) => STATUS_COLOR[(liveStatus?.[d.id] as string) ?? 'pending']);
 
+    // node drag (move)
     merged.call(
       d3
         .drag<SVGGElement, GraphNode>()
+        .filter((event) => {
+          // Don't start move-drag when clicking an anchor
+          const t = event.target as Element;
+          return !t.classList.contains('anchor-out') && !t.classList.contains('anchor-in');
+        })
         .on('drag', function (event, d) {
           d.position.x += event.dx;
           d.position.y += event.dy;
@@ -126,6 +140,42 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
           onGraphChange({ ...graphRef.current });
         }) as any,
     );
+
+    // anchor-out drag (edge creation)
+    merged.select<SVGCircleElement>('circle.anchor-out').each(function (d) {
+      d3.select(this).call(
+        d3.drag<SVGCircleElement, GraphNode>()
+          .on('start', (event) => {
+            event.sourceEvent.stopPropagation();
+            const [x, y] = d3.pointer(event, rootRef.current!);
+            d3.select(rootRef.current!).append('line').attr('class', 'temp-edge')
+              .attr('stroke', '#94a3b8').attr('stroke-dasharray', '4 4').attr('stroke-width', 2)
+              .attr('x1', d.position.x + NODE_W).attr('y1', d.position.y + NODE_H / 2)
+              .attr('x2', x).attr('y2', y);
+          })
+          .on('drag', (event) => {
+            const [x, y] = d3.pointer(event, rootRef.current!);
+            d3.select(rootRef.current!).select('line.temp-edge').attr('x2', x).attr('y2', y);
+          })
+          .on('end', (event) => {
+            d3.select(rootRef.current!).select('line.temp-edge').remove();
+            const hit = document.elementFromPoint(event.sourceEvent.clientX, event.sourceEvent.clientY);
+            const toId = hit?.closest('g.node')?.getAttribute('data-node-id') ?? null;
+            if (!toId || toId === d.id) return;
+            const current = graphRef.current;
+            const ordersOnTarget = current.edges.filter((e) => e.to === toId).map((e) => e.inputOrder);
+            const inputOrder = ordersOnTarget.length ? Math.max(...ordersOnTarget) + 1 : 1;
+            const next: Graph = {
+              ...current,
+              edges: [
+                ...current.edges,
+                { id: crypto.randomUUID(), from: d.id, to: toId, required: true, inputOrder },
+              ],
+            };
+            onGraphChange(next);
+          }) as any,
+      );
+    });
   }, [graph, liveStatus, onGraphChange, onSelectNode, onSelectEdge]);
 
   return (
