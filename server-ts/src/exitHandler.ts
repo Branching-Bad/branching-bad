@@ -1,5 +1,5 @@
 import type { Db } from './db/index.js';
-import { captureDiffWithBase, gitCommitAll } from './executor/index.js';
+import { captureDiffWithBase } from './executor/index.js';
 import type { MsgStore } from './msgStore.js';
 import type { ProcessManager } from './processManager.js';
 import { buildAgentCommand } from './routes/shared.js';
@@ -25,16 +25,6 @@ export function handleChildExit(
   pm?: ProcessManager,
 ): void {
   let exitCode = _exitCode;
-  // Commit any uncommitted changes (use task title for a meaningful commit message)
-  try {
-    const taskForCommit = db.getTaskById(taskId);
-    const commitMsg = taskForCommit
-      ? `run #${runId.slice(0, 8)}: ${taskForCommit.title}`
-      : 'agent: apply changes';
-    gitCommitAll(workingDir, commitMsg);
-  } catch {
-    // Ignore commit failures (no changes, etc.)
-  }
 
   // Capture diff
   let diff = '';
