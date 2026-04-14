@@ -1,5 +1,5 @@
 import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage, ApplyToMainOptions, GitStatusInfo } from "../types";
-import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconArrowUp, IconArrowDown, IconExpand } from "./icons";
+import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconExpand } from "./icons";
 import { LogViewer } from "./LogViewer";
 import { ChatPanel } from "./ChatPanel";
 import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
@@ -145,209 +145,163 @@ export function DetailsSidebar({
         className="fixed inset-0 z-[41] bg-black/50 backdrop-blur-[1px] lg:hidden"
       />
 
-      <aside className="fixed inset-y-0 right-0 z-[42] w-full max-w-[540px] border-l border-border-default bg-surface-100 shadow-2xl">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-border-default px-5 py-4">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-brand">{selectedTask.jira_issue_key}</p>
-                <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-text-primary">{selectedTask.title}</h3>
+      <aside className="fixed inset-y-3 right-3 z-[42] flex w-full max-w-[540px] flex-col overflow-hidden rounded-[var(--radius-2xl)] border border-border-default bg-surface-100/90 shadow-[var(--shadow-lg)] backdrop-blur-md">
+        {/* ── Header ─────────────────────────────────────────── */}
+        <header className="border-b border-border-default bg-surface-100/70 px-5 pt-4 pb-3 backdrop-blur-md">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                {selectedTask.jira_issue_key && (
+                  <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand">
+                    {selectedTask.jira_issue_key}
+                  </span>
+                )}
+                <StatusPill status={selectedTask.status} />
               </div>
-              <div className="flex items-center gap-1.5">
+              <h3 className="mt-2 line-clamp-2 text-[14px] font-semibold leading-snug text-text-primary">
+                {selectedTask.title}
+              </h3>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onEditTask}
+                className="rounded-full border border-border-default bg-surface-200 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary"
+              >
+                Edit
+              </button>
+              {laneFromStatus(selectedTask.status) === "todo" && (
                 <button
-                  onClick={onEditTask}
-                  className="rounded-md border border-border-strong bg-surface-300 px-2 py-1 text-[11px] font-medium text-text-secondary transition hover:text-text-primary"
+                  onClick={onDeleteTask}
+                  className="rounded-full border border-status-danger/30 bg-status-danger-soft px-2.5 py-1 text-[11px] font-medium text-status-danger transition hover:bg-status-danger/20"
                 >
-                  Edit
+                  Delete
                 </button>
+              )}
+              <button
+                onClick={onClose}
+                aria-label="Close details"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary"
+              >
+                <IconX className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Meta chip row — priority + flag glyphs + updated */}
+          <div className="mt-3 flex items-center gap-1.5 text-[10px] text-text-muted">
+            {selectedTask.priority && <PriorityChip priority={selectedTask.priority} />}
+            <FlagChip
+              active={selectedTask.require_plan}
+              tone="warning"
+              title={selectedTask.require_plan ? "Require Plan" : "Direct Run"}
+              icon={selectedTask.require_plan ? <IconDocument className="h-3 w-3" /> : <IconBolt className="h-3 w-3" />}
+            />
+            <FlagChip
+              active={!!selectedTask.auto_approve_plan}
+              tone="warning"
+              title={selectedTask.auto_approve_plan ? "Auto Approve: On" : "Auto Approve: Off"}
+              icon={<IconRocket className="h-3 w-3" />}
+            />
+            <FlagChip
+              active={!!selectedTask.auto_start}
+              tone="warning"
+              title={selectedTask.auto_start ? "Autostart: On" : "Autostart: Off"}
+              icon={<IconFastForward className="h-3 w-3" />}
+            />
+            <FlagChip
+              active={!!selectedTask.use_worktree}
+              tone="warning"
+              title={selectedTask.use_worktree ? "Worktree" : "Direct"}
+              icon={<IconGitBranch className="h-3 w-3" />}
+            />
+            <span className="ml-auto tabular-nums">{formatDate(selectedTask.updated_at)}</span>
+          </div>
+
+          {selectedTask.description && (
+            <p className="mt-3 line-clamp-3 text-[12px] leading-relaxed text-text-secondary">
+              {selectedTask.description}
+            </p>
+          )}
+
+          {selectedTask.last_pipeline_error && (
+            <div className="mt-3 rounded-[var(--radius-md)] border border-error-border bg-error-bg px-3 py-2 text-[11px] text-error-text">
+              <p className="font-medium">Pipeline Error</p>
+              <p className="mt-1 whitespace-pre-wrap">{selectedTask.last_pipeline_error}</p>
+              {selectedTask.last_pipeline_at && (
+                <p className="mt-1 text-[10px] opacity-70">{formatDate(selectedTask.last_pipeline_at)}</p>
+              )}
+              <div className="mt-2 flex gap-2">
                 {laneFromStatus(selectedTask.status) === "todo" && (
                   <button
-                    onClick={onDeleteTask}
-                    className="rounded-md border border-status-danger/40 bg-status-danger/10 px-2 py-1 text-[11px] font-medium text-status-danger transition hover:bg-status-danger/20 hover:text-status-danger"
-                  >
-                    Delete
-                  </button>
-                )}
-                <button
-                  onClick={onClose}
-                  className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary"
-                >
-                  <IconX className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px]">
-              <span className="rounded-full border border-border-strong bg-surface-300 px-2 py-0.5 text-text-secondary">
-                {selectedTask.status}
-              </span>
-              {selectedTask.priority && (
-                <span
-                  title={`Priority: ${selectedTask.priority}`}
-                  className={`inline-flex items-center rounded-full border p-1 ${
-                    selectedTask.priority === "highest" || selectedTask.priority === "high"
-                      ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
-                      : selectedTask.priority === "medium"
-                        ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                        : "border-brand/40 bg-brand/10 text-brand"
-                  }`}
-                >
-                  {selectedTask.priority === "highest" || selectedTask.priority === "high"
-                    ? <IconArrowUp className="h-3 w-3" />
-                    : selectedTask.priority === "low" || selectedTask.priority === "lowest"
-                      ? <IconArrowDown className="h-3 w-3" />
-                      : <span className="h-3 w-3 flex items-center justify-center text-[9px] font-bold">=</span>
-                  }
-                </span>
-              )}
-              <span
-                title={selectedTask.require_plan ? "Require Plan" : "Direct Run"}
-                className={`inline-flex items-center rounded-full border p-1 ${
-                  selectedTask.require_plan
-                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                    : "border-border-strong bg-surface-300 text-text-muted"
-                }`}
-              >
-                {selectedTask.require_plan
-                  ? <IconDocument className="h-3 w-3" />
-                  : <IconBolt className="h-3 w-3" />
-                }
-              </span>
-              <span
-                title={selectedTask.auto_approve_plan ? "Auto Approve: On" : "Auto Approve: Off"}
-                className={`inline-flex items-center rounded-full border p-1 ${
-                  selectedTask.auto_approve_plan
-                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                    : "border-border-strong bg-surface-300 text-text-muted"
-                }`}
-              >
-                <IconRocket className="h-3 w-3" />
-              </span>
-              <span
-                title={selectedTask.auto_start ? "Autostart: On" : "Autostart: Off"}
-                className={`inline-flex items-center rounded-full border p-1 ${
-                  selectedTask.auto_start
-                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                    : "border-border-strong bg-surface-300 text-text-muted"
-                }`}
-              >
-                <IconFastForward className="h-3 w-3" />
-              </span>
-              <span
-                title={selectedTask.use_worktree ? "Worktree" : "Direct"}
-                className={`inline-flex items-center rounded-full border p-1 ${
-                  selectedTask.use_worktree
-                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                    : "border-border-strong bg-surface-300 text-text-muted"
-                }`}
-              >
-                <IconGitBranch className="h-3 w-3" />
-              </span>
-              <span className="ml-1 text-text-muted">{formatDate(selectedTask.updated_at)}</span>
-            </div>
-            {selectedTask.description && (
-              <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-text-secondary">{selectedTask.description}</p>
-            )}
-            {selectedTask.last_pipeline_error && (
-              <div className="mt-3 rounded-lg border border-error-border bg-error-bg px-3 py-2 text-[11px] text-error-text">
-                <p className="font-medium">Pipeline Error</p>
-                <p className="mt-1 whitespace-pre-wrap">{selectedTask.last_pipeline_error}</p>
-                {selectedTask.last_pipeline_at && (
-                  <p className="mt-1 text-[10px] opacity-70">{formatDate(selectedTask.last_pipeline_at)}</p>
-                )}
-                <div className="mt-2 flex gap-2">
-                  {laneFromStatus(selectedTask.status) === "todo" && (
-                    <button
-                      onClick={onRequeueAutostart}
-                      disabled={busy}
-                      className="rounded-md border border-error-border bg-error-bg px-2.5 py-1 text-[11px] font-medium text-error-text transition hover:bg-surface-200 disabled:bg-surface-300/50 disabled:text-text-muted/40 disabled:cursor-not-allowed"
-                    >
-                      Requeue Pipeline
-                    </button>
-                  )}
-                  <button
-                    onClick={onClearTaskPipeline}
+                    onClick={onRequeueAutostart}
                     disabled={busy}
-                    className="rounded-md border border-border-default bg-surface-secondary px-2.5 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-200 disabled:bg-surface-300/50 disabled:text-text-muted/40 disabled:cursor-not-allowed"
-                    title="Clear stuck plan jobs and autostart jobs, reset task to TODO"
+                    className="rounded-full border border-error-border bg-error-bg/70 px-2.5 py-1 text-[11px] font-medium text-error-text transition hover:bg-surface-200 disabled:opacity-40"
                   >
-                    Clear Pipeline
+                    Requeue
                   </button>
-                </div>
-              </div>
-            )}
-            {!selectedTask.last_pipeline_error && ["PLAN_GENERATING", "PLAN_DRAFTED", "PLAN_APPROVED"].includes(selectedTask.status.trim().toUpperCase()) && (
-              <div className="mt-3">
+                )}
                 <button
                   onClick={onClearTaskPipeline}
                   disabled={busy}
-                  className="rounded-md border border-border-default bg-surface-secondary px-2.5 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-200 disabled:bg-surface-300/50 disabled:text-text-muted/40 disabled:cursor-not-allowed"
-                  title="Clear stuck pipeline, reset task to TODO"
+                  className="rounded-full border border-border-default bg-surface-200 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary disabled:opacity-40"
+                  title="Clear stuck plan jobs and autostart jobs, reset task to TODO"
                 >
                   Clear Pipeline
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+          {!selectedTask.last_pipeline_error && ["PLAN_GENERATING", "PLAN_DRAFTED", "PLAN_APPROVED"].includes(selectedTask.status.trim().toUpperCase()) && (
+            <div className="mt-3">
+              <button
+                onClick={onClearTaskPipeline}
+                disabled={busy}
+                className="rounded-full border border-border-default bg-surface-200 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary disabled:opacity-40"
+                title="Clear stuck pipeline, reset task to TODO"
+              >
+                Clear Pipeline
+              </button>
+            </div>
+          )}
+        </header>
 
-          <div className="flex border-b border-border-default px-3">
-            <div className="relative flex items-center">
-              <button
-                onClick={() => setDetailsTab("plan")}
-                className={`relative px-3 py-2.5 text-sm font-medium transition ${
-                  detailsTab === "plan" ? "text-brand" : "text-text-muted hover:text-text-secondary"
-                }`}
-              >
-                Plan
-                {detailsTab === "plan" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
-              </button>
-              {detailsTab === "plan" && onExpandPlan && (
-                <button onClick={onExpandPlan} title="Expand" className="rounded-md p-0.5 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
-                  <IconExpand className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <div className="relative flex items-center">
-              <button
-                onClick={() => setDetailsTab("tasklist")}
-                className={`relative px-3 py-2.5 text-sm font-medium transition ${
-                  detailsTab === "tasklist" ? "text-brand" : "text-text-muted hover:text-text-secondary"
-                }`}
-              >
-                Tasklist
-                {detailsTab === "tasklist" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
-              </button>
-              {detailsTab === "tasklist" && onExpandPlan && (
-                <button onClick={onExpandPlan} title="Expand" className="rounded-md p-0.5 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
-                  <IconExpand className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <button
+        {/* ── Segmented tab control ─────────────────────────── */}
+        <div className="flex items-center gap-2 border-b border-border-default px-4 py-2">
+          <div className="flex items-center gap-0.5 rounded-full border border-border-default bg-surface-200 p-0.5">
+            <TabButton
+              active={detailsTab === "plan"}
+              onClick={() => setDetailsTab("plan")}
+              label="Plan"
+            />
+            <TabButton
+              active={detailsTab === "tasklist"}
+              onClick={() => setDetailsTab("tasklist")}
+              label="Tasklist"
+            />
+            <TabButton
+              active={detailsTab === "run"}
               onClick={() => setDetailsTab("run")}
-              className={`relative px-3 py-2.5 text-sm font-medium transition ${
-                detailsTab === "run" ? "text-brand" : "text-text-muted hover:text-text-secondary"
-              }`}
-            >
-              Run Output
-              {detailsTab === "run" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
-            </button>
+              label="Run"
+            />
             {(selectedTask?.status === "IN_REVIEW" || selectedTask?.status === "DONE") && (
-              <button
+              <TabButton
+                active={detailsTab === "review"}
                 onClick={() => setDetailsTab("review")}
-                className={`relative px-3 py-2.5 text-sm font-medium transition ${
-                  detailsTab === "review" ? "text-brand" : "text-text-muted hover:text-text-secondary"
-                }`}
-              >
-                Review
-                {reviewComments.length > 0 && (
-                  <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand/20 px-1 text-[10px] font-semibold text-brand">
-                    {reviewComments.length}
-                  </span>
-                )}
-                {detailsTab === "review" && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand" />}
-              </button>
+                label="Review"
+                badge={reviewComments.length > 0 ? reviewComments.length : undefined}
+              />
             )}
           </div>
+          {(detailsTab === "plan" || detailsTab === "tasklist") && onExpandPlan && (
+            <button
+              onClick={onExpandPlan}
+              title="Expand"
+              className="ml-auto flex h-6 w-6 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary"
+            >
+              <IconExpand className="h-3 w-3" />
+            </button>
+          )}
+        </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {detailsTab === "plan" && (
@@ -912,8 +866,87 @@ export function DetailsSidebar({
               />
             )}
           </div>
-        </div>
       </aside>
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers (declared after main component for readability)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TabButton({ active, onClick, label, badge }: { active: boolean; onClick: () => void; label: string; badge?: number }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition ${
+        active
+          ? "bg-surface-0 text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+          : "text-text-muted hover:text-text-secondary"
+      }`}
+    >
+      {label}
+      {badge != null && (
+        <span className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-semibold ${active ? "bg-brand-tint text-brand" : "bg-surface-300 text-text-secondary"}`}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const upper = status.toUpperCase();
+  const lane = laneFromStatus(status);
+  const tone =
+    lane === "done"
+      ? "bg-status-success-soft text-status-success"
+      : lane === "inreview"
+      ? "bg-status-pending-soft text-status-pending"
+      : lane === "inprogress" || upper === "PLAN_GENERATING" || upper === "PLAN_APPROVED"
+      ? "bg-brand-tint text-brand"
+      : upper === "PLAN_DRAFTED" || upper === "PLAN_REVISE_REQUESTED"
+      ? "bg-status-warning-soft text-status-warning"
+      : upper === "FAILED"
+      ? "bg-status-danger-soft text-status-danger"
+      : "bg-surface-200 text-text-secondary";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] ${tone}`}>
+      {status}
+    </span>
+  );
+}
+
+function PriorityChip({ priority }: { priority: string }) {
+  const p = priority.toLowerCase();
+  const color =
+    p === "highest" ? "#FF453A" :
+    p === "high"    ? "#FF9F0A" :
+    p === "medium"  ? "#FFD60A" :
+    p === "low"     ? "#0A84FF" :
+                      "#8E8E93";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-surface-200 px-1.5 py-0.5 text-[10px] font-medium text-text-secondary"
+      title={`Priority: ${priority}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
+      {priority}
+    </span>
+  );
+}
+
+function FlagChip({ active, icon, title }: { active: boolean; tone: "warning"; icon: React.ReactNode; title: string }) {
+  return (
+    <span
+      title={title}
+      className={`inline-flex h-5 w-5 items-center justify-center rounded-full transition ${
+        active
+          ? "bg-status-warning-soft text-status-warning"
+          : "bg-surface-200 text-text-muted"
+      }`}
+    >
+      {icon}
+    </span>
   );
 }
