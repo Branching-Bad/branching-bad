@@ -388,29 +388,35 @@ export function SettingsModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-[2%]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative flex w-full h-[85vh] rounded-2xl border border-border-default bg-surface-100 shadow-2xl overflow-hidden">
+      <div className="relative flex h-[85vh] w-full max-w-6xl overflow-hidden rounded-[var(--radius-2xl)] border border-border-default bg-surface-100 shadow-[var(--shadow-lg)]">
         {/* ── Left sidebar nav ── */}
-        <div className="flex w-52 shrink-0 flex-col border-r border-border-default bg-surface-0">
-          <div className="px-5 py-5">
-            <h2 className="text-sm font-semibold text-text-primary tracking-tight">Settings</h2>
+        <div className="flex w-56 shrink-0 flex-col border-r border-border-default bg-surface-0/70 backdrop-blur-md">
+          <div className="px-5 pt-5 pb-4">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+              Settings
+            </span>
           </div>
-          <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-4">
+          <nav className="flex flex-1 flex-col gap-0.5 px-2.5 pb-4">
             {navItems.map((item) => {
               const active = tab === item.key;
               return (
                 <button
                   key={item.key}
                   onClick={() => setTab(item.key)}
-                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                  className={`group flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-[13px] font-medium transition ${
                     active
-                      ? "bg-brand/10 text-brand"
-                      : "text-text-muted hover:bg-surface-200 hover:text-text-secondary"
+                      ? "bg-brand-tint text-text-primary shadow-[inset_0_0_0_1px_var(--color-brand-glow)]"
+                      : "text-text-secondary hover:bg-surface-200 hover:text-text-primary"
                   }`}
                 >
-                  <item.icon className={`h-4 w-4 ${active ? "text-brand" : "text-text-muted"}`} />
+                  <item.icon
+                    className={`h-4 w-4 ${
+                      active ? "text-brand" : "text-text-muted group-hover:text-text-secondary"
+                    }`}
+                  />
                   {item.label}
                 </button>
               );
@@ -421,20 +427,32 @@ export function SettingsModal({
         {/* ── Right content area ── */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border-default px-6 py-4">
-            <h3 className="text-sm font-medium text-text-primary">
+          <div className="flex items-center justify-between border-b border-border-default bg-surface-100/70 px-6 py-4 backdrop-blur-md">
+            <h3 className="text-[15px] font-semibold text-text-primary">
               {navItems.find((n) => n.key === tab)?.label}
             </h3>
-            <button onClick={onClose} className="rounded-lg p-1.5 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
-              <IconX className="h-4 w-4" />
+            <button
+              onClick={onClose}
+              aria-label="Close settings"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary"
+            >
+              <IconX className="h-3.5 w-3.5" />
             </button>
           </div>
 
           {/* Alerts */}
           {(extError || extInfo) && (
-            <div className="px-6 pt-4 space-y-2">
-              {extError && <div className="rounded-lg border border-error-border bg-error-bg px-3 py-2 text-sm text-error-text">{extError}</div>}
-              {extInfo && <div className="rounded-lg border border-info-border bg-info-bg px-3 py-2 text-sm text-info-text">{extInfo}</div>}
+            <div className="space-y-2 px-6 pt-4">
+              {extError && (
+                <div className="rounded-[var(--radius-md)] border border-error-border bg-error-bg px-3 py-2 text-sm text-error-text">
+                  {extError}
+                </div>
+              )}
+              {extInfo && (
+                <div className="rounded-[var(--radius-md)] border border-info-border bg-info-bg px-3 py-2 text-sm text-info-text">
+                  {extInfo}
+                </div>
+              )}
             </div>
           )}
 
