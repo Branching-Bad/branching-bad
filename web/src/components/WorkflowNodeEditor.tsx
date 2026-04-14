@@ -1,4 +1,4 @@
-import { type FC, type ReactNode } from 'react';
+import { useEffect, useState, type FC, type ReactNode } from 'react';
 import Editor from '@monaco-editor/react';
 import type { GraphNode, ScriptNode, AgentNode } from '../types/workflow';
 
@@ -197,11 +197,42 @@ const ScriptSection: FC<{ node: ScriptNode; onChange: (n: ScriptNode) => void }>
         </Field>
       </Section>
     ) : (
-      <Section title="Code">
+      <CodeSection node={node} onChange={onChange} />
+    )}
+  </>
+);
+
+const CodeSection: FC<{ node: ScriptNode; onChange: (n: ScriptNode) => void }> = ({ node, onChange }) => {
+  const [expanded, setExpanded] = useState(false);
+  const monacoLang = node.lang === 'python' ? 'python' : node.lang === 'typescript' ? 'typescript' : 'shell';
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expanded]);
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">Code</h3>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          title="Expand editor"
+          className="flex h-6 w-6 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary"
+        >
+          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+            <path d="M4.5 1.5H1.5v3M7.5 10.5h3v-3M1.5 7.5v3h3M10.5 4.5v-3h-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div className="rounded-[var(--radius-lg)] border border-border-default bg-surface-0/50 p-3">
         <div className="overflow-hidden rounded-[var(--radius-md)] border border-border-default">
           <Editor
             height="280px"
-            language={node.lang === 'python' ? 'python' : node.lang === 'typescript' ? 'typescript' : 'shell'}
+            language={monacoLang}
             theme="vs-dark"
             value={node.code ?? ''}
             onChange={(v) => onChange({ ...node, code: v ?? '' })}
@@ -215,10 +246,64 @@ const ScriptSection: FC<{ node: ScriptNode; onChange: (n: ScriptNode) => void }>
             }}
           />
         </div>
-      </Section>
-    )}
-  </>
-);
+      </div>
+
+      {expanded && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setExpanded(false)} />
+          <div className="relative flex h-[min(90vh,900px)] w-full max-w-6xl flex-col overflow-hidden rounded-[var(--radius-2xl)] border border-border-default bg-surface-100 shadow-[var(--shadow-lg)]">
+            <header className="flex items-center justify-between gap-3 border-b border-border-default bg-surface-100/70 px-5 py-3 backdrop-blur-md">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-brand">
+                  {node.lang}
+                </span>
+                <span className="text-[13px] font-semibold text-text-primary">{node.label || 'Script'}</span>
+                <span className="text-[11px] text-text-muted">· {monacoLang}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="hidden md:inline text-[10px] text-text-muted">Esc to close</span>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(false)}
+                  className="rounded-full bg-brand px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-dark"
+                >
+                  Done
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(false)}
+                  aria-label="Close"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none">
+                    <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+            </header>
+            <div className="flex-1 bg-surface-0">
+              <Editor
+                height="100%"
+                language={monacoLang}
+                theme="vs-dark"
+                value={node.code ?? ''}
+                onChange={(v) => onChange({ ...node, code: v ?? '' })}
+                options={{
+                  minimap: { enabled: true },
+                  fontSize: 14,
+                  lineNumbers: 'on',
+                  scrollBeyondLastLine: false,
+                  padding: { top: 14, bottom: 14 },
+                  fontFamily: '"Source Code Pro", "SF Mono", "Fira Code", monospace',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
 
 const AgentSection: FC<{ node: AgentNode; onChange: (n: AgentNode) => void; profiles: Array<{ id: string; name: string }> }> = ({ node, onChange, profiles }) => (
   <>
