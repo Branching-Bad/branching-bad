@@ -1,8 +1,8 @@
 import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage, ApplyToMainOptions, GitStatusInfo } from "../types";
-import { IconX, IconPlay, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconExpand } from "./icons";
+import { IconX, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconExpand } from "./icons";
 import { LogViewer } from "./LogViewer";
-import { ChatPanel } from "./ChatPanel";
-import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor, runStatusColor } from "./shared";
+import { RunConversation } from "./RunConversation";
+import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor } from "./shared";
 import { DiffReviewPanel } from "./DiffReviewPanel";
 import { AgentProfileSelect } from "./AgentProfileSelect";
 
@@ -690,138 +690,30 @@ export function DetailsSidebar({
             )}
 
             {detailsTab === "run" && (
-              <>
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-medium text-text-secondary">Execution</p>
-                      {selectedProfile ? (
-                        <p className="mt-1 text-[11px] text-text-muted">
-                          {selectedProfile.agent_name} · {selectedProfile.model}
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-[11px] text-text-muted">Agent/model not selected for repo</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={onStartRun}
-                        disabled={busy || !selectedProfileId || (taskRequiresPlan && !approvedPlan)}
-                        className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
-                        title="Start a fresh run"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <IconPlay className="h-3.5 w-3.5" />
-                          New
-                        </span>
-                      </button>
-                      {activeRun?.agent_session_id && (
-                        <button
-                          onClick={onResumeRun}
-                          disabled={busy || !selectedProfileId || activeRun.status === "running"}
-                          className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
-                          title="Resume previous agent session"
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <IconPlay className="h-3.5 w-3.5" />
-                            Resume
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {selectedTask.use_worktree && !activeRun && (
-                    <div className="mt-2">
-                      <input
-                        value={customBranchName}
-                        onChange={(e) => setCustomBranchName(e.target.value)}
-                        className="w-full rounded-lg border border-border-strong bg-surface-100 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-                        placeholder="Branch name (auto-generated if empty)"
-                      />
-                    </div>
-                  )}
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                    {taskRequiresPlan && !approvedPlan && (
-                      <span className="rounded-full border border-status-caution/40 bg-status-caution/10 px-2 py-0.5 text-status-caution">
-                        Plan approval required
-                      </span>
-                    )}
-                    {!taskRequiresPlan && (
-                      <span className="rounded-full border border-brand/40 bg-brand-tint px-2 py-0.5 text-brand">
-                        Direct run enabled
-                      </span>
-                    )}
-                    {activeRun && (
-                      <>
-                        <span className={`rounded-full border px-2 py-0.5 font-medium ${runStatusColor(activeRun.status)}`}>
-                          {activeRun.status}
-                        </span>
-                        {activeRun.branch_name && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-border-strong bg-surface-300 px-2 py-0.5 text-text-secondary">
-                            <IconGitBranch className="h-3 w-3" />
-                            {activeRun.branch_name}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  {activeRun && !runFinished && (
-                    <button
-                      onClick={onStopRun}
-                      className="mt-3 rounded-md border border-status-danger/30 bg-status-danger-soft px-3 py-1.5 text-xs font-medium text-status-danger transition hover:bg-status-danger/20"
-                    >
-                      Cancel Run
-                    </button>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <h4 className="mb-2 text-xs font-medium text-text-secondary">Live Logs</h4>
-                  <LogViewer
-                    logs={runLogs}
-                    className="h-[360px]"
-                  />
-                </div>
-
-                {activeRun && (
-                  <ChatPanel
-                    isRunning={!!activeRun && !runFinished}
-                    onSend={onSendChat}
-                    onCancelQueued={onCancelQueuedChat}
-                    messages={chatMessages}
-                    queuedCount={chatQueuedCount}
-                    agentProfiles={agentProfiles}
-                    chatProfileId={chatProfileId}
-                    onChatProfileChange={onChatProfileChange}
-                  />
-                )}
-
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <h4 className="mb-2 text-xs font-medium text-text-secondary">Run Events</h4>
-                  {!runResult ? (
-                    <p className="rounded-lg border border-dashed border-border-strong px-3 py-6 text-center text-xs text-text-muted">
-                      Run event summary will appear after completion.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {runResult.events.length === 0 && (
-                        <p className="text-xs text-text-muted">No events recorded.</p>
-                      )}
-                      {runResult.events.map((event) => (
-                        <div key={event.id} className="rounded-lg border border-border-strong bg-surface-100 px-3 py-2">
-                          <div className="mb-1 flex items-center justify-between gap-2">
-                            <span className="text-[11px] font-medium text-text-secondary">{event.type}</span>
-                            <span className="text-[10px] text-text-muted">{formatDate(event.created_at)}</span>
-                          </div>
-                          <pre className="max-h-[140px] overflow-auto whitespace-pre-wrap text-[11px] text-text-muted">
-                            {typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload, null, 2)}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
+              <RunConversation
+                selectedProfile={selectedProfile}
+                selectedProfileId={selectedProfileId}
+                taskRequiresPlan={taskRequiresPlan}
+                approvedPlan={approvedPlan}
+                activeRun={activeRun}
+                runLogs={runLogs}
+                runFinished={runFinished}
+                runResult={runResult}
+                selectedTask={selectedTask}
+                customBranchName={customBranchName}
+                setCustomBranchName={setCustomBranchName}
+                chatMessages={chatMessages}
+                chatQueuedCount={chatQueuedCount}
+                busy={busy}
+                onStartRun={onStartRun}
+                onResumeRun={onResumeRun}
+                onStopRun={onStopRun}
+                onSendChat={onSendChat}
+                onCancelQueuedChat={onCancelQueuedChat}
+                agentProfiles={agentProfiles}
+                chatProfileId={chatProfileId}
+                onChatProfileChange={onChatProfileChange}
+              />
             )}
 
             {detailsTab === "review" && (
