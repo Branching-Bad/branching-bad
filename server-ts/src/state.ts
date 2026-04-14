@@ -13,4 +13,5 @@ export interface AppState {
   processManager: ProcessManager;
   registry: ProviderRegistry;
   setupJobs: Map<string, SetupJob>;
+  workflowScheduler?: { refresh(id: string): void };
 }

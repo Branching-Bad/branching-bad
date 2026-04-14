@@ -27,6 +27,7 @@ import { memoryRoutes } from './routes/memories.js';
 import { glossaryRoutes } from './routes/glossary.js';
 import { analystRoutes } from './routes/analyst.js';
 import { taskDefaultsRoutes } from './routes/taskDefaults.js';
+import { workflowRoutes } from './routes/workflow.js';
 
 export function createApp(state: AppState): express.Express {
   const app = express();
@@ -64,6 +65,7 @@ export function createApp(state: AppState): express.Express {
   app.use(glossaryRoutes());
   app.use(analystRoutes());
   app.use(taskDefaultsRoutes());
+  app.use('/workflow', workflowRoutes(state));
 
   // Global error handler — catches unhandled sync throws and async rejections
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
