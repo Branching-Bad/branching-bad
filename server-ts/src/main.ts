@@ -1,6 +1,5 @@
 import { createServer } from 'http';
 import path from 'path';
-import os from 'os';
 
 import { Db } from './db/index.js';
 // Import all DB modules to register prototype extensions
@@ -34,28 +33,12 @@ import { ProviderRegistry, registerAll } from './provider/index.js';
 import { createApp } from './app.js';
 import { spawnAutostartWorker } from './routes/autostart.js';
 import { spawnProviderSyncWorker } from './provider/syncRoutes.js';
+import { getAppDataDir } from './routes/shared.js';
 import type { AppState } from './state.js';
 import { attachWebSocketHandler } from './websocket.js';
 
 function resolveDbPath(): string {
-  const overrideDir = process.env.APP_DATA_DIR;
-  if (overrideDir) {
-    return path.join(overrideDir, 'agent.db');
-  }
-
-  const platform = os.platform();
-  let dataDir: string;
-
-  if (platform === 'darwin') {
-    dataDir = path.join(os.homedir(), 'Library', 'Application Support', 'branching-bad');
-  } else if (platform === 'win32') {
-    dataDir = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'branching-bad');
-  } else {
-    // Linux / other
-    dataDir = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'branching-bad');
-  }
-
-  return path.join(dataDir, 'agent.db');
+  return path.join(getAppDataDir(), 'agent.db');
 }
 
 async function main() {

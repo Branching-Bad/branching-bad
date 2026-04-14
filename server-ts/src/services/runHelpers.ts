@@ -141,7 +141,7 @@ export function resolveAgentProfile(
   return profile;
 }
 
-export function buildBranchName(task: any, profile: any, payload: StartRunPayload): string {
+export function buildBranchName(task: any, _profile: any, payload: StartRunPayload): string {
   if (!task.use_worktree) {
     return '';
   }
@@ -149,7 +149,5 @@ export function buildBranchName(task: any, profile: any, payload: StartRunPayloa
   if (customBranch) {
     return sanitizeBranchSegment(customBranch);
   }
-  const agentSegment = sanitizeBranchSegment(profile.provider) || 'agent';
-  const taskSegment = sanitizeBranchSegment(task.jira_issue_key) || 'task';
-  return `agent/${agentSegment}-${taskSegment}-${Math.floor(Date.now() / 1000)}`;
+  return sanitizeBranchSegment(task.jira_issue_key) || `task-${String(task.id).slice(0, 8)}`;
 }

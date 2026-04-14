@@ -5,12 +5,13 @@ import path from 'path';
 import type { WorktreeInfo } from './types.js';
 import { execCommand, execGit } from './shell.js';
 import { assertGitRepo } from './git-read.js';
+import { worktreesRootFor } from '../routes/shared.js';
 
 // ---------------------------------------------------------------------------
 // Worktree management
 // ---------------------------------------------------------------------------
 
-/** Create a git worktree at `.branching-bad/worktrees/<branchName>/`. */
+/** Create a git worktree under the app data directory, keyed by repo identity. */
 export function createWorktree(
   repoPath: string,
   branchName: string,
@@ -18,7 +19,7 @@ export function createWorktree(
 ): WorktreeInfo {
   assertGitRepo(repoPath);
 
-  const worktreeDir = path.join(repoPath, '.branching-bad', 'worktrees', branchName);
+  const worktreeDir = path.join(worktreesRootFor(repoPath), branchName);
   const parentDir = path.dirname(worktreeDir);
   mkdirSync(parentDir, { recursive: true });
 

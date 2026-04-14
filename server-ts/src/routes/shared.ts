@@ -1,4 +1,6 @@
+import crypto from 'crypto';
 import os from 'os';
+import path from 'path';
 
 import type { Db } from '../db/index.js';
 import { ApiError } from '../errors.js';
@@ -26,10 +28,9 @@ export function isTodoLaneStatus(status: string): boolean {
 
 export function sanitizeBranchSegment(input: string): string {
   const replaced = input
-    .toLowerCase()
     .split('')
     .map((c) => {
-      if (/[a-z0-9._\-/]/.test(c)) {
+      if (/[A-Za-z0-9._\-/]/.test(c)) {
         return c;
       }
       return '-';
@@ -40,13 +41,44 @@ export function sanitizeBranchSegment(input: string): string {
     .split('-')
     .filter((s) => s.length > 0)
     .join('-')
-    .slice(0, 45);
+    .slice(0, 60);
 }
 
 // -- Home directory --
 
 export function homeDir(): string {
   return os.homedir() || process.env['HOME'] || process.env['USERPROFILE'] || os.tmpdir();
+}
+
+// -- Application data directory --
+
+/** Resolve the per-user data directory for this app, matching the DB location logic. */
+export function getAppDataDir(): string {
+  const override = process.env['APP_DATA_DIR'];
+  if (override) return override;
+
+  const platform = os.platform();
+  if (platform === 'darwin') {
+    return path.join(homeDir(), 'Library', 'Application Support', 'branching-bad');
+  }
+  if (platform === 'win32') {
+    return path.join(process.env['APPDATA'] || path.join(homeDir(), 'AppData', 'Roaming'), 'branching-bad');
+  }
+  // Linux / other
+  return path.join(process.env['XDG_DATA_HOME'] || path.join(homeDir(), '.local', 'share'), 'branching-bad');
+}
+
+/** Stable, human-readable namespace for a repo on disk: `<basename>-<shortHash>`. */
+export function repoNamespace(repoPath: string): string {
+  const normalized = path.resolve(repoPath);
+  const base = path.basename(normalized).replace(/[^A-Za-z0-9._-]/g, '-') || 'repo';
+  const hash = crypto.createHash('sha1').update(normalized).digest('hex').slice(0, 8);
+  return `${base}-${hash}`;
+}
+
+/** Where worktrees for a given repo live, outside the repo itself. */
+export function worktreesRootFor(repoPath: string): string {
+  return path.join(getAppDataDir(), 'worktrees', repoNamespace(repoPath));
 }
 
 // -- Agent command resolution --
