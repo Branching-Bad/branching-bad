@@ -4,6 +4,7 @@ import { WorkflowList } from './WorkflowList';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import { WorkflowNodeEditor } from './WorkflowNodeEditor';
 import { WorkflowEdgeEditor } from './WorkflowEdgeEditor';
+import { WorkflowRunHistory } from './WorkflowRunHistory';
 import type { Edge, Graph, GraphNode } from '../types/workflow';
 
 const normalizeInputOrder = (g: Graph, toId: string): Graph => {
@@ -19,7 +20,7 @@ interface Props {
 }
 
 export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
-  const { workflows, selected, selectedId, setSelectedId, refreshList, saveGraph, run, liveStatus } = useWorkflow(repoId);
+  const { workflows, selected, selectedId, setSelectedId, refreshList, refreshSelected, saveGraph, run, runs, retryNode, liveStatus } = useWorkflow(repoId);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
@@ -193,6 +194,13 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
                 />
               )}
             </div>
+            <WorkflowRunHistory
+              runs={runs}
+              onRetryNode={async (runId, nodeId) => {
+                await retryNode(runId, nodeId);
+                await refreshSelected();
+              }}
+            />
           </>
         ) : (
           <div className="p-6 text-text-muted text-sm">Select or create a workflow.</div>
