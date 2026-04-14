@@ -100,10 +100,11 @@ Db.prototype.createManualTask = function (payload: CreateTaskPayload): TaskWithP
     const useWorktree = payload.useWorktree ?? defaults.use_worktree ?? true;
     const carryDirtyState = payload.carryDirtyState ?? defaults.carry_dirty_state ?? false;
 
-    const maxSortRow = db
-      .prepare('SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM tasks WHERE repo_id = ?')
-      .get(payload.repoId) as { max_sort: number };
-    const sortOrder = maxSortRow.max_sort + 1;
+    // Use current timestamp as sort_order so a newly created task always sorts
+    // strictly after every existing task (existing values are small integers
+    // from reorderTasks(); a ms-since-epoch value dwarfs them). A manual
+    // reorder re-compresses the lane back to 0..N when the user drags.
+    const sortOrder = Date.now();
 
     const maxLocal = db
       .prepare(
