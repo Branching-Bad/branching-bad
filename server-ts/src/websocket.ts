@@ -42,6 +42,13 @@ export function broadcastGlobalEvent(event: GlobalEvent): void {
   }
 }
 
+export function broadcastWorkflow(runId: string, msg: Record<string, unknown>): void {
+  const payload = JSON.stringify({ topic: `workflow:run:${runId}`, ...msg });
+  for (const ws of globalClients) {
+    if (ws.readyState === 1) ws.send(payload);
+  }
+}
+
 /**
  * Attach a WebSocket upgrade handler to the given HTTP server.
  * Routes:
