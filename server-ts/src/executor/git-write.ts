@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import path from 'path';
 
@@ -22,6 +22,21 @@ export function createWorktree(
   const worktreeDir = path.join(worktreesRootFor(repoPath), branchName);
   const parentDir = path.dirname(worktreeDir);
   mkdirSync(parentDir, { recursive: true });
+
+  // Stale leftover from a previous run (crash / orphan / manual interrupt) can
+  // leave the directory and/or git's worktree registry pointing at a path that
+  // doesn't roundtrip. Clear both before attempting `git worktree add`.
+  if (existsSync(worktreeDir)) {
+    // Try the proper git removal first so the registry is updated, then fall
+    // back to rm + prune for the cases where git no longer recognizes it.
+    const gitRemove = execGit(repoPath, ['worktree', 'remove', '--force', worktreeDir]);
+    if (!gitRemove.success || existsSync(worktreeDir)) {
+      try { rmSync(worktreeDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    }
+  }
+  // Always prune so a registry entry whose directory has been deleted out of
+  // band doesn't block re-creation with the same name.
+  execGit(repoPath, ['worktree', 'prune']);
 
   // Capture dirty state before creating worktree (must happen first)
   let trackedDiff: string | undefined;
