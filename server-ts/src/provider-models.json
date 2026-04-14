@@ -1,0 +1,61 @@
+{
+  "providers": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "binary": "claude",
+      "model_flag": "--model",
+      "models": [
+        { "id": "opus",       "name": "Opus",              "description": "Most capable, deep reasoning" },
+        { "id": "opus[1m]",   "name": "Opus (1M context)",  "description": "Opus with 1M context window" },
+        { "id": "sonnet",     "name": "Sonnet",            "description": "Balanced performance" },
+        { "id": "sonnet[1m]", "name": "Sonnet (1M context)","description": "Sonnet with 1M context window" },
+        { "id": "haiku",      "name": "Haiku",             "description": "Fast and cost-effective" }
+      ]
+    },
+    {
+      "id": "codex",
+      "name": "Codex CLI",
+      "binary": "codex",
+      "model_flag": "-m",
+      "models": [
+        { "id": "gpt-5.4",            "name": "GPT-5.4",             "description": "Most capable, latest" },
+        { "id": "gpt-5.3-codex",      "name": "GPT-5.3 Codex",       "description": "Strong reasoning, fast" },
+        { "id": "gpt-5.3-codex-spark","name": "GPT-5.3 Codex Spark", "description": "Near-instant, text-only" },
+        { "id": "gpt-5-codex-mini",   "name": "GPT-5 Codex Mini",    "description": "Cost-effective" },
+        { "id": "o3",                 "name": "o3",                   "description": "Deep reasoning" }
+      ]
+    },
+    {
+      "id": "gemini-cli",
+      "name": "Gemini CLI",
+      "binary": "gemini",
+      "model_flag": "-m",
+      "models": [
+        { "id": "gemini-3.1-pro-preview",       "name": "Gemini 3.1 Pro",       "description": "Most capable" },
+        { "id": "gemini-3-flash",               "name": "Gemini 3 Flash",       "description": "Fast, balanced" },
+        { "id": "gemini-3.1-flash-lite-preview", "name": "Gemini 3.1 Flash Lite","description": "Budget-friendly" },
+        { "id": "gemini-2.5-pro",               "name": "Gemini 2.5 Pro",       "description": "Previous-gen pro, 1M context" },
+        { "id": "gemini-2.5-flash",             "name": "Gemini 2.5 Flash",     "description": "Previous-gen flash" }
+      ]
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "binary": "opencode",
+      "model_flag": "",
+      "models": [
+        { "id": "default", "name": "Default", "description": "Provider default model" }
+      ]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "binary": "cursor",
+      "model_flag": "--model",
+      "models": [
+        { "id": "default", "name": "Default", "description": "Provider default model" }
+      ]
+    }
+  ]
+}
