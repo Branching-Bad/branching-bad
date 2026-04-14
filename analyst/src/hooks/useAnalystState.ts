@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { Repo, AgentProfile, RunLogEntry, AnalystHistoryEntry, AnalystSession, AnalystLog } from "../types";
 import { api } from "../api";
 import { useWebSocketStream } from "./useWebSocketStream";
@@ -23,7 +23,7 @@ export function useAnalystState() {
   const [repoId, setRepoId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [profileId, setProfileId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [sendingHttp, setSendingHttp] = useState(false);
   const [history, setHistory] = useState<AnalystHistoryEntry[]>([]);
   const [viewingHistoryId, setViewingHistoryId] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -34,12 +34,28 @@ export function useAnalystState() {
   const wsUrl = sessionId ? `/api/analyst/${sessionId}/ws` : null;
   const { logs, isConnected, isFinished, clearLogs, appendLog } = useWebSocketStream(wsUrl);
 
+  // Derive streaming state from WS events.
+  const wsLoading = useMemo(() => {
+    if (!sessionId || logs.length === 0) return false;
+    const hasAgentDone = logs.some((l) => l.type === "agent_done");
+    if (!hasAgentDone) return false;
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const t = logs[i].type;
+      if (t === "agent_done") return false;
+      if (t === "agent_text" || t === "thinking" || t === "tool_use" || t === "tool_result") return true;
+      if (t === "user_message") return true;
+    }
+    return false;
+  }, [sessionId, logs]);
+
   // Bootstrap: fetch repos + profiles
   useEffect(() => {
     Promise.all([
-      api<Repo[]>("/api/repos"),
-      api<AgentProfile[]>("/api/agents"),
-    ]).then(([r, p]) => {
+      api<{ repos: Repo[] }>("/api/repos"),
+      api<{ profiles: AgentProfile[] }>("/api/agents"),
+    ]).then(([rRes, pRes]) => {
+      const r = rRes.repos;
+      const p = pRes.profiles;
       setRepos(r);
       setProfiles(p);
       if (p.length > 0) setProfileId(p[0].id);
@@ -98,7 +114,7 @@ export function useAnalystState() {
   const startSession = useCallback(async (message: string) => {
     if (!repoId) return;
     setViewingHistoryId(null);
-    setLoading(true);
+    setSendingHttp(true);
     try {
       const body: Record<string, unknown> = { message, profileId: profileIdRef.current };
       const res = await api<{ sessionId: string }>(
@@ -107,20 +123,20 @@ export function useAnalystState() {
       );
       setSessionId(res.sessionId);
     } finally {
-      setLoading(false);
+      setSendingHttp(false);
     }
   }, [repoId]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!sessionId) return;
-    setLoading(true);
+    setSendingHttp(true);
     try {
       await api(`/api/analyst/${sessionId}/message`, {
         method: "POST",
         body: JSON.stringify({ content, profileId: profileIdRef.current }),
       });
     } finally {
-      setLoading(false);
+      setSendingHttp(false);
     }
   }, [sessionId]);
 
@@ -187,7 +203,7 @@ export function useAnalystState() {
     sessionId,
     profileId,
     setProfileId,
-    loading,
+    loading: sendingHttp || wsLoading,
     logs,
     isConnected,
     isFinished,

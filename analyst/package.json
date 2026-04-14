@@ -10,9 +10,9 @@
     "preview": "npx vite preview"
   },
   "dependencies": {
+    "marked": "^17.0.4",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-virtuoso": "^4.18.1"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.1",

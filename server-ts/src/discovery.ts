@@ -1,98 +1,78 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import which from 'which';
 import type { DiscoveredProfile } from './models.js';
 
+interface ModelEntry {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface ProviderEntry {
+  id: string;
+  name: string;
+  binary: string;
+  model_flag: string;
+  models: ModelEntry[];
+}
+
+interface ProviderModelsFile {
+  providers: ProviderEntry[];
+}
+
+function loadProviderModels(): ProviderModelsFile {
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const jsonPath = path.join(thisDir, 'provider-models.json');
+  const raw = fs.readFileSync(jsonPath, 'utf-8');
+  return JSON.parse(raw) as ProviderModelsFile;
+}
+
 export function discoverAgentProfiles(): DiscoveredProfile[] {
   const profiles: DiscoveredProfile[] = [];
+  const catalog = loadProviderModels();
 
-  // Codex
-  const codexModel = readModelFromTextConfigPaths(
-    configPaths('.codex/config.toml', 'codex/config.toml'),
-    ['model = "', 'model="'],
-  );
-  const codexPath = resolveWhich('codex');
-  if (codexPath) {
-    profiles.push({
-      provider: 'codex',
-      agent_name: 'Codex CLI',
-      model: codexModel ?? 'gpt-5-codex',
-      command: codexPath,
-      source: codexPath,
-      discovery_kind: 'binary',
-      metadata: { hint: 'Detected codex binary in PATH' },
-    });
-  }
+  for (const provider of catalog.providers) {
+    const binaryPath = resolveWhich(provider.binary);
+    if (!binaryPath) continue;
 
-  // Claude Code
-  const claudeConfigModel = readModelFromJsonConfigPaths(
-    configPaths('.claude/settings.json', 'Claude/settings.json'),
-  );
-  const claudePath = resolveWhich('claude');
-  if (claudePath) {
-    const models = new Set<string>();
-    if (claudeConfigModel) {
-      models.add(claudeConfigModel);
-    }
-    models.add('sonnet');
-    models.add('haiku');
-    models.add('opus');
+    // Try to read configured model from config files
+    const configModel = readConfigModel(provider.id);
 
-    const sorted = [...models].sort();
-    for (const model of sorted) {
+    for (const model of provider.models) {
       profiles.push({
-        provider: 'claude-code',
-        agent_name: 'Claude Code',
-        model,
-        command: claudePath,
-        source: claudePath,
+        provider: provider.id,
+        agent_name: provider.name,
+        model: model.id,
+        command: binaryPath,
+        source: binaryPath,
         discovery_kind: 'binary',
-        metadata: { hint: 'Detected claude binary in PATH' },
+        metadata: {
+          hint: `Detected ${provider.binary} binary in PATH`,
+          model_name: model.name,
+          model_description: model.description,
+        },
       });
     }
-  }
 
-  // Gemini CLI
-  const geminiPath = resolveWhich('gemini');
-  if (geminiPath) {
-    profiles.push({
-      provider: 'gemini-cli',
-      agent_name: 'Gemini CLI',
-      model: 'gemini-2.5-pro',
-      command: geminiPath,
-      source: geminiPath,
-      discovery_kind: 'binary',
-      metadata: { hint: 'Detected gemini binary in PATH' },
-    });
-  }
-
-  // OpenCode
-  const opencodePath = resolveWhich('opencode');
-  if (opencodePath) {
-    profiles.push({
-      provider: 'opencode',
-      agent_name: 'OpenCode',
-      model: 'default',
-      command: opencodePath,
-      source: opencodePath,
-      discovery_kind: 'binary',
-      metadata: { hint: 'Detected opencode binary in PATH' },
-    });
-  }
-
-  // Cursor
-  const cursorPath = resolveWhich('cursor');
-  if (cursorPath) {
-    profiles.push({
-      provider: 'cursor',
-      agent_name: 'Cursor',
-      model: 'default',
-      command: cursorPath,
-      source: cursorPath,
-      discovery_kind: 'binary',
-      metadata: { hint: 'Detected cursor binary in PATH' },
-    });
+    // Add user's configured model if not already in the catalog
+    if (configModel && !provider.models.some((m) => m.id === configModel)) {
+      profiles.push({
+        provider: provider.id,
+        agent_name: provider.name,
+        model: configModel,
+        command: binaryPath,
+        source: binaryPath,
+        discovery_kind: 'binary',
+        metadata: {
+          hint: 'Model read from user config file',
+          model_name: configModel,
+          model_description: 'User-configured model',
+        },
+      });
+    }
   }
 
   // Inferred fallbacks when no binaries are found
@@ -109,7 +89,7 @@ export function discoverAgentProfiles(): DiscoveredProfile[] {
     profiles.push({
       provider: 'codex',
       agent_name: 'Codex CLI',
-      model: 'gpt-5-codex',
+      model: 'gpt-5.4',
       command: 'codex',
       source: 'inferred',
       discovery_kind: 'inferred',
@@ -118,6 +98,23 @@ export function discoverAgentProfiles(): DiscoveredProfile[] {
   }
 
   return profiles;
+}
+
+/** Read the user's currently configured model from CLI config files. */
+function readConfigModel(providerId: string): string | null {
+  switch (providerId) {
+    case 'claude-code':
+      return readModelFromJsonConfigPaths(
+        configPaths('.claude/settings.json', 'Claude/settings.json'),
+      );
+    case 'codex':
+      return readModelFromTextConfigPaths(
+        configPaths('.codex/config.toml', 'codex/config.toml'),
+        ['model = "', 'model="'],
+      );
+    default:
+      return null;
+  }
 }
 
 function resolveWhich(name: string): string | null {

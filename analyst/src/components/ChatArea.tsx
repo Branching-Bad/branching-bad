@@ -1,13 +1,9 @@
-import { useRef, useEffect, useCallback, useState } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { RunLogEntry } from "../types";
-import MessageBubble from "./MessageBubble";
+import AnalystChat from "./AnalystChat";
 import MessageInput from "./MessageInput";
-import TypingIndicator from "./TypingIndicator";
 import EmptyState from "./EmptyState";
-import { IconArrowDown } from "./Icons";
 
-const VISIBLE_TYPES = new Set(["thinking", "agent_text", "user_message", "turn_separator"]);
+const VISIBLE_TYPES = new Set(["thinking", "agent_text", "user_message", "turn_separator", "tool_use", "tool_result", "agent_done"]);
 
 interface Props {
   logs: RunLogEntry[];
@@ -24,28 +20,8 @@ export default function ChatArea({
   logs, isConnected, isFinished, loading,
   hasSession, viewingHistory, onSend, inputRef,
 }: Props) {
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const [atBottom, setAtBottom] = useState(true);
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
-
   const visibleLogs = logs.filter((l) => VISIBLE_TYPES.has(l.type));
   const isStreaming = hasSession && isConnected && !isFinished;
-
-  const scrollToBottom = useCallback(() => {
-    virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" });
-  }, []);
-
-  // Auto-scroll on new messages if user is at bottom
-  useEffect(() => {
-    if (atBottom && visibleLogs.length > 0) {
-      virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" });
-    }
-  }, [visibleLogs.length, atBottom]);
-
-  // Show/hide scroll-to-bottom button
-  useEffect(() => {
-    setShowScrollBtn(!atBottom && visibleLogs.length > 5);
-  }, [atBottom, visibleLogs.length]);
 
   // No session — show empty state
   if (!hasSession && visibleLogs.length === 0) {
@@ -80,38 +56,25 @@ export default function ChatArea({
       )}
 
       {/* Messages */}
-      <div className="flex-1 min-h-0">
-        <Virtuoso
-          ref={virtuosoRef}
-          data={visibleLogs}
-          atBottomStateChange={setAtBottom}
-          atBottomThreshold={80}
-          followOutput="smooth"
-          className="h-full"
-          itemContent={(_index, entry) => (
-            <div className="max-w-3xl mx-auto px-4 py-1.5">
-              <MessageBubble entry={entry} />
-            </div>
-          )}
-          components={{
-            Footer: () => isStreaming ? (
-              <div className="max-w-3xl mx-auto px-4 pb-2">
-                <TypingIndicator />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {visibleLogs.length > 0 ? (
+          <AnalystChat logs={visibleLogs} className="h-full" isStreaming={isStreaming || loading} />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center">
+              <div className="mx-auto w-10 h-10 rounded-xl bg-surface-300 border border-border-default flex items-center justify-center mb-3">
+                <svg className="w-5 h-5 text-text-muted/40" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
               </div>
-            ) : null,
-          }}
-        />
+              <p className="text-sm text-text-muted">
+                {loading ? "Starting analysis..." : "Waiting for response..."}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Scroll to bottom FAB */}
-      {showScrollBtn && (
-        <button
-          onClick={scrollToBottom}
-          className="absolute bottom-24 right-6 w-8 h-8 rounded-full bg-surface-300 border border-border-strong shadow-md flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-surface-400 transition-all animate-fade-in"
-        >
-          <IconArrowDown />
-        </button>
-      )}
 
       {/* Input area */}
       {!viewingHistory && (

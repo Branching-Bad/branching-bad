@@ -66,14 +66,14 @@ export default function SessionList({ entries, activeId, onSelect, onDelete }: P
                     activeId === entry.id ? "text-brand" : "text-text-muted"
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs truncate ${
+                    <span className={`block text-xs truncate ${
                       activeId === entry.id ? "text-text-primary font-medium" : "text-text-secondary"
                     }`}>
                       {entry.title ?? entry.firstMessage}
-                    </p>
-                    <p className="text-[10px] text-text-muted mt-0.5">
+                    </span>
+                    <span className="block text-[10px] text-text-muted mt-0.5">
                       {formatRelative(entry.timestamp)}
-                    </p>
+                    </span>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(entry.id); }}
