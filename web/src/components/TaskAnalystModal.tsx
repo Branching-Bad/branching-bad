@@ -84,37 +84,38 @@ function HistoryPanel({
   );
 }
 
-export function TaskAnalystModal({
-  open,
-  onClose,
+type AnalystStateProps = {
+  sessionId: string | null;
+  profileId: string;
+  setProfileId: (v: string) => void;
+  loading: boolean;
+  logs: RunLogEntry[];
+  isConnected: boolean;
+  history: AnalystHistoryEntry[];
+  viewingHistoryId: string | null;
+  startSession: (repoId: string, message: string, additionalRepoIds?: string[]) => Promise<void>;
+  sendMessage: (content: string) => Promise<void>;
+  archiveAndReset: () => Promise<void>;
+  loadHistoryEntry: (id: string | null) => Promise<void>;
+  deleteHistoryEntry: (id: string) => Promise<void>;
+  extractTaskFields: () => { title: string; description: string } | null;
+};
+
+// Shared inner panel — used by both the modal and the full tab view
+export function TaskAnalystPanel({
   repoId,
   repos,
   agentProfiles,
   onCreateTask,
   analystState,
+  autoFocus = false,
 }: {
-  open: boolean;
-  onClose: () => void;
   repoId: string;
   repos: Repo[];
   agentProfiles: AgentProfile[];
   onCreateTask: (prefill: { title: string; description: string }) => void;
-  analystState: {
-    sessionId: string | null;
-    profileId: string;
-    setProfileId: (v: string) => void;
-    loading: boolean;
-    logs: RunLogEntry[];
-    isConnected: boolean;
-    history: AnalystHistoryEntry[];
-    viewingHistoryId: string | null;
-    startSession: (repoId: string, message: string, additionalRepoIds?: string[]) => Promise<void>;
-    sendMessage: (content: string) => Promise<void>;
-    archiveAndReset: () => Promise<void>;
-    loadHistoryEntry: (id: string | null) => Promise<void>;
-    deleteHistoryEntry: (id: string) => Promise<void>;
-    extractTaskFields: () => { title: string; description: string } | null;
-  };
+  analystState: AnalystStateProps;
+  autoFocus?: boolean;
 }) {
   const [input, setInput] = useState("");
   const [extraRepoIds, setExtraRepoIds] = useState<string[]>([]);
@@ -133,10 +134,9 @@ export function TaskAnalystModal({
   const filteredLogs = displayLogs.filter((l) => ANALYST_VISIBLE_TYPES.has(l.type));
   const showHistory = history.length > 0 || sessionId !== null;
 
-  // Focus input when modal opens
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open]);
+    if (autoFocus) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [autoFocus]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -156,20 +156,11 @@ export function TaskAnalystModal({
     }
   };
 
-  // Close just hides the modal — session stays alive
-  const handleClose = () => {
-    onClose();
-  };
-
   const handleCreateTask = () => {
     const fields = extractTaskFields();
-    if (fields) {
-      onCreateTask(fields);
-      handleClose();
-    }
+    if (fields) onCreateTask(fields);
   };
 
-  // "New" archives current session and resets for a new one
   const handleNew = () => {
     void archiveAndReset();
     setInput("");
@@ -180,142 +171,178 @@ export function TaskAnalystModal({
     (l) => l.type === "agent_text" && l.data.includes("---TASK_OUTPUT_START---"),
   );
 
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {showHistory && (
+        <HistoryPanel
+          history={history}
+          viewingHistoryId={viewingHistoryId}
+          activeSessionId={sessionId}
+          onSelect={loadHistoryEntry}
+          onDelete={deleteHistoryEntry}
+          onBackToActive={() => loadHistoryEntry(null)}
+        />
+      )}
+
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Profile selector row */}
+        <div className="flex items-center gap-2 border-b border-border-default px-4 py-2">
+          <AgentProfileSelect
+            profiles={agentProfiles}
+            value={profileId}
+            onChange={setProfileId}
+          />
+          {loading && (
+            <div className="flex items-center gap-1.5 text-text-muted">
+              <Spinner className="w-3.5 h-3.5" />
+              <span className="text-xs">Analyzing...</span>
+            </div>
+          )}
+        </div>
+
+        {/* Repo selector — only before session starts and not viewing history */}
+        {!sessionId && !isViewingHistory && otherRepos.length > 0 && (
+          <div className="border-b border-border-default px-5 py-2">
+            <p className="mb-1.5 text-xs text-text-muted">Additional repositories for context:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {otherRepos.map((r) => {
+                const selected = extraRepoIds.includes(r.id);
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setExtraRepoIds((prev) =>
+                      selected ? prev.filter((id) => id !== r.id) : [...prev, r.id],
+                    )}
+                    className={`rounded-md border px-2 py-0.5 text-xs transition ${
+                      selected
+                        ? "border-brand bg-brand/10 text-brand"
+                        : "border-border-strong bg-surface-200 text-text-muted hover:border-text-muted"
+                    }`}
+                  >
+                    {r.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-hidden p-4">
+          {filteredLogs.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center">
+                <IconAnalyst className="mx-auto h-10 w-10 text-text-muted/40" />
+                <p className="mt-3 text-sm text-text-muted">
+                  Describe a feature or requirement to get started.
+                </p>
+                <p className="mt-1 text-xs text-text-muted/60">
+                  The analyst will ask clarifying questions and help structure a task.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <AnalystChat logs={filteredLogs} className="h-full" isStreaming={loading} />
+          )}
+        </div>
+
+        {/* Input — hidden when viewing history */}
+        {!isViewingHistory && (
+          <div className="border-t border-border-default px-4 py-3">
+            <div className="flex gap-2">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={sessionId ? "Type your response..." : "Describe a feature or requirement..."}
+                rows={2}
+                className="flex-1 resize-none rounded-lg border border-border-strong bg-surface-300 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+              />
+              <button
+                onClick={() => void handleSend()}
+                disabled={!input.trim() || loading || !profileId}
+                className={`${btnPrimary} self-end !px-4 !py-2`}
+              >
+                {loading ? <Spinner className="w-4 h-4" /> : "Send"}
+              </button>
+            </div>
+            {!profileId && (
+              <p className="mt-1.5 text-xs text-status-warning">Select an agent profile to start.</p>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-border-default px-4 py-2.5">
+          <button
+            onClick={handleNew}
+            disabled={!sessionId && !isViewingHistory}
+            className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
+          >
+            New
+          </button>
+          <button
+            onClick={handleCreateTask}
+            disabled={!hasOutput}
+            className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
+          >
+            Create Task
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TaskAnalystModal({
+  open,
+  onClose,
+  repoId,
+  repos,
+  agentProfiles,
+  onCreateTask,
+  analystState,
+}: {
+  open: boolean;
+  onClose: () => void;
+  repoId: string;
+  repos: Repo[];
+  agentProfiles: AgentProfile[];
+  onCreateTask: (prefill: { title: string; description: string }) => void;
+  analystState: AnalystStateProps;
+}) {
+  // Focus input when modal opens
+  const [focusTrigger, setFocusTrigger] = useState(0);
+  useEffect(() => {
+    if (open) setFocusTrigger((n) => n + 1);
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative flex h-[80vh] w-full max-w-4xl flex-col rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border-default px-5 py-3">
           <div className="flex items-center gap-2.5">
             <IconAnalyst className="w-5 h-5 text-status-warning" />
             <h3 className="text-sm font-medium text-text-primary">Task Analyst</h3>
-            {loading && (
-              <div className="flex items-center gap-1.5 text-text-muted">
-                <Spinner className="w-3.5 h-3.5" />
-                <span className="text-xs">Analyzing...</span>
-              </div>
-            )}
           </div>
-          <div className="flex items-center gap-2">
-            <AgentProfileSelect
-              profiles={agentProfiles}
-              value={profileId}
-              onChange={setProfileId}
-            />
-            <button onClick={handleClose} className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
-              <IconX className="h-5 w-5" />
-            </button>
-          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
+            <IconX className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Body: optional history panel + main content */}
-        <div className="flex flex-1 overflow-hidden">
-          {showHistory && (
-            <HistoryPanel
-              history={history}
-              viewingHistoryId={viewingHistoryId}
-              activeSessionId={sessionId}
-              onSelect={loadHistoryEntry}
-              onDelete={deleteHistoryEntry}
-              onBackToActive={() => loadHistoryEntry(null)}
-            />
-          )}
-
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {/* Repo selector — only before session starts and not viewing history */}
-            {!sessionId && !isViewingHistory && otherRepos.length > 0 && (
-              <div className="border-b border-border-default px-5 py-2">
-                <p className="mb-1.5 text-xs text-text-muted">Additional repositories for context:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {otherRepos.map((r) => {
-                    const selected = extraRepoIds.includes(r.id);
-                    return (
-                      <button
-                        key={r.id}
-                        onClick={() => setExtraRepoIds((prev) =>
-                          selected ? prev.filter((id) => id !== r.id) : [...prev, r.id],
-                        )}
-                        className={`rounded-md border px-2 py-0.5 text-xs transition ${
-                          selected
-                            ? "border-brand bg-brand/10 text-brand"
-                            : "border-border-strong bg-surface-200 text-text-muted hover:border-text-muted"
-                        }`}
-                      >
-                        {r.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Messages */}
-            <div className="flex-1 overflow-hidden p-4">
-              {filteredLogs.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="text-center">
-                    <IconAnalyst className="mx-auto h-10 w-10 text-text-muted/40" />
-                    <p className="mt-3 text-sm text-text-muted">
-                      Describe a feature or requirement to get started.
-                    </p>
-                    <p className="mt-1 text-xs text-text-muted/60">
-                      The analyst will ask clarifying questions and help structure a task.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <AnalystChat logs={filteredLogs} className="h-full" isStreaming={loading} />
-              )}
-            </div>
-
-            {/* Input — hidden when viewing history */}
-            {!isViewingHistory && (
-              <div className="border-t border-border-default px-4 py-3">
-                <div className="flex gap-2">
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={sessionId ? "Type your response..." : "Describe a feature or requirement..."}
-                    rows={2}
-                    className="flex-1 resize-none rounded-lg border border-border-strong bg-surface-300 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-                  />
-                  <button
-                    onClick={() => void handleSend()}
-                    disabled={!input.trim() || loading || !profileId}
-                    className={`${btnPrimary} self-end !px-4 !py-2`}
-                  >
-                    {loading ? <Spinner className="w-4 h-4" /> : "Send"}
-                  </button>
-                </div>
-                {!profileId && (
-                  <p className="mt-1.5 text-xs text-status-warning">Select an agent profile to start.</p>
-                )}
-              </div>
-            )}
-
-            {/* Footer */}
-            <div className="flex items-center justify-between border-t border-border-default px-4 py-2.5">
-              <button
-                onClick={handleNew}
-                disabled={!sessionId && !isViewingHistory}
-                className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
-              >
-                New
-              </button>
-              <button
-                onClick={handleCreateTask}
-                disabled={!hasOutput}
-                className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
-              >
-                Create Task
-              </button>
-            </div>
-          </div>
-        </div>
+        <TaskAnalystPanel
+          repoId={repoId}
+          repos={repos}
+          agentProfiles={agentProfiles}
+          onCreateTask={(prefill) => { onCreateTask(prefill); onClose(); }}
+          analystState={analystState}
+          autoFocus={focusTrigger > 0}
+        />
       </div>
     </div>
   );

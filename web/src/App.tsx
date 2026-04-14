@@ -10,7 +10,8 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailsSidebar } from "./components/DetailsSidebar";
 import { DiffReviewModal } from "./components/DiffReviewModal";
 import { PlanExpandModal } from "./components/PlanExpandModal";
-import { TaskAnalystModal } from "./components/TaskAnalystModal";
+import { TaskAnalystModal, TaskAnalystPanel } from "./components/TaskAnalystModal";
+import { WorkflowTab } from "./components/WorkflowTab";
 import { initProviders } from "./providers/init";
 import { JiraSprintQuickSwitch } from "./providers/jira/JiraSprintQuickSwitch";
 import { useEventStream } from "./hooks/useEventStream";
@@ -49,6 +50,7 @@ export default function App() {
   const [editTaskModalOpen, setEditTaskModalOpen] = useState(false);
   const [analystOpen, setAnalystOpen] = useState(false);
   const [taskPrefill, setTaskPrefill] = useState<{ title: string; description: string } | null>(null);
+  const [topTab, setTopTab] = useState<'board' | 'analyst' | 'workflow'>('board');
 
   // ── Stream function ref (breaks circular dep between hooks and useEventStream) ──
   useEffect(() => {
@@ -241,15 +243,28 @@ export default function App() {
                 <>
                   <span className="text-text-muted">/</span>
                   <span className="text-sm text-text-secondary">{repo.selectedRepo.name}</span>
-                  <button
-                    onClick={() => setAnalystOpen(true)}
-                    className="ml-1 flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition hover:text-brand hover:bg-surface-300"
-                    title="Task Analyst"
-                  >
-                    <IconAnalyst className="w-3.5 h-3.5 text-status-warning" />
-                  </button>
                 </>
               )}
+            </div>
+            {/* Top-level tab switcher */}
+            <div className="ml-2 flex items-center gap-0.5 rounded-lg border border-border-strong bg-surface-200 p-0.5">
+              {(["board", "analyst", "workflow"] as const).map((tab) => {
+                const labels: Record<typeof tab, string> = { board: "Board", analyst: "Task Analyst", workflow: "Workflow" };
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setTopTab(tab)}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition ${
+                      topTab === tab
+                        ? "bg-surface-0 text-text-primary shadow-sm"
+                        : "text-text-muted hover:text-text-secondary"
+                    }`}
+                  >
+                    {tab === "analyst" && <IconAnalyst className="w-3 h-3 text-status-warning" />}
+                    {labels[tab]}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -286,52 +301,84 @@ export default function App() {
       </div>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-7xl px-5 py-6">
-        <KanbanBoard
-          groupedTasks={task.groupedTasks}
-          selectedTaskId={task.selectedTaskId}
-          onSelectTask={(taskId) => { task.setSelectedTaskId(taskId); setDetailsOpen(true); setDetailsTab("plan"); }}
-          onCreateTask={() => setCreateTaskModalOpen(true)}
-          selectedRepoId={repo.selectedRepoId}
-          statusFromLane={task.statusFromLane}
-          setTasks={task.setTasks}
-          onError={setError}
-          onConflict={(taskId, files) => {
-            task.setSelectedTaskId(taskId);
-            setDetailsOpen(true);
-            setDetailsTab("review");
-            review.setApplyConflicts(files);
-            setError("Changes conflict with main. Resolve in the review panel.");
-          }}
-          agentProfiles={boot.agentProfiles}
-          taskRunStates={run.taskRunStates}
-          queueMode={repo.selectedRepo?.queue_mode}
-          onToggleQueueMode={async () => {
-            if (!repo.selectedRepo) return;
-            const newMode = !repo.selectedRepo.queue_mode;
-            try {
-              await api(`/api/repos/${encodeURIComponent(repo.selectedRepo.id)}`, {
-                method: "PATCH",
-                body: JSON.stringify({ queueMode: newMode }),
-              });
-              void boot.bootstrap();
-            } catch (err) {
-              setError((err as Error).message);
+      {topTab === 'board' && (
+        <main className="mx-auto max-w-7xl px-5 py-6">
+          <KanbanBoard
+            groupedTasks={task.groupedTasks}
+            selectedTaskId={task.selectedTaskId}
+            onSelectTask={(taskId) => { task.setSelectedTaskId(taskId); setDetailsOpen(true); setDetailsTab("plan"); }}
+            onCreateTask={() => setCreateTaskModalOpen(true)}
+            selectedRepoId={repo.selectedRepoId}
+            statusFromLane={task.statusFromLane}
+            setTasks={task.setTasks}
+            onError={setError}
+            onConflict={(taskId, files) => {
+              task.setSelectedTaskId(taskId);
+              setDetailsOpen(true);
+              setDetailsTab("review");
+              review.setApplyConflicts(files);
+              setError("Changes conflict with main. Resolve in the review panel.");
+            }}
+            agentProfiles={boot.agentProfiles}
+            taskRunStates={run.taskRunStates}
+            queueMode={repo.selectedRepo?.queue_mode}
+            onToggleQueueMode={async () => {
+              if (!repo.selectedRepo) return;
+              const newMode = !repo.selectedRepo.queue_mode;
+              try {
+                await api(`/api/repos/${encodeURIComponent(repo.selectedRepo.id)}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ queueMode: newMode }),
+                });
+                void boot.bootstrap();
+              } catch (err) {
+                setError((err as Error).message);
+              }
+            }}
+            toolbarContent={
+              <JiraSprintQuickSwitch
+                selectedRepoId={repo.selectedRepoId}
+                busy={busy}
+                onBusyChange={setBusy}
+                onError={setError}
+                onInfo={setInfo}
+                onTasksRefresh={task.refreshTasks}
+                refreshHint={`${info}|${error}|${extensionsOpen}`}
+              />
             }
-          }}
-          toolbarContent={
-            <JiraSprintQuickSwitch
-              selectedRepoId={repo.selectedRepoId}
-              busy={busy}
-              onBusyChange={setBusy}
-              onError={setError}
-              onInfo={setInfo}
-              onTasksRefresh={task.refreshTasks}
-              refreshHint={`${info}|${error}|${extensionsOpen}`}
-            />
-          }
-        />
-      </main>
+          />
+        </main>
+      )}
+
+      {topTab === 'analyst' && (
+        <main className="mx-auto flex max-w-7xl flex-col px-5 py-6" style={{ height: "calc(100vh - 56px)" }}>
+          {repo.selectedRepoId ? (
+            <div className="flex flex-1 overflow-hidden rounded-xl border border-border-default bg-surface-100">
+              <TaskAnalystPanel
+                repoId={repo.selectedRepoId}
+                repos={boot.repos}
+                agentProfiles={boot.agentProfiles}
+                onCreateTask={(prefill) => {
+                  setTaskPrefill(prefill);
+                  setCreateTaskModalOpen(true);
+                }}
+                analystState={analyst}
+                autoFocus={true}
+              />
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-text-muted">
+              Select a repository to use the Task Analyst.
+            </div>
+          )}
+        </main>
+      )}
+
+      {topTab === 'workflow' && (
+        <main className="mx-auto flex max-w-7xl flex-col px-5 py-6" style={{ height: "calc(100vh - 56px)" }}>
+          <WorkflowTab repoId={repo.selectedRepoId} />
+        </main>
+      )}
 
       {detailsOpen && task.selectedTask && (
         <DetailsSidebar
