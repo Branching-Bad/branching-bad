@@ -31,8 +31,8 @@ export function laneFromStatus(status: string): LaneKey {
 export const laneMeta: Array<{ key: LaneKey; title: string; dot: string }> = [
   { key: "todo", title: "To Do", dot: "bg-text-muted" },
   { key: "inprogress", title: "In Progress", dot: "bg-brand" },
-  { key: "inreview", title: "In Review", dot: "bg-info-text" },
-  { key: "done", title: "Done", dot: "bg-brand" },
+  { key: "inreview", title: "In Review", dot: "bg-status-pending" },
+  { key: "done", title: "Done", dot: "bg-status-success" },
   { key: "archived", title: "Archive", dot: "bg-text-muted" },
 ];
 

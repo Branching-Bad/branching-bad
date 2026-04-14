@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { api } from "./api";
-import { btnSecondary } from "./components/shared";
 import { IconSettings, IconExtensions, IconAnalyst } from "./components/icons";
 import { SettingsModal } from "./components/SettingsModal";
 import { ExtensionsDrawer } from "./components/ExtensionsDrawer";
@@ -246,17 +245,17 @@ export default function App() {
                 </>
               )}
             </div>
-            {/* Top-level tab switcher */}
-            <div className="ml-2 flex items-center gap-0.5 rounded-lg border border-border-strong bg-surface-200 p-0.5">
+            {/* Top-level tab switcher — SF segmented control */}
+            <div className="ml-2 flex items-center gap-0.5 rounded-full border border-border-default bg-surface-200 p-0.5">
               {(["board", "analyst", "workflow"] as const).map((tab) => {
                 const labels: Record<typeof tab, string> = { board: "Board", analyst: "Task Analyst", workflow: "Workflow" };
                 return (
                   <button
                     key={tab}
                     onClick={() => setTopTab(tab)}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition ${
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition ${
                       topTab === tab
-                        ? "bg-surface-0 text-text-primary shadow-sm"
+                        ? "bg-surface-0 text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
                         : "text-text-muted hover:text-text-secondary"
                     }`}
                   >
@@ -268,22 +267,31 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => void task.clearAllPipelines()} disabled={busy} className={`${btnSecondary} !px-3 !py-1.5 text-xs`} title="Clear all stuck pipelines">
+            <button
+              onClick={() => void task.clearAllPipelines()}
+              disabled={busy}
+              className="rounded-full border border-border-default bg-surface-200 px-3 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary disabled:opacity-40"
+              title="Clear all stuck pipelines"
+            >
               Clear Queue
             </button>
             <button
               onClick={() => setExtensionsOpen(true)}
-              className="relative flex h-8 w-8 items-center justify-center rounded-md border border-border-strong bg-surface-300 text-text-muted transition hover:text-text-primary hover:border-border-strong"
+              className="relative flex h-8 w-8 items-center justify-center rounded-full border border-border-default bg-surface-200 text-text-secondary transition hover:bg-surface-300 hover:text-text-primary"
               title="Extensions"
             >
               <IconExtensions />
               {totalProviderItemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-status-danger px-1 text-[10px] font-bold text-white">
+                <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-status-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface-0">
                   {totalProviderItemCount}
                 </span>
               )}
             </button>
-            <button onClick={() => setSettingsOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-md border border-border-strong bg-surface-300 text-text-muted transition hover:text-text-primary hover:border-border-strong">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border-default bg-surface-200 text-text-secondary transition hover:bg-surface-300 hover:text-text-primary"
+              title="Settings"
+            >
               <IconSettings />
             </button>
           </div>
@@ -293,10 +301,10 @@ export default function App() {
       {/* Alerts */}
       <div className="mx-auto max-w-7xl px-5">
         {error && !settingsOpen && (
-          <div className="mt-4 rounded-lg border border-error-border bg-error-bg px-4 py-3 text-sm text-error-text">{error}</div>
+          <div className="mt-4 rounded-[var(--radius-md)] border border-error-border bg-error-bg px-4 py-3 text-sm text-error-text">{error}</div>
         )}
         {info && !settingsOpen && (
-          <div className="mt-4 rounded-lg border border-info-border bg-info-bg px-4 py-3 text-sm text-info-text">{info}</div>
+          <div className="mt-4 rounded-[var(--radius-md)] border border-info-border bg-info-bg px-4 py-3 text-sm text-info-text">{info}</div>
         )}
       </div>
 

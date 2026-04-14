@@ -4,13 +4,13 @@ import { api } from "../api";
 import { IconPlus, IconGitBranch } from "./icons";
 import { formatDate, laneMeta, laneFromStatus } from "./shared";
 
-/* ── Lane visual config ── */
-const laneStyle: Record<string, { accent: string; accentSoft: string; dotBg: string; badgeBg: string; badgeText: string }> = {
-  todo:       { accent: "text-text-muted",   accentSoft: "rgba(137,137,137,0.06)", dotBg: "bg-text-muted",   badgeBg: "bg-surface-300",        badgeText: "text-text-muted" },
-  inprogress: { accent: "text-brand",        accentSoft: "rgba(62,207,142,0.06)",  dotBg: "bg-brand",        badgeBg: "bg-brand/10",           badgeText: "text-brand" },
-  inreview:   { accent: "text-info-text",    accentSoft: "rgba(96,165,250,0.06)",  dotBg: "bg-info-text",    badgeBg: "bg-info-text/10",       badgeText: "text-info-text" },
-  done:       { accent: "text-brand",        accentSoft: "rgba(62,207,142,0.06)",  dotBg: "bg-brand",        badgeBg: "bg-brand/10",           badgeText: "text-brand" },
-  archived:   { accent: "text-text-muted",   accentSoft: "rgba(137,137,137,0.06)", dotBg: "bg-text-muted",   badgeBg: "bg-surface-300",        badgeText: "text-text-muted" },
+/* ── Lane visual config (SF system palette) ── */
+const laneStyle: Record<string, { accent: string; dotBg: string; badgeBg: string; badgeText: string }> = {
+  todo:       { accent: "text-text-muted",      dotBg: "bg-text-muted",      badgeBg: "bg-surface-200",         badgeText: "text-text-secondary" },
+  inprogress: { accent: "text-brand",           dotBg: "bg-brand",           badgeBg: "bg-brand-tint",          badgeText: "text-brand" },
+  inreview:   { accent: "text-status-pending",  dotBg: "bg-status-pending",  badgeBg: "bg-status-pending-soft", badgeText: "text-status-pending" },
+  done:       { accent: "text-status-success",  dotBg: "bg-status-success",  badgeBg: "bg-status-success-soft", badgeText: "text-status-success" },
+  archived:   { accent: "text-text-muted",      dotBg: "bg-text-muted",      badgeBg: "bg-surface-200",         badgeText: "text-text-secondary" },
 };
 
 export function KanbanBoard({
@@ -175,10 +175,10 @@ export function KanbanBoard({
           {onToggleQueueMode && (
             <button
               onClick={onToggleQueueMode}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border transition ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition ${
                 queueMode
-                  ? "border-brand bg-brand/10 text-brand"
-                  : "border-border-strong bg-surface-300 text-text-muted"
+                  ? "border-brand/50 bg-brand-tint text-brand shadow-[inset_0_0_0_1px_var(--color-brand-glow)]"
+                  : "border-border-default bg-surface-200 text-text-secondary hover:bg-surface-300 hover:text-text-primary"
               }`}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${queueMode ? "bg-brand animate-pulse" : "bg-text-muted"}`} />
@@ -196,9 +196,9 @@ export function KanbanBoard({
           return (
             <div
               key={lane.key}
-              className={`group/lane relative min-h-[260px] rounded-[22px] border p-3.5 transition-all duration-200 ${
+              className={`group/lane relative min-h-[260px] rounded-[var(--radius-2xl)] border p-3.5 transition-all duration-200 ${
                 isDragOver
-                  ? "border-brand/60 bg-brand/5 shadow-[0_0_24px_rgba(62,207,142,0.08)]"
+                  ? "border-brand/60 bg-brand-tint shadow-[0_0_24px_var(--color-brand-glow)]"
                   : "border-border-default bg-surface-100/60 backdrop-blur-sm"
               }`}
               onDragOver={(e) => handleDragOver(e, lane.key)}
@@ -212,13 +212,13 @@ export function KanbanBoard({
                   <h3 className={`text-xs font-semibold uppercase tracking-wider ${style.accent}`}>{lane.title}</h3>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className={`inline-flex h-6 min-w-[24px] items-center justify-center rounded-full px-2 text-[11px] font-bold tabular-nums ${style.badgeBg} ${style.badgeText}`}>
+                  <span className={`inline-flex h-6 min-w-[24px] items-center justify-center rounded-full px-2 text-[11px] font-semibold tabular-nums ${style.badgeBg} ${style.badgeText}`}>
                     {groupedTasks[lane.key].length}
                   </span>
                   {selectedRepoId && lane.key === "todo" && (
                     <button
                       onClick={onCreateTask}
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-border-default text-text-muted transition-all hover:border-brand/40 hover:bg-brand/10 hover:text-brand"
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-border-default text-text-muted transition-all hover:border-brand/40 hover:bg-brand-tint hover:text-brand"
                       title="Add task"
                     >
                       <IconPlus className="h-3.5 w-3.5" />
@@ -253,7 +253,7 @@ export function KanbanBoard({
                   </div>
                 ))}
                 {groupedTasks[lane.key].length === 0 && (
-                  <div className="flex min-h-[100px] items-center justify-center rounded-2xl border border-dashed border-border-default">
+                  <div className="flex min-h-[100px] items-center justify-center rounded-[var(--radius-xl)] border border-dashed border-border-default/60">
                     <p className="text-xs text-text-muted">No items</p>
                   </div>
                 )}
@@ -265,9 +265,9 @@ export function KanbanBoard({
 
       {/* ── Archive lane ── */}
       <div
-        className={`rounded-[22px] border p-3.5 transition-all duration-200 ${
+        className={`rounded-[var(--radius-2xl)] border p-3.5 transition-all duration-200 ${
           dragOverLane === "archived"
-            ? "border-brand/60 bg-brand/5"
+            ? "border-brand/60 bg-brand-tint"
             : "border-border-default bg-surface-100/60 backdrop-blur-sm"
         }`}
         onDragOver={(e) => handleDragOver(e, "archived")}
@@ -334,7 +334,7 @@ function phaseIndicator(status: string, isRunning: boolean) {
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0 0 15 0m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077 1.41-.513m14.095-5.13 1.41-.513M5.106 17.785l1.15-.964m11.49-9.642 1.149-.964M7.501 19.795l.75-1.3m7.5-12.99.75-1.3m-6.063 16.658.26-1.477m2.605-14.772.26-1.477m-2.01 17.334-.364-1.43M13.863 4.027l-.364-1.43m-2.24 16.806-.862-1.218m6.608-12.37-.862-1.218" /></svg>,
   };
   if (upper === 'IN_REVIEW') return {
-    color: 'text-info-text', animate: '', title: 'In review',
+    color: 'text-status-pending', animate: '', title: 'In review',
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>,
   };
   if (upper === 'FAILED') return {
@@ -368,10 +368,10 @@ function TaskCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onSelect}
-      className={`group relative w-full rounded-2xl border p-3.5 text-left transition-all duration-150 cursor-grab active:cursor-grabbing ${dimmed ? "opacity-50" : ""} ${
+      className={`group relative w-full rounded-[var(--radius-xl)] border p-3.5 text-left transition-all duration-150 cursor-grab active:cursor-grabbing ${dimmed ? "opacity-50" : ""} ${
         selected
-          ? "border-brand/40 bg-brand/8 shadow-[0_0_0_1px_rgba(62,207,142,0.15),0_4px_16px_rgba(62,207,142,0.06)]"
-          : "border-border-default bg-surface-200/80 hover:border-border-strong hover:bg-surface-200 hover:shadow-[0_2px_8px_rgba(0,0,0,0.15)]"
+          ? "border-brand/50 bg-brand-tint shadow-[0_0_0_1px_var(--color-brand-glow),0_4px_16px_rgba(10,132,255,0.12)]"
+          : "border-border-default bg-surface-200/80 hover:border-border-strong hover:bg-surface-200 hover:shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
       }`}
     >
       {/* Phase indicator */}

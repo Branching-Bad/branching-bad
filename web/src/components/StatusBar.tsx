@@ -12,7 +12,7 @@ interface Props {
 function RunSpinner() {
   return (
     <span
-      className="inline-block w-3.5 h-3.5 border-2 border-text-muted border-t-transparent rounded-full animate-spin"
+      className="inline-block w-3 h-3 border-2 border-brand border-t-transparent rounded-full animate-spin"
       aria-hidden="true"
     />
   );
@@ -31,9 +31,19 @@ function RunChip({
   onResume: (runId: string) => void;
   onNavigate: (taskId: string, repoId: string) => void;
 }) {
+  const statusTone =
+    run.status === "running"
+      ? "border-brand/40 bg-brand-tint"
+      : run.status === "done"
+      ? "border-status-success/40 bg-status-success-soft"
+      : run.status === "failed"
+      ? "border-status-danger/40 bg-status-danger-soft"
+      : "border-border-default bg-surface-200";
+
   const className =
-    "flex items-center gap-2 px-3 py-1.5 rounded-md bg-surface-200 border border-border-strong hover:bg-surface-300 transition-colors cursor-pointer text-left" +
+    `flex items-center gap-2 rounded-full border px-3 py-1.5 text-left transition hover:brightness-110 cursor-pointer ${statusTone}` +
     (exiting ? ` ${THANOS_SNAP_CLASS}` : "");
+
   return (
     <button
       type="button"
@@ -42,25 +52,32 @@ function RunChip({
     >
       {run.status === "running" && <RunSpinner />}
       {run.status === "done" && (
-        <span className="text-status-success font-bold text-sm" aria-label="Done">✓</span>
+        <svg className="h-3 w-3 text-status-success" viewBox="0 0 12 12" fill="none" aria-label="Done">
+          <path d="M2.5 6.3L5 8.7L9.5 3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       )}
       {run.status === "failed" && (
-        <span className="text-status-danger font-bold text-sm" aria-label="Failed">✗</span>
+        <svg className="h-3 w-3 text-status-danger" viewBox="0 0 12 12" fill="none" aria-label="Failed">
+          <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
       )}
       {run.status === "cancelled" && (
-        <span className="text-text-muted text-sm" aria-label="Cancelled">⏸</span>
+        <svg className="h-3 w-3 text-text-muted" viewBox="0 0 12 12" fill="none" aria-label="Cancelled">
+          <rect x="3" y="2.5" width="2" height="7" rx="0.5" fill="currentColor" />
+          <rect x="7" y="2.5" width="2" height="7" rx="0.5" fill="currentColor" />
+        </svg>
       )}
 
-      <span className="flex flex-col min-w-0">
-        <span className="text-text-primary text-xs font-medium truncate max-w-48">{run.taskTitle}</span>
-        <span className="text-text-muted text-xs truncate">{run.repoName}</span>
+      <span className="flex min-w-0 flex-col">
+        <span className="max-w-48 truncate text-[11px] font-medium text-text-primary">{run.taskTitle}</span>
+        <span className="truncate text-[10px] text-text-muted">{run.repoName}</span>
       </span>
 
       {run.status === "running" && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onCancel(run.runId); }}
-          className="ml-1 px-2 py-0.5 rounded text-xs font-medium bg-status-danger/20 text-status-danger border border-status-danger/50 hover:bg-status-danger/30 transition-colors"
+          className="ml-1 rounded-full bg-status-danger-soft px-2 py-0.5 text-[10px] font-medium text-status-danger transition hover:bg-status-danger/20"
         >
           Cancel
         </button>
@@ -69,7 +86,7 @@ function RunChip({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onResume(run.runId); }}
-          className="ml-1 px-2 py-0.5 rounded text-xs font-medium bg-brand/20 text-brand border border-brand/50 hover:bg-brand/30 transition-colors"
+          className="ml-1 rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-medium text-brand transition hover:bg-brand/20"
         >
           Resume
         </button>
@@ -82,19 +99,21 @@ export function StatusBar({ runs, exitingRunIds, onCancel, onResume, onNavigate 
   if (runs.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface-100 border-t border-border-strong px-4 py-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-text-muted text-xs font-medium mr-1 shrink-0">Runs:</span>
-        {runs.map((run) => (
-          <RunChip
-            key={run.runId}
-            run={run}
-            exiting={exitingRunIds?.has(run.runId) ?? false}
-            onCancel={onCancel}
-            onResume={onResume}
-            onNavigate={onNavigate}
-          />
-        ))}
+    <div className="fixed bottom-3 left-1/2 z-40 -translate-x-1/2">
+      <div className="flex items-center gap-2 rounded-full border border-border-default bg-surface-100/80 px-3 py-1.5 shadow-[var(--shadow-lg)] backdrop-blur-md">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted">Runs</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {runs.map((run) => (
+            <RunChip
+              key={run.runId}
+              run={run}
+              exiting={exitingRunIds?.has(run.runId) ?? false}
+              onCancel={onCancel}
+              onResume={onResume}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
