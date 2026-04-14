@@ -39,5 +39,8 @@ Thumbs.db
 # Playwright MCP
 .playwright-mcp/
 
+# Superpowers session state (brainstorm mockups, etc.)
+.superpowers/
+
 # Reference project (not part of active app)
 reference/
