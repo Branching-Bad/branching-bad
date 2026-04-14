@@ -303,15 +303,15 @@ export function KanbanBoard({
 function phaseIndicator(status: string, isRunning: boolean) {
   const upper = status.toUpperCase();
   if (upper === 'PLAN_GENERATING') return {
-    color: 'text-purple-400', animate: 'animate-pulse', title: 'Generating plan',
+    color: 'text-status-pending', animate: 'animate-pulse', title: 'Generating plan',
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" /></svg>,
   };
   if (upper === 'PLAN_DRAFTED') return {
-    color: 'text-amber-400', animate: '', title: 'Plan needs approval',
+    color: 'text-status-warning', animate: '', title: 'Plan needs approval',
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>,
   };
   if (upper === 'PLAN_APPROVED') return {
-    color: 'text-green-400', animate: '', title: 'Plan approved',
+    color: 'text-status-success', animate: '', title: 'Plan approved',
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>,
   };
   if (isRunning) return {
@@ -323,7 +323,7 @@ function phaseIndicator(status: string, isRunning: boolean) {
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>,
   };
   if (upper === 'FAILED') return {
-    color: 'text-red-400', animate: '', title: 'Failed',
+    color: 'text-status-danger', animate: '', title: 'Failed',
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>,
   };
   return null;
@@ -386,7 +386,7 @@ function TaskCard({
       {/* Footer badges */}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         {profile && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-400" title={`${profile.agent_name} / ${profile.model}`}>
+          <span className="inline-flex items-center gap-1 rounded-full bg-status-pending/10 px-2 py-0.5 text-[10px] font-medium text-status-pending" title={`${profile.agent_name} / ${profile.model}`}>
             <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
             </svg>

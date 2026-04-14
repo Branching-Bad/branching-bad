@@ -53,7 +53,7 @@ function DefaultsRow({
         {onDelete && (
           <button
             onClick={() => void onDelete()}
-            className="text-text-muted hover:text-red-400 transition"
+            className="text-text-muted hover:text-status-danger transition"
             title="Remove override"
           >
             <IconX className="h-3 w-3" />

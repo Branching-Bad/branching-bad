@@ -176,7 +176,7 @@ export function SqDrawerSection({ selectedRepoId, busy, onBusyChange, onTasksRef
           <button
             onClick={() => void clearItems()}
             disabled={busy || scanning}
-            className="flex items-center justify-center rounded-lg border border-red-700/40 bg-red-900/10 px-2.5 py-2 text-xs font-medium text-red-400 transition hover:bg-red-900/20 disabled:opacity-50"
+            className="flex items-center justify-center rounded-lg border border-status-danger/40 bg-status-danger/10 px-2.5 py-2 text-xs font-medium text-status-danger transition hover:bg-status-danger/20 disabled:opacity-50"
             title="Clear all issues"
           >
             Clear
@@ -184,7 +184,7 @@ export function SqDrawerSection({ selectedRepoId, busy, onBusyChange, onTasksRef
         )}
       </div>
       {dockerAvailable === false && (
-        <p className="mb-2 -mt-1 text-[10px] text-yellow-400">Docker not available</p>
+        <p className="mb-2 -mt-1 text-[10px] text-status-caution">Docker not available</p>
       )}
       {pending.length === 0 ? (
         <p className="text-xs text-text-muted">No issues detected.</p>

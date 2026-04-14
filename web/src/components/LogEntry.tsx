@@ -51,12 +51,12 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  read: "text-blue-400",
-  edit: "text-amber-400",
-  write: "text-emerald-400",
-  search: "text-purple-400",
-  terminal: "text-cyan-400",
-  folder: "text-orange-400",
+  read: "text-tool-read",
+  edit: "text-tool-edit",
+  write: "text-tool-write",
+  search: "text-tool-search",
+  terminal: "text-tool-terminal",
+  folder: "text-tool-folder",
   tool: "text-text-muted",
 };
 
@@ -108,7 +108,7 @@ export function LogEntry({ type, data }: { type: string; data: string }) {
 
     return (
       <div className="flex items-center gap-2 py-0.5">
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-tool-read animate-pulse shrink-0" />
         <span className={color}>{TOOL_ICONS[cat] ?? TOOL_ICONS.tool}</span>
         <span className={`font-medium text-[11px] ${color}`}>{tool}</span>
         {summary && <span className="text-[10px] text-text-muted truncate">{summary}</span>}
@@ -133,7 +133,7 @@ export function LogEntry({ type, data }: { type: string; data: string }) {
     return (
       <div className="ml-5 pl-3 border-l-2 border-border-strong py-0.5">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-status-success shrink-0" />
           {tool && <span className={`font-medium text-[10px] ${color}`}>{tool}</span>}
           <span className="text-[10px] text-text-muted/50">result</span>
           {isLong && (

@@ -15,14 +15,14 @@ function parseData(item: ProviderItem): Record<string, any> {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const SEVERITY_DOT: Record<string, string> = {
-  critical: "bg-red-500",
-  high: "bg-orange-400",
-  medium: "bg-yellow-400",
-  low: "bg-zinc-400",
+  critical: "bg-status-danger",
+  high: "bg-status-warning",
+  medium: "bg-status-caution",
+  low: "bg-status-neutral",
 };
 
 function severityDot(severity: string) {
-  return SEVERITY_DOT[severity] ?? "bg-zinc-400";
+  return SEVERITY_DOT[severity] ?? "bg-status-neutral";
 }
 
 function fmtNum(n: number | undefined): string {
@@ -140,7 +140,7 @@ export function PgIssuesModal({
             <button
               onClick={() => void clearAll()}
               disabled={busy}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-status-danger/30 bg-status-danger/5 px-3 py-1.5 text-xs font-medium text-status-danger transition hover:bg-status-danger/10 disabled:opacity-50"
             >
               Clear
             </button>

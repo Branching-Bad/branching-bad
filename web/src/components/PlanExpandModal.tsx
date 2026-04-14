@@ -86,7 +86,7 @@ export function PlanExpandModal({
     if (phases?.length) {
       const items = phases.flatMap((p) => p.tasks ?? []);
       if (items.some((t) => t.complexity || t.suggested_model)) {
-        const cxColors: Record<string, string> = { low: "bg-blue-500/15 text-blue-400", medium: "bg-orange-500/15 text-orange-400", high: "bg-red-500/15 text-red-400" };
+        const cxColors: Record<string, string> = { low: "bg-brand/15 text-brand", medium: "bg-status-warning/15 text-status-warning", high: "bg-status-danger/15 text-status-danger" };
         const updateTaskModel = (taskId: string, newModel: string) => {
           try {
             const parsed = JSON.parse(manualTasklistJsonText);
@@ -115,7 +115,7 @@ export function PlanExpandModal({
                   <select
                     value={t.suggested_model ?? ""}
                     onChange={(e) => updateTaskModel(t.id, e.target.value)}
-                    className="shrink-0 rounded border border-purple-500/30 bg-purple-500/10 px-1 py-0.5 text-[10px] text-purple-400 focus:border-purple-400 focus:outline-none"
+                    className="shrink-0 rounded border border-status-pending/30 bg-status-pending/10 px-1 py-0.5 text-[10px] text-status-pending focus:border-status-pending focus:outline-none"
                   >
                     <option value="">-</option>
                     {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -279,10 +279,10 @@ export function PlanExpandModal({
             {(aiFeedback || aiFeedbackOpen) && (
               <div className={`rounded-xl border p-3 ${
                 aiFeedbackParsed?.verdict === "passed"
-                  ? "border-green-500/30 bg-green-500/5"
+                  ? "border-status-success/30 bg-status-success/10"
                   : aiFeedbackParsed?.verdict === "failed"
-                    ? "border-red-500/30 bg-red-500/5"
-                    : "border-purple-500/30 bg-purple-500/5"
+                    ? "border-status-danger/30 bg-status-danger/10"
+                    : "border-status-pending/30 bg-status-pending/10"
               }`}>
                 <div className="mb-2 flex items-center justify-between">
                   <button
@@ -294,8 +294,8 @@ export function PlanExpandModal({
                     {aiFeedbackParsed && (
                       <span className={`ml-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                         aiFeedbackParsed.verdict === "passed"
-                          ? "border-green-500/40 bg-green-500/15 text-green-400"
-                          : "border-red-500/40 bg-red-500/15 text-red-400"
+                          ? "border-status-success/40 bg-status-success/15 text-status-success"
+                          : "border-status-danger/40 bg-status-danger/15 text-status-danger"
                       }`}>
                         {aiFeedbackParsed.verdict.toUpperCase()}
                       </span>
@@ -304,7 +304,7 @@ export function PlanExpandModal({
                   {aiFeedbackOpen && aiFeedbackParsed?.verdict === "failed" && aiFeedbackParsed.comments.length > 0 && (
                     <button
                       onClick={onUseAiFeedbackAsRevision}
-                      className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-400 transition hover:bg-purple-500/20"
+                      className="rounded-md border border-status-pending/30 bg-status-pending/10 px-2.5 py-1 text-[11px] font-medium text-status-pending transition hover:bg-status-pending/20"
                     >
                       {selectedFeedbackIndices && selectedFeedbackIndices.size > 0
                         ? `Revise with ${selectedFeedbackIndices.size} selected`
@@ -315,7 +315,7 @@ export function PlanExpandModal({
                 {aiFeedbackOpen && (
                   aiFeedbackParsed ? (
                     aiFeedbackParsed.verdict === "passed" ? (
-                      <p className="text-xs text-green-400">Plan looks good. No issues found.</p>
+                      <p className="text-xs text-status-success">Plan looks good. No issues found.</p>
                     ) : (
                       <div className="space-y-2">
                         {aiFeedbackParsed.comments.map((c, i) => (
@@ -324,20 +324,20 @@ export function PlanExpandModal({
                             onClick={() => onToggleFeedbackIndex?.(i)}
                             className={`cursor-pointer rounded-lg border px-3 py-2 transition ${
                               selectedFeedbackIndices?.has(i)
-                                ? "border-purple-500/50 bg-purple-500/10"
+                                ? "border-status-pending/50 bg-status-pending/10"
                                 : "border-border-strong bg-surface-100 hover:border-border-default"
                             }`}
                           >
                             <div className="mb-1 flex items-center gap-2">
                               <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
                                 selectedFeedbackIndices?.has(i)
-                                  ? "border-purple-500 bg-purple-500 text-white"
+                                  ? "border-status-pending bg-status-pending text-white"
                                   : "border-border-strong bg-surface-100 text-transparent"
                               }`}>✓</span>
                               <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                c.severity === "critical" ? "bg-red-500/15 text-red-400"
-                                : c.severity === "major" ? "bg-orange-500/15 text-orange-400"
-                                : "bg-blue-500/15 text-blue-400"
+                                c.severity === "critical" ? "bg-status-danger/15 text-status-danger"
+                                : c.severity === "major" ? "bg-status-warning/15 text-status-warning"
+                                : "bg-brand/15 text-brand"
                               }`}>{c.severity}</span>
                               <span className="rounded bg-surface-300 px-1.5 py-0.5 text-[10px] text-text-muted">{c.category}</span>
                             </div>

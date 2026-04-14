@@ -131,8 +131,8 @@ function FileTree({
           </span>
         )}
         <span className="shrink-0 flex items-center gap-1 text-[9px]">
-          {node.additions > 0 && <span className="text-green-400">+{node.additions}</span>}
-          {node.deletions > 0 && <span className="text-red-400">-{node.deletions}</span>}
+          {node.additions > 0 && <span className="text-status-success">+{node.additions}</span>}
+          {node.deletions > 0 && <span className="text-status-danger">-{node.deletions}</span>}
         </span>
       </button>
     );
@@ -407,21 +407,21 @@ export function DiffReviewModal({
 
             {/* Conflict display */}
             {applyConflicts.length > 0 && (
-              <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
-                <p className="mb-1 text-xs font-medium text-red-400">
+              <div className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2">
+                <p className="mb-1 text-xs font-medium text-status-danger">
                   Merge Conflicts ({applyConflicts.length} {applyConflicts.length === 1 ? "file" : "files"})
                 </p>
                 <ul className="mb-1 space-y-0.5">
                   {applyConflicts.map((f) => (
-                    <li key={f} className="text-[11px] text-red-300">- {f}</li>
+                    <li key={f} className="text-[11px] text-status-danger">- {f}</li>
                   ))}
                 </ul>
-                <div className="mt-2 flex items-center gap-2 rounded border border-yellow-700 bg-yellow-900/20 px-3 py-2">
-                  <span className="text-sm text-yellow-300">
+                <div className="mt-2 flex items-center gap-2 rounded border border-status-caution/50 bg-status-caution/10 px-3 py-2">
+                  <span className="text-sm text-status-caution">
                     {applyConflicts.length} file(s) have conflicts
                   </span>
                   <button
-                    className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded bg-brand px-3 py-1 text-sm text-white hover:bg-brand/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={conflictResolving || busy}
                     onClick={() => {
                       setConflictResolving(true);
@@ -431,7 +431,7 @@ export function DiffReviewModal({
                     {conflictResolving ? "Resolving..." : "Let Agent Resolve"}
                   </button>
                   <button
-                    className="rounded border border-zinc-600 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded border border-border-strong px-3 py-1 text-sm text-text-secondary hover:bg-surface-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={conflictResolving}
                     onClick={() => onResolveConflicts?.('manual', applyConflicts)}
                   >
@@ -481,7 +481,7 @@ export function DiffReviewModal({
                     </div>
                     <button
                       onClick={() => setBatchLineComments(batchLineComments.filter((_, i) => i !== idx))}
-                      className="ml-2 shrink-0 text-text-muted hover:text-red-400"
+                      className="ml-2 shrink-0 text-text-muted hover:text-status-danger"
                       title="Remove"
                     >
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -548,14 +548,14 @@ export function DiffReviewModal({
                   <div key={rc.id} className="rounded-lg border border-border-strong bg-surface-100 px-3 py-2">
                     <div className="mb-1 flex items-center gap-2">
                       {rc.status === "processing" && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-400">
-                          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-brand">
+                          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
                           Processing
                         </span>
                       )}
                       {rc.status === "addressed" && (
                         <span
-                          className="inline-flex items-center gap-1 text-[10px] font-medium text-green-400"
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-status-success"
                           title={rc.addressed_at ? `Addressed at ${new Date(rc.addressed_at).toLocaleString()}` : "Addressed"}
                         >
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -580,17 +580,17 @@ export function DiffReviewModal({
                           </button>
                         )}
                         {canModify && onResendReviewComment && (
-                          <button onClick={() => onResendReviewComment(rc.id)} className="rounded-md p-0.5 text-text-muted transition hover:text-blue-400" title="Re-send">
+                          <button onClick={() => onResendReviewComment(rc.id)} className="rounded-md p-0.5 text-text-muted transition hover:text-brand" title="Re-send">
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                           </button>
                         )}
                         {canModify && onEditReviewComment && (
-                          <button onClick={() => { setEditingCommentId(rc.id); setEditingText(rc.comment); }} className="rounded-md p-0.5 text-text-muted transition hover:text-yellow-400" title="Edit">
+                          <button onClick={() => { setEditingCommentId(rc.id); setEditingText(rc.comment); }} className="rounded-md p-0.5 text-text-muted transition hover:text-status-caution" title="Edit">
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </button>
                         )}
                         {canModify && onDeleteReviewComment && (
-                          <button onClick={() => onDeleteReviewComment(rc.id)} className="rounded-md p-0.5 text-text-muted transition hover:text-red-400" title="Delete">
+                          <button onClick={() => onDeleteReviewComment(rc.id)} className="rounded-md p-0.5 text-text-muted transition hover:text-status-danger" title="Delete">
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         )}

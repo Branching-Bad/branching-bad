@@ -279,11 +279,11 @@ export function EsInvestigateModal(props: Props) {
                 <span
                   className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
                     analysis.severity === "critical"
-                      ? "bg-red-900/40 text-red-400"
+                      ? "bg-status-danger/15 text-status-danger"
                       : analysis.severity === "high"
-                        ? "bg-orange-900/40 text-orange-400"
+                        ? "bg-status-warning/15 text-status-warning"
                         : analysis.severity === "medium"
-                          ? "bg-yellow-900/40 text-yellow-400"
+                          ? "bg-status-caution/15 text-status-caution"
                           : "bg-surface-300 text-text-muted"
                   }`}
                 >

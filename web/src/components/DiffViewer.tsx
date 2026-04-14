@@ -286,8 +286,8 @@ function FileCard({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 text-[10px]">
-          {stats.additions > 0 && <span className="text-green-400">+{stats.additions}</span>}
-          {stats.deletions > 0 && <span className="text-red-400">-{stats.deletions}</span>}
+          {stats.additions > 0 && <span className="text-status-success">+{stats.additions}</span>}
+          {stats.deletions > 0 && <span className="text-status-danger">-{stats.deletions}</span>}
         </div>
       </button>
       {expanded && (

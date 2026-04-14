@@ -147,7 +147,7 @@ function ToolIcon({ category }: { category: string }) {
 function StatusDot({ status }: { status: "done" | "running" }) {
   return (
     <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
-      status === "running" ? "bg-blue-400 animate-pulse" : "bg-green-500"
+      status === "running" ? "bg-brand animate-pulse" : "bg-status-success"
     }`} />
   );
 }
@@ -169,7 +169,7 @@ function ToolTimeline({ steps }: { steps: ToolStep[] }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
         </svg>
         <span className="font-medium inline-flex items-center gap-1.5">
-          {hasRunning && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />}
+          {hasRunning && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />}
           {label}
         </span>
         {!expanded && steps.length > 0 && (

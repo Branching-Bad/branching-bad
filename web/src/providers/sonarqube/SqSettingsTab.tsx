@@ -258,8 +258,8 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
         dockerAvailable === null
           ? "border-border-default bg-surface-200 text-text-muted"
           : dockerAvailable
-            ? "border-green-700/40 bg-green-900/10 text-green-400"
-            : "border-yellow-700/40 bg-yellow-900/10 text-yellow-400"
+            ? "border-status-success/40 bg-status-success/10 text-status-success"
+            : "border-status-caution/40 bg-status-caution/10 text-status-caution"
       }`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -267,12 +267,12 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
               <span className="text-text-muted">Checking Docker…</span>
             ) : dockerAvailable ? (
               <>
-                <span className="inline-block h-2 w-2 rounded-full bg-green-400" />
+                <span className="inline-block h-2 w-2 rounded-full bg-status-success" />
                 <span>Docker is running</span>
               </>
             ) : (
               <>
-                <span className="inline-block h-2 w-2 rounded-full bg-yellow-400" />
+                <span className="inline-block h-2 w-2 rounded-full bg-status-caution" />
                 <span>Docker is not installed or not running. Install Docker Desktop to use local scanning.</span>
               </>
             )}
@@ -293,8 +293,8 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
           <h3 className="mb-3 text-sm font-medium text-text-secondary">Local SonarQube (Docker)</h3>
 
           {localContainer === "running" && hasLocalAccount ? (
-            <div className="flex items-center gap-2 text-xs text-green-400">
-              <span className="inline-block h-2 w-2 rounded-full bg-green-400" />
+            <div className="flex items-center gap-2 text-xs text-status-success">
+              <span className="inline-block h-2 w-2 rounded-full bg-status-success" />
               SonarQube running on localhost:{localPort}
             </div>
           ) : (
@@ -336,7 +336,7 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
                 {setupRunning ? "Setting up…" : "Start Local SonarQube"}
               </button>
               {setupStatus && (
-                <p className="text-xs text-blue-400">{setupStatus}</p>
+                <p className="text-xs text-status-info">{setupStatus}</p>
               )}
             </div>
           )}
@@ -360,7 +360,7 @@ export function SqSettingsTab({ selectedRepoId, busy, onBusyChange, onError, onI
               <button
                 onClick={() => void handleDeleteAccount()}
                 disabled={busy}
-                className="rounded-lg border border-red-700/40 bg-red-900/10 px-2.5 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-900/20 disabled:opacity-50"
+                className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-2.5 py-1.5 text-xs font-medium text-status-danger transition hover:bg-status-danger/20 disabled:opacity-50"
                 title="Delete account"
               >
                 ✕

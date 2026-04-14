@@ -234,7 +234,7 @@ export default function App() {
                     className="ml-1 flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition hover:text-brand hover:bg-surface-300"
                     title="Task Analyst"
                   >
-                    <IconAnalyst className="w-3.5 h-3.5 text-orange-500" />
+                    <IconAnalyst className="w-3.5 h-3.5 text-status-warning" />
                   </button>
                 </>
               )}
@@ -251,7 +251,7 @@ export default function App() {
             >
               <IconExtensions />
               {totalProviderItemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                <span className="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-status-danger px-1 text-[10px] font-bold text-white">
                   {totalProviderItemCount}
                 </span>
               )}

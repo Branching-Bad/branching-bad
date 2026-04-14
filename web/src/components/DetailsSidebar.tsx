@@ -163,7 +163,7 @@ export function DetailsSidebar({
                 {laneFromStatus(selectedTask.status) === "todo" && (
                   <button
                     onClick={onDeleteTask}
-                    className="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-400 transition hover:bg-red-500/20 hover:text-red-300"
+                    className="rounded-md border border-status-danger/40 bg-status-danger/10 px-2 py-1 text-[11px] font-medium text-status-danger transition hover:bg-status-danger/20 hover:text-status-danger"
                   >
                     Delete
                   </button>
@@ -185,10 +185,10 @@ export function DetailsSidebar({
                   title={`Priority: ${selectedTask.priority}`}
                   className={`inline-flex items-center rounded-full border p-1 ${
                     selectedTask.priority === "highest" || selectedTask.priority === "high"
-                      ? "border-red-500/40 bg-red-500/10 text-red-400"
+                      ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
                       : selectedTask.priority === "medium"
-                        ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
-                        : "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                        ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
+                        : "border-brand/40 bg-brand/10 text-brand"
                   }`}
                 >
                   {selectedTask.priority === "highest" || selectedTask.priority === "high"
@@ -203,7 +203,7 @@ export function DetailsSidebar({
                 title={selectedTask.require_plan ? "Require Plan" : "Direct Run"}
                 className={`inline-flex items-center rounded-full border p-1 ${
                   selectedTask.require_plan
-                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
                     : "border-border-strong bg-surface-300 text-text-muted"
                 }`}
               >
@@ -216,7 +216,7 @@ export function DetailsSidebar({
                 title={selectedTask.auto_approve_plan ? "Auto Approve: On" : "Auto Approve: Off"}
                 className={`inline-flex items-center rounded-full border p-1 ${
                   selectedTask.auto_approve_plan
-                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
                     : "border-border-strong bg-surface-300 text-text-muted"
                 }`}
               >
@@ -226,7 +226,7 @@ export function DetailsSidebar({
                 title={selectedTask.auto_start ? "Autostart: On" : "Autostart: Off"}
                 className={`inline-flex items-center rounded-full border p-1 ${
                   selectedTask.auto_start
-                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
                     : "border-border-strong bg-surface-300 text-text-muted"
                 }`}
               >
@@ -236,7 +236,7 @@ export function DetailsSidebar({
                 title={selectedTask.use_worktree ? "Worktree" : "Direct"}
                 className={`inline-flex items-center rounded-full border p-1 ${
                   selectedTask.use_worktree
-                    ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
                     : "border-border-strong bg-surface-300 text-text-muted"
                 }`}
               >
@@ -470,10 +470,10 @@ export function DetailsSidebar({
                 {(aiFeedback || aiFeedbackOpen) && (
                   <div className={`rounded-xl border p-3 ${
                     aiFeedbackParsed?.verdict === "passed"
-                      ? "border-green-500/30 bg-green-500/5"
+                      ? "border-status-success/30 bg-status-success/10"
                       : aiFeedbackParsed?.verdict === "failed"
-                        ? "border-red-500/30 bg-red-500/5"
-                        : "border-purple-500/30 bg-purple-500/5"
+                        ? "border-status-danger/30 bg-status-danger/10"
+                        : "border-status-pending/30 bg-status-pending/10"
                   }`}>
                     <div className="mb-2 flex items-center justify-between">
                       <button
@@ -485,8 +485,8 @@ export function DetailsSidebar({
                         {aiFeedbackParsed && (
                           <span className={`ml-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                             aiFeedbackParsed.verdict === "passed"
-                              ? "border-green-500/40 bg-green-500/15 text-green-400"
-                              : "border-red-500/40 bg-red-500/15 text-red-400"
+                              ? "border-status-success/40 bg-status-success/15 text-status-success"
+                              : "border-status-danger/40 bg-status-danger/15 text-status-danger"
                           }`}>
                             {aiFeedbackParsed.verdict.toUpperCase()}
                           </span>
@@ -495,7 +495,7 @@ export function DetailsSidebar({
                       {aiFeedbackOpen && aiFeedbackParsed?.verdict === "failed" && aiFeedbackParsed.comments.length > 0 && (
                         <button
                           onClick={onUseAiFeedbackAsRevision}
-                          className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-400 transition hover:bg-purple-500/20"
+                          className="rounded-md border border-status-pending/30 bg-status-pending/10 px-2.5 py-1 text-[11px] font-medium text-status-pending transition hover:bg-status-pending/20"
                         >
                           {selectedFeedbackIndices && selectedFeedbackIndices.size > 0
                             ? `Revise with ${selectedFeedbackIndices.size} selected`
@@ -506,7 +506,7 @@ export function DetailsSidebar({
                     {aiFeedbackOpen && (
                       aiFeedbackParsed ? (
                         aiFeedbackParsed.verdict === "passed" ? (
-                          <p className="text-xs text-green-400">Plan looks good. No issues found.</p>
+                          <p className="text-xs text-status-success">Plan looks good. No issues found.</p>
                         ) : (
                           <div className="space-y-2">
                             {aiFeedbackParsed.comments.map((c, i) => (
@@ -515,20 +515,20 @@ export function DetailsSidebar({
                                 onClick={() => onToggleFeedbackIndex?.(i)}
                                 className={`cursor-pointer rounded-lg border px-3 py-2 transition ${
                                   selectedFeedbackIndices?.has(i)
-                                    ? "border-purple-500/50 bg-purple-500/10"
+                                    ? "border-status-pending/50 bg-status-pending/10"
                                     : "border-border-strong bg-surface-100 hover:border-border-default"
                                 }`}
                               >
                                 <div className="mb-1 flex items-center gap-2">
                                   <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
                                     selectedFeedbackIndices?.has(i)
-                                      ? "border-purple-500 bg-purple-500 text-white"
+                                      ? "border-status-pending bg-status-pending text-white"
                                       : "border-border-strong bg-surface-100 text-transparent"
                                   }`}>✓</span>
                                   <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                    c.severity === "critical" ? "bg-red-500/15 text-red-400"
-                                    : c.severity === "major" ? "bg-orange-500/15 text-orange-400"
-                                    : "bg-blue-500/15 text-blue-400"
+                                    c.severity === "critical" ? "bg-status-danger/15 text-status-danger"
+                                    : c.severity === "major" ? "bg-status-warning/15 text-status-warning"
+                                    : "bg-brand/15 text-brand"
                                   }`}>{c.severity}</span>
                                   <span className="rounded bg-surface-300 px-1.5 py-0.5 text-[10px] text-text-muted">{c.category}</span>
                                 </div>
@@ -621,10 +621,10 @@ export function DetailsSidebar({
                     const phases = tl?.phases as Array<{ id: string; name: string; tasks: Array<{ id: string; title: string; complexity?: string; suggested_model?: string }> }> | undefined;
                     if (!phases?.length) return null;
                     const items = phases.flatMap((p) => p.tasks ?? []);
-                    const cxColors: Record<string, string> = { low: "bg-blue-500/15 text-blue-400", medium: "bg-orange-500/15 text-orange-400", high: "bg-red-500/15 text-red-400" };
+                    const cxColors: Record<string, string> = { low: "bg-brand/15 text-brand", medium: "bg-status-warning/15 text-status-warning", high: "bg-status-danger/15 text-status-danger" };
                     const statusIcon: Record<string, { icon: string; color: string }> = {
                       completed: { icon: "\u2713", color: "text-brand bg-brand/15 border-brand/30" },
-                      in_progress: { icon: "\u25B6", color: "text-yellow-400 bg-yellow-500/15 border-yellow-500/30 animate-pulse" },
+                      in_progress: { icon: "\u25B6", color: "text-status-caution bg-status-caution/15 border-status-caution/30 animate-pulse" },
                       pending: { icon: "\u2022", color: "text-text-muted bg-surface-300 border-border-default" },
                     };
                     const modelOptions = ["haiku", "sonnet", "opus"];
@@ -682,7 +682,7 @@ export function DetailsSidebar({
                                 <select
                                   value={t.suggested_model ?? ""}
                                   onChange={(e) => updateTaskModel(t.id, e.target.value)}
-                                  className="shrink-0 rounded border border-purple-500/30 bg-purple-500/10 px-1 py-0.5 text-[10px] text-purple-400 focus:border-purple-400 focus:outline-none"
+                                  className="shrink-0 rounded border border-status-pending/30 bg-status-pending/10 px-1 py-0.5 text-[10px] text-status-pending focus:border-status-pending focus:outline-none"
                                 >
                                   <option value="">-</option>
                                   {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -788,7 +788,7 @@ export function DetailsSidebar({
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
                     {taskRequiresPlan && !approvedPlan && (
-                      <span className="rounded-full border border-yellow-700 bg-yellow-950/40 px-2 py-0.5 text-yellow-400">
+                      <span className="rounded-full border border-status-caution/40 bg-status-caution/10 px-2 py-0.5 text-status-caution">
                         Plan approval required
                       </span>
                     )}

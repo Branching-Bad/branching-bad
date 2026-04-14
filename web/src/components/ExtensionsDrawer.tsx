@@ -99,7 +99,7 @@ export function ExtensionsDrawer({
                     {isExpanded ? <IconChevronUp className="h-3.5 w-3.5 text-text-muted" /> : <IconChevronDown className="h-3.5 w-3.5 text-text-muted" />}
                     <span>{displayName}</span>
                     {count > 0 && (
-                      <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                      <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-status-danger px-1.5 text-[10px] font-bold text-white">
                         {count}
                       </span>
                     )}

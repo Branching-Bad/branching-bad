@@ -153,7 +153,7 @@ export function GlossaryPanel({
                   </h5>
                   <button
                     onClick={() => void onDelete(t.id, selectedRepoId)}
-                    className="shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-400"
+                    className="shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100 hover:text-status-danger"
                     title="Delete term"
                   >
                     <IconX className="h-3 w-3" />

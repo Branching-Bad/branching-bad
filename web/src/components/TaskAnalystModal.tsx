@@ -48,7 +48,7 @@ function HistoryPanel({
             }`}
           >
             <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-success" />
               <span className="truncate text-xs font-medium text-text-primary">Active Session</span>
             </div>
           </button>
@@ -189,7 +189,7 @@ export function TaskAnalystModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border-default px-5 py-3">
           <div className="flex items-center gap-2.5">
-            <IconAnalyst className="w-5 h-5 text-orange-500" />
+            <IconAnalyst className="w-5 h-5 text-status-warning" />
             <h3 className="text-sm font-medium text-text-primary">Task Analyst</h3>
             {loading && (
               <div className="flex items-center gap-1.5 text-text-muted">

@@ -75,7 +75,7 @@ export function ChatPanel({
               key={msg.id}
               className={`rounded-lg px-3 py-2 text-xs ${
                 msg.role === "user"
-                  ? "bg-blue-500/10 border border-blue-500/20 text-blue-200"
+                  ? "bg-brand/10 border border-brand/20 text-brand"
                   : "bg-surface-300 border border-border-strong text-text-secondary"
               }`}
             >

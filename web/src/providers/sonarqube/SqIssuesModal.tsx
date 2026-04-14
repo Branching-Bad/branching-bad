@@ -16,14 +16,14 @@ function parseData(item: ProviderItem): Record<string, any> {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const SEVERITY_STYLES: Record<string, { dot: string; badge: string }> = {
-  BLOCKER: { dot: "bg-red-600", badge: "bg-red-600 text-white" },
-  CRITICAL: { dot: "bg-red-500", badge: "bg-red-500 text-white" },
-  MAJOR: { dot: "bg-orange-400", badge: "bg-orange-400 text-white" },
-  MINOR: { dot: "bg-yellow-400", badge: "bg-yellow-400 text-black" },
-  INFO: { dot: "bg-zinc-400", badge: "bg-zinc-400 text-white" },
+  BLOCKER: { dot: "bg-status-danger", badge: "bg-status-danger text-white" },
+  CRITICAL: { dot: "bg-status-danger", badge: "bg-status-danger text-white" },
+  MAJOR: { dot: "bg-status-warning", badge: "bg-status-warning text-white" },
+  MINOR: { dot: "bg-status-caution", badge: "bg-status-caution text-black" },
+  INFO: { dot: "bg-status-neutral", badge: "bg-status-neutral text-white" },
 };
 
-const DEFAULT_STYLE = { dot: "bg-zinc-400", badge: "bg-zinc-400 text-white" };
+const DEFAULT_STYLE = { dot: "bg-status-neutral", badge: "bg-status-neutral text-white" };
 
 export function SqIssuesModal({
   open,
@@ -150,7 +150,7 @@ export function SqIssuesModal({
             <button
               onClick={() => void clearAll()}
               disabled={busy}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-status-danger/30 bg-status-danger/5 px-3 py-1.5 text-xs font-medium text-status-danger transition hover:bg-status-danger/10 disabled:opacity-50"
             >
               Clear
             </button>
@@ -176,7 +176,7 @@ export function SqIssuesModal({
               {scans.map(s => (
                 <div key={s.id} className="flex items-center gap-3 text-[11px] text-text-secondary">
                   <span className={`inline-block h-1.5 w-1.5 rounded-full ${
-                    s.status === "completed" ? "bg-green-500" : s.status === "failed" ? "bg-red-500" : "bg-yellow-500 animate-pulse"
+                    s.status === "completed" ? "bg-status-success" : s.status === "failed" ? "bg-status-danger" : "bg-status-caution animate-pulse"
                   }`} />
                   <span className="font-mono">{s.project_key}</span>
                   <span className="text-text-muted">{s.status}</span>

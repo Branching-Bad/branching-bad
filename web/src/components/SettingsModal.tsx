@@ -62,7 +62,7 @@ function RuleRow({
       </button>
       <button
         onClick={() => onDelete(rule.id)}
-        className="shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-400"
+        className="shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100 hover:text-status-danger"
         title="Delete"
       >
         <IconX className="h-3 w-3" />
@@ -710,7 +710,7 @@ export function SettingsModal({
                         <h5 className="text-xs font-medium text-text-primary leading-snug">{m.title}</h5>
                         <button
                           onClick={() => void onDeleteMemory?.(m.id, selectedRepoId, memorySearchQuery, memoryPage)}
-                          className="shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-400"
+                          className="shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100 hover:text-status-danger"
                           title="Delete memory"
                         >
                           <IconX className="h-3 w-3" />
@@ -767,7 +767,7 @@ export function SettingsModal({
                   </div>
                   <button
                     onClick={() => void onClearOutputs?.()}
-                    className="rounded-md bg-red-600 px-4 py-1.5 text-[11px] font-medium text-white transition hover:bg-red-500"
+                    className="rounded-md bg-status-danger px-4 py-1.5 text-[11px] font-medium text-white transition hover:bg-status-danger/90"
                   >
                     Clear All Outputs
                   </button>

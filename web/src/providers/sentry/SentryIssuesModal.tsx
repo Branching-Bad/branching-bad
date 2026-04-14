@@ -184,7 +184,7 @@ export function SentryIssuesModal({
             <button
               onClick={() => void clearAll()}
               disabled={busy}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-status-danger/30 bg-status-danger/5 px-3 py-1.5 text-xs font-medium text-status-danger transition hover:bg-status-danger/10 disabled:opacity-50"
             >
               Clear
             </button>
@@ -245,14 +245,14 @@ export function SentryIssuesModal({
                     >
                       <div className="flex items-center gap-2">
                         <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                          data.level === "fatal" ? "bg-red-600" : data.level === "error" ? "bg-red-400" : "bg-yellow-400"
+                          data.level === "fatal" ? "bg-status-danger" : data.level === "error" ? "bg-status-warning" : "bg-status-caution"
                         }`} />
                         <span className="truncate text-xs font-medium text-text-primary">{item.title}</span>
                         {item.status === "regression" && (
-                          <span className="shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400 uppercase">Regression</span>
+                          <span className="shrink-0 rounded bg-status-danger/10 px-1.5 py-0.5 text-[10px] font-bold text-status-danger uppercase">Regression</span>
                         )}
                         {tab === "fixed" && item.linked_task_id && (
-                          <span className="shrink-0 rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-bold text-green-400">
+                          <span className="shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-[10px] font-bold text-status-success">
                             Task linked
                           </span>
                         )}
@@ -281,7 +281,7 @@ export function SentryIssuesModal({
                         ) : cached?.trace ? (
                           <pre className="mt-2 max-h-[200px] overflow-auto rounded-lg bg-surface-100 p-2.5 text-[11px] leading-relaxed text-text-secondary font-mono">{cached.trace}</pre>
                         ) : cached?.error ? (
-                          <p className="mt-2 text-[11px] text-red-400">Failed to load event: {cached.error}</p>
+                          <p className="mt-2 text-[11px] text-status-danger">Failed to load event: {cached.error}</p>
                         ) : (
                           <p className="mt-2 text-[11px] text-text-muted italic">No stack trace available.</p>
                         )}
