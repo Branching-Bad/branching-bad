@@ -65,7 +65,7 @@ export function createApp(state: AppState): express.Express {
   app.use(glossaryRoutes());
   app.use(analystRoutes());
   app.use(taskDefaultsRoutes());
-  app.use('/workflow', workflowRoutes(state));
+  app.use('/api/workflow', workflowRoutes(state));
 
   // Global error handler — catches unhandled sync throws and async rejections
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
