@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from "react";
+import { useEffect, useRef, useState, type FC, type ReactNode } from "react";
 import type { AgentProfile } from "../types";
 
 interface Props {
@@ -15,14 +15,14 @@ interface Props {
   autoFocus?: boolean;
 }
 
-// ── Priority palette (SF system colors, by severity) ─────────────────────────
+// SF system colors by severity
 const PRIORITY_OPTIONS: Array<{ value: string; label: string; dot: string | null }> = [
   { value: "",        label: "No priority", dot: null },
-  { value: "Highest", label: "Highest",     dot: "#FF453A" }, // systemRed
-  { value: "High",    label: "High",        dot: "#FF9F0A" }, // systemOrange
-  { value: "Medium",  label: "Medium",      dot: "#FFD60A" }, // systemYellow
-  { value: "Low",     label: "Low",         dot: "#0A84FF" }, // systemBlue
-  { value: "Lowest",  label: "Lowest",      dot: "#8E8E93" }, // systemGray
+  { value: "Highest", label: "Highest",     dot: "#FF453A" },
+  { value: "High",    label: "High",        dot: "#FF9F0A" },
+  { value: "Medium",  label: "Medium",      dot: "#FFD60A" },
+  { value: "Low",     label: "Low",         dot: "#0A84FF" },
+  { value: "Lowest",  label: "Lowest",      dot: "#8E8E93" },
 ];
 
 export function TaskFormFields({
@@ -41,58 +41,28 @@ export function TaskFormFields({
   return (
     <div className="flex h-full min-h-0 gap-5">
       {/* ── Sidebar ─────────────────────────────────────────── */}
-      <aside className="flex w-[260px] shrink-0 flex-col gap-5 overflow-y-auto pr-1">
-        {/* Details */}
+      <aside className="flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto pr-1">
         <FieldGroup title="Details">
           <Field label="Priority">
             <PriorityPicker value={priority} onChange={setPriority} />
           </Field>
           <Field label="Agent / model">
-            <AgentPicker
-              value={agentProfileId}
-              onChange={setAgentProfileId}
-              profiles={agentProfiles}
-            />
+            <AgentPicker value={agentProfileId} onChange={setAgentProfileId} profiles={agentProfiles} />
           </Field>
         </FieldGroup>
 
-        {/* Behaviour */}
-        <FieldGroup title="Behaviour">
-          <SwitchRow
-            checked={requirePlan}
-            onChange={setRequirePlan}
-            label="Require plan"
-            hint="Agent drafts a plan before making changes."
-          />
-          <SwitchRow
-            checked={autoApprovePlan}
-            onChange={setAutoApprovePlan}
-            disabled={!requirePlan}
-            label="Auto approve"
-            hint="Skip human review of the drafted plan."
-          />
-          <SwitchRow
-            checked={autoStart}
-            onChange={setAutoStart}
-            label="Autostart"
-            hint="Begin work as soon as the task is ready."
-          />
-          <SwitchRow
-            checked={useWorktree}
-            onChange={setUseWorktree}
-            label="Use worktree"
-            hint="Isolate changes in a separate branch."
-          />
+        <FieldGroup title="Behaviour" divided>
+          <SwitchRow checked={requirePlan}     onChange={setRequirePlan}     label="Require plan" />
+          <SwitchRow checked={autoApprovePlan} onChange={setAutoApprovePlan} label="Auto approve" disabled={!requirePlan} />
+          <SwitchRow checked={autoStart}       onChange={setAutoStart}       label="Autostart" />
+          <SwitchRow checked={useWorktree}     onChange={setUseWorktree}     label="Use worktree" />
           {useWorktree && (
-            <div className="mt-0.5 border-l border-border-default/60 pl-3">
-              <SwitchRow
-                checked={carryDirtyState}
-                onChange={setCarryDirtyState}
-                label="Include uncommitted"
-                hint="Copy dirty files into the worktree on create."
-                dense
-              />
-            </div>
+            <SwitchRow
+              checked={carryDirtyState}
+              onChange={setCarryDirtyState}
+              label="Include uncommitted"
+              indent
+            />
           )}
         </FieldGroup>
       </aside>
@@ -118,140 +88,223 @@ export function TaskFormFields({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Priority picker — vertical SF-style radio list with colored dots
+// Compact picker — trigger + inline popover menu (click-outside to close)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PriorityPicker: FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => (
-  <div className="overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-surface-200">
-    {PRIORITY_OPTIONS.map((opt, idx) => {
-      const selected = value === opt.value;
-      return (
-        <button
-          key={opt.value || "none"}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          className={`flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left text-[12px] transition ${
-            idx > 0 ? "border-t border-border-default/40" : ""
-          } ${
-            selected
-              ? "bg-brand-tint text-text-primary"
-              : "text-text-secondary hover:bg-surface-300 hover:text-text-primary"
-          }`}
-        >
-          {opt.dot ? (
-            <span
-              className="h-2 w-2 shrink-0 rounded-full shadow-[0_0_0_2px_rgba(0,0,0,0.2)_inset]"
-              style={{ backgroundColor: opt.dot }}
-            />
-          ) : (
-            <span className="h-2 w-2 shrink-0 rounded-full border border-border-strong" />
-          )}
-          <span className="flex-1">{opt.label}</span>
-          {selected && (
-            <svg className="h-3 w-3 text-brand" viewBox="0 0 12 12" fill="none">
-              <path d="M2 6.3L5 9L10 3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-      );
-    })}
+function usePopover() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
+const Dot: FC<{ color: string | null }> = ({ color }) =>
+  color ? (
+    <span
+      className="h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: color, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.2)" }}
+    />
+  ) : (
+    <span className="h-2 w-2 shrink-0 rounded-full border border-border-strong" />
+  );
+
+const TriggerButton: FC<{ onClick: () => void; open: boolean; children: ReactNode }> = ({ onClick, open, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`flex w-full items-center gap-2 rounded-[var(--radius-md)] border bg-surface-200 px-2.5 py-1.5 text-left text-[12px] transition ${
+      open
+        ? "border-border-focus shadow-[0_0_0_3px_var(--color-brand-glow)]"
+        : "border-border-default hover:border-border-strong"
+    }`}
+  >
+    {children}
+    <svg
+      className={`ml-auto h-3 w-3 shrink-0 text-text-muted transition-transform ${open ? "rotate-180" : ""}`}
+      viewBox="0 0 12 12" fill="none"
+    >
+      <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  </button>
+);
+
+const MenuList: FC<{ children: ReactNode }> = ({ children }) => (
+  <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-surface-100 shadow-[var(--shadow-lg)]">
+    <div className="max-h-56 overflow-y-auto py-0.5">{children}</div>
   </div>
 );
 
+const MenuItem: FC<{ selected?: boolean; onClick: () => void; children: ReactNode }> = ({ selected, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] transition ${
+      selected
+        ? "bg-brand-tint text-text-primary"
+        : "text-text-secondary hover:bg-surface-200 hover:text-text-primary"
+    }`}
+  >
+    {children}
+    {selected && (
+      <svg className="ml-auto h-3 w-3 text-brand" viewBox="0 0 12 12" fill="none">
+        <path d="M2 6.3L5 9L10 3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )}
+  </button>
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Agent picker — card with avatar + name + model subtext
+// Priority picker
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AgentPicker: FC<{ value: string; onChange: (v: string) => void; profiles: AgentProfile[] }> = ({ value, onChange, profiles }) => {
-  const selected = profiles.find((p) => p.id === value) ?? null;
-  const display = selected
-    ? { primary: selected.agent_name, secondary: selected.model, avatar: selected.agent_name.charAt(0).toUpperCase() }
-    : { primary: "Repo default", secondary: "Use the repo's default profile", avatar: "·" };
-
+const PriorityPicker: FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+  const { open, setOpen, ref } = usePopover();
+  const current = PRIORITY_OPTIONS.find((o) => o.value === value) ?? PRIORITY_OPTIONS[0];
   return (
-    <div className="relative rounded-[var(--radius-md)] border border-border-default bg-surface-200 transition focus-within:border-border-focus focus-within:shadow-[0_0_0_3px_var(--color-brand-glow)]">
-      <div className="pointer-events-none flex items-center gap-2.5 px-2.5 py-1.5">
-        <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
-            selected ? "bg-brand-tint text-brand" : "bg-surface-300 text-text-muted"
-          }`}
-        >
-          {display.avatar}
+    <div className="relative" ref={ref}>
+      <TriggerButton onClick={() => setOpen((v) => !v)} open={open}>
+        <Dot color={current.dot} />
+        <span className={`truncate ${current.value ? "text-text-primary" : "text-text-muted"}`}>
+          {current.label}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12px] font-medium text-text-primary">
-            {display.primary}
-          </span>
-          <span className="block truncate text-[10px] text-text-muted">
-            {display.secondary}
-          </span>
-        </span>
-        <svg className="h-3 w-3 shrink-0 text-text-muted" viewBox="0 0 12 12" fill="none">
-          <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        </svg>
-      </div>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 cursor-pointer opacity-0"
-      >
-        <option value="">Repo default</option>
-        {profiles.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.agent_name} · {p.model}
-          </option>
-        ))}
-      </select>
+      </TriggerButton>
+      {open && (
+        <MenuList>
+          {PRIORITY_OPTIONS.map((opt) => (
+            <MenuItem
+              key={opt.value || "none"}
+              selected={opt.value === value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+            >
+              <Dot color={opt.dot} />
+              <span className="flex-1 truncate">{opt.label}</span>
+            </MenuItem>
+          ))}
+        </MenuList>
+      )}
     </div>
   );
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SF-style toggle switch row
+// Agent picker
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AgentPicker: FC<{ value: string; onChange: (v: string) => void; profiles: AgentProfile[] }> = ({ value, onChange, profiles }) => {
+  const { open, setOpen, ref } = usePopover();
+  const selected = profiles.find((p) => p.id === value) ?? null;
+  return (
+    <div className="relative" ref={ref}>
+      <TriggerButton onClick={() => setOpen((v) => !v)} open={open}>
+        {selected ? (
+          <>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-tint text-[10px] font-semibold text-brand">
+              {selected.agent_name.charAt(0).toUpperCase()}
+            </span>
+            <span className="min-w-0 truncate text-text-primary">
+              {selected.agent_name}
+              <span className="text-text-muted"> · {selected.model}</span>
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-300 text-[10px] text-text-muted">·</span>
+            <span className="truncate text-text-muted">Repo default</span>
+          </>
+        )}
+      </TriggerButton>
+      {open && (
+        <MenuList>
+          <MenuItem selected={value === ""} onClick={() => { onChange(""); setOpen(false); }}>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-300 text-[10px] text-text-muted">·</span>
+            <span className="flex-1 truncate text-text-muted">Repo default</span>
+          </MenuItem>
+          {profiles.map((p) => (
+            <MenuItem key={p.id} selected={p.id === value} onClick={() => { onChange(p.id); setOpen(false); }}>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-tint text-[10px] font-semibold text-brand">
+                {p.agent_name.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {p.agent_name}
+                <span className="text-text-muted"> · {p.model}</span>
+              </span>
+            </MenuItem>
+          ))}
+        </MenuList>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compact SF switch row — label + switch, no hint (hover title shows tooltip)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SwitchRow: FC<{
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
-  hint?: string;
   disabled?: boolean;
-  dense?: boolean;
-}> = ({ checked, onChange, label, hint, disabled, dense }) => (
-  <div className={`flex items-start justify-between gap-3 ${dense ? "py-1" : "py-1.5"} ${disabled ? "opacity-40" : ""}`}>
-    <div className="min-w-0 flex-1">
-      <div className="text-[12px] font-medium text-text-primary">{label}</div>
-      {hint && <p className="mt-0.5 text-[10px] leading-relaxed text-text-muted">{hint}</p>}
-    </div>
+  indent?: boolean;
+}> = ({ checked, onChange, label, disabled, indent }) => (
+  <label
+    className={`flex cursor-pointer items-center justify-between gap-3 py-2 text-[12.5px] ${
+      disabled ? "cursor-not-allowed opacity-40" : ""
+    } ${indent ? "pl-4" : ""}`}
+  >
+    <span className="flex items-center gap-1.5 text-text-primary">
+      {indent && <span className="h-2 w-2 rounded-sm border-l border-b border-border-strong" />}
+      {label}
+    </span>
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       onClick={() => !disabled && onChange(!checked)}
       disabled={disabled}
-      className={`relative mt-0.5 h-[22px] w-[38px] shrink-0 rounded-full transition-colors ${
+      className={`relative h-[20px] w-[34px] shrink-0 rounded-full transition-colors ${
         checked ? "bg-status-success" : "bg-surface-300"
       } disabled:cursor-not-allowed`}
     >
       <span
-        className={`absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.3)] transition-all ${
-          checked ? "left-[18px]" : "left-[2px]"
+        className={`absolute top-[2px] h-[16px] w-[16px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-all ${
+          checked ? "left-[16px]" : "left-[2px]"
         }`}
       />
     </button>
-  </div>
+  </label>
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Field primitives
 // ─────────────────────────────────────────────────────────────────────────────
 
-const FieldGroup: FC<{ title: string; children: ReactNode }> = ({ title, children }) => (
+const FieldGroup: FC<{ title: string; children: ReactNode; divided?: boolean }> = ({ title, children, divided }) => (
   <section className="space-y-2">
-    <h4 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+    <h4 className="px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
       {title}
     </h4>
-    <div className="space-y-2 rounded-[var(--radius-lg)] border border-border-default bg-surface-0/40 p-3">
+    <div
+      className={`rounded-[var(--radius-lg)] border border-border-default bg-surface-100/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_1px_2px_rgba(0,0,0,0.2)] backdrop-blur-sm ${
+        divided
+          ? "px-3 [&>*+*]:border-t [&>*+*]:border-border-default/50"
+          : "space-y-3 p-3"
+      }`}
+    >
       {children}
     </div>
   </section>
