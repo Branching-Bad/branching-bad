@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import type { AgentProfile, Task } from "../types";
 import { IconX } from "./icons";
-import { btnPrimary, btnSecondary } from "./shared";
 import { TaskFormFields } from "./TaskFormFields";
 import type { TaskFormValues } from "./CreateTaskModal";
 
@@ -26,7 +25,6 @@ export function EditTaskModal({
   const [carryDirtyState, setCarryDirtyState] = useState(false);
   const [agentProfileId, setAgentProfileId] = useState("");
 
-  // Populate form only when a different task is opened (not on every re-render)
   const taskId = task?.id;
   useEffect(() => {
     if (!task || !open) return;
@@ -45,46 +43,78 @@ export function EditTaskModal({
   if (!open || !task) return null;
 
   const handleSave = async () => {
-    await onSave(task.id, { title, description, priority, requirePlan, autoApprovePlan, autoStart, useWorktree, carryDirtyState, agentProfileId });
+    await onSave(task.id, {
+      title, description, priority,
+      requirePlan, autoApprovePlan, autoStart,
+      useWorktree, carryDirtyState, agentProfileId,
+    });
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-[72] flex items-center justify-center">
+    <div className="fixed inset-0 z-[72] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-[86%] rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border-default px-6 py-4">
-          <h3 className="text-base font-medium text-text-primary">Edit Task</h3>
-          <button onClick={onClose} className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
-            <IconX className="h-5 w-5" />
+
+      <div className="relative flex h-[min(85vh,760px)] w-full max-w-5xl flex-col overflow-hidden rounded-[var(--radius-2xl)] border border-border-default bg-surface-100 shadow-[var(--shadow-lg)]">
+        {/* Header */}
+        <header className="flex items-center justify-between border-b border-border-default bg-surface-100/70 px-6 py-4 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            {task.jira_issue_key && (
+              <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand">
+                {task.jira_issue_key}
+              </span>
+            )}
+            <h3 className="text-[15px] font-semibold text-text-primary">Edit task</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary"
+          >
+            <IconX className="h-3.5 w-3.5" />
           </button>
-        </div>
+        </header>
 
         <form
           onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
-          className="flex flex-col px-6 py-5 h-[420px]"
+          className="flex min-h-0 flex-1 flex-col"
         >
-          <TaskFormFields
-            title={title} setTitle={setTitle}
-            description={description} setDescription={setDescription}
-            priority={priority} setPriority={setPriority}
-            requirePlan={requirePlan} setRequirePlan={setRequirePlan}
-            autoApprovePlan={autoApprovePlan} setAutoApprovePlan={setAutoApprovePlan}
-            autoStart={autoStart} setAutoStart={setAutoStart}
-            useWorktree={useWorktree} setUseWorktree={setUseWorktree}
-            carryDirtyState={carryDirtyState} setCarryDirtyState={setCarryDirtyState}
-            agentProfileId={agentProfileId} setAgentProfileId={setAgentProfileId}
-            agentProfiles={agentProfiles}
-            autoFocus
-          />
-          <div className="flex gap-2 pt-3">
-            <button type="submit" disabled={busy || !title.trim()} className={btnPrimary}>
-              Save
-            </button>
-            <button type="button" onClick={onClose} className={btnSecondary}>
+          <div className="min-h-0 flex-1 px-6 py-5">
+            <TaskFormFields
+              title={title} setTitle={setTitle}
+              description={description} setDescription={setDescription}
+              priority={priority} setPriority={setPriority}
+              requirePlan={requirePlan} setRequirePlan={setRequirePlan}
+              autoApprovePlan={autoApprovePlan} setAutoApprovePlan={setAutoApprovePlan}
+              autoStart={autoStart} setAutoStart={setAutoStart}
+              useWorktree={useWorktree} setUseWorktree={setUseWorktree}
+              carryDirtyState={carryDirtyState} setCarryDirtyState={setCarryDirtyState}
+              agentProfileId={agentProfileId} setAgentProfileId={setAgentProfileId}
+              agentProfiles={agentProfiles}
+              autoFocus
+            />
+          </div>
+
+          <footer className="flex items-center justify-end gap-2 border-t border-border-default bg-surface-100/70 px-6 py-3 backdrop-blur-md">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-border-default bg-surface-200 px-4 py-1.5 text-[12px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary"
+            >
               Cancel
             </button>
-          </div>
+            <button
+              type="submit"
+              disabled={busy || !title.trim()}
+              className="flex items-center gap-1.5 rounded-full bg-brand px-4 py-1.5 text-[12px] font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:bg-brand-dark disabled:opacity-40 disabled:hover:bg-brand"
+            >
+              <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6.5L5 9.5L10 3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Save
+            </button>
+          </footer>
         </form>
       </div>
     </div>
