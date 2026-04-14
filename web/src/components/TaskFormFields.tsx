@@ -262,30 +262,20 @@ const SwitchRow: FC<{
   indent?: boolean;
 }> = ({ checked, onChange, label, disabled, indent }) => (
   <label
-    className={`flex cursor-pointer items-center justify-between gap-3 py-2 text-[12.5px] ${
+    className={`flex cursor-pointer items-center gap-2.5 py-2 text-[12.5px] ${
       disabled ? "cursor-not-allowed opacity-40" : ""
     } ${indent ? "pl-4" : ""}`}
   >
+    <input
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.checked)}
+    />
     <span className="flex items-center gap-1.5 text-text-primary">
       {indent && <span className="h-2 w-2 rounded-sm border-l border-b border-border-strong" />}
       {label}
     </span>
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => !disabled && onChange(!checked)}
-      disabled={disabled}
-      className={`relative h-[20px] w-[34px] shrink-0 rounded-full transition-colors ${
-        checked ? "bg-status-success" : "bg-surface-300"
-      } disabled:cursor-not-allowed`}
-    >
-      <span
-        className={`absolute top-[2px] h-[16px] w-[16px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-all ${
-          checked ? "left-[16px]" : "left-[2px]"
-        }`}
-      />
-    </button>
   </label>
 );
 
