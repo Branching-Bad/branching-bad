@@ -39,23 +39,5 @@ export function validateGraph(g: Graph): string[] {
   }
   if (cycle) errors.push('graph contains a cycle');
 
-  for (const n of g.nodes) {
-    if (n.kind === 'script') {
-      if (n.lang === 'custom' && !n.runCommand) {
-        errors.push(`node ${n.id}: custom lang requires runCommand`);
-      }
-      if (n.source === 'inline' && !n.code) {
-        errors.push(`node ${n.id}: inline source requires code`);
-      }
-      if (n.source === 'file' && !n.filePath) {
-        errors.push(`node ${n.id}: file source requires filePath`);
-      }
-    }
-    if (n.kind === 'agent') {
-      if (!n.agentProfileId) errors.push(`node ${n.id}: agentProfileId required`);
-      if (!n.promptTemplate) errors.push(`node ${n.id}: promptTemplate required`);
-    }
-  }
-
   return errors;
 }

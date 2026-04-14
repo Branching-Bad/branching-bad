@@ -40,31 +40,21 @@ test('detects duplicate inputOrder on same target', () => {
   assert.ok(errs.some((e) => e.includes('inputOrder')));
 });
 
-test('requires runCommand on custom lang script', () => {
+test('empty required fields are tolerated at save (runtime validates)', () => {
+  // Drafts with empty code/prompt/runCommand should save cleanly.
+  // Runtime exec surfaces these as failed attempts with clear stderr.
   const g: Graph = {
     nodes: [
       {
         id: 'a', kind: 'script', label: 'a', position: { x: 0, y: 0 }, onFail: 'halt-subtree',
-        lang: 'custom', source: 'inline', code: 'echo hi',
+        lang: 'custom', source: 'inline', code: '', runCommand: '',
       },
-    ],
-    edges: [],
-  };
-  const errs = validateGraph(g);
-  assert.ok(errs.some((e) => e.includes('runCommand')));
-});
-
-test('requires agent profile + prompt on agent node', () => {
-  const g: Graph = {
-    nodes: [
       {
-        id: 'a', kind: 'agent', label: 'a', position: { x: 0, y: 0 }, onFail: 'halt-subtree',
+        id: 'b', kind: 'agent', label: 'b', position: { x: 0, y: 0 }, onFail: 'halt-subtree',
         agentProfileId: '', promptTemplate: '',
       },
     ],
     edges: [],
   };
-  const errs = validateGraph(g);
-  assert.ok(errs.some((e) => e.includes('agentProfileId')));
-  assert.ok(errs.some((e) => e.includes('promptTemplate')));
+  assert.deepEqual(validateGraph(g), []);
 });
