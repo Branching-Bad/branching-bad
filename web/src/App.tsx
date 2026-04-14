@@ -375,12 +375,12 @@ export default function App() {
       )}
 
       {topTab === 'workflow' && (
-        <main className="mx-auto flex max-w-7xl flex-col px-5 py-6" style={{ height: "calc(100vh - 56px)" }}>
+        <section style={{ height: "calc(100vh - 56px)" }}>
           <WorkflowTab
             repoId={repo.selectedRepoId}
             agentProfiles={boot.agentProfiles.map((p) => ({ id: p.id, name: p.agent_name }))}
           />
-        </main>
+        </section>
       )}
 
       {detailsOpen && task.selectedTask && (

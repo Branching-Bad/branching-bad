@@ -5,35 +5,58 @@ import type { Graph, GraphNode, Edge, AttemptStatus } from '../types/workflow';
 interface Props {
   graph: Graph;
   liveStatus?: Record<string, AttemptStatus>;
+  selectedNodeId?: string | null;
+  selectedEdgeId?: string | null;
   onGraphChange: (next: Graph) => void;
   onSelectNode: (nodeId: string | null) => void;
   onSelectEdge: (edgeId: string | null) => void;
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: '#64748b',
-  running: '#3b82f6',
-  done: '#22c55e',
-  failed: '#ef4444',
-  skipped: '#475569',
-  cancelled: '#334155',
+/** Apple systemColor palette, dark. */
+const STATUS_COLOR: Record<AttemptStatus, string> = {
+  pending: 'rgba(235, 235, 245, 0.3)',
+  running: '#0A84FF',
+  done: '#30D158',
+  failed: '#FF453A',
+  skipped: 'rgba(235, 235, 245, 0.18)',
+  cancelled: 'rgba(235, 235, 245, 0.18)',
 };
 
-const NODE_W = 160;
-const NODE_H = 60;
+const KIND_GLYPH: Record<GraphNode['kind'], string> = {
+  script: '‹›',
+  agent: '◆',
+  merge: '⑂',
+};
 
-export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, onSelectNode, onSelectEdge }) => {
+const NODE_W = 196;
+const NODE_H = 76;
+const RX = 12;
+
+function edgePath(from: GraphNode, to: GraphNode): string {
+  const x1 = from.position.x + NODE_W;
+  const y1 = from.position.y + NODE_H / 2;
+  const x2 = to.position.x;
+  const y2 = to.position.y + NODE_H / 2;
+  const mx = (x1 + x2) / 2;
+  return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+}
+
+export const WorkflowCanvas: FC<Props> = ({
+  graph, liveStatus, selectedNodeId, selectedEdgeId,
+  onGraphChange, onSelectNode, onSelectEdge,
+}) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const rootRef = useRef<SVGGElement | null>(null);
   const graphRef = useRef<Graph>(graph);
   graphRef.current = graph;
 
+  // Pan + zoom, with click-through to clear selection on empty canvas
   useEffect(() => {
     const svg = d3.select(svgRef.current!);
     const root = d3.select(rootRef.current!);
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 4])
+      .scaleExtent([0.25, 3])
       .filter((event) => {
         const t = event.target as Element;
         return !t.closest('g.node') && !t.closest('path.edge');
@@ -51,51 +74,180 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
     });
   }, [onSelectNode, onSelectEdge]);
 
+  // Render edges + nodes
   useEffect(() => {
     const root = d3.select(rootRef.current!);
 
-    // edges
-    const edgeSel = root.selectAll<SVGPathElement, Edge>('path.edge').data(graph.edges, (d) => d.id);
+    // ── Edges ────────────────────────────────────────────
+    const edgeSel = root
+      .selectAll<SVGPathElement, Edge>('path.edge')
+      .data(graph.edges, (d) => d.id);
     edgeSel.exit().remove();
-    const edgeEnter = edgeSel.enter().append('path').attr('class', 'edge').attr('fill', 'none').attr('stroke-width', 2);
+    const edgeEnter = edgeSel
+      .enter()
+      .append('path')
+      .attr('class', 'edge')
+      .attr('fill', 'none');
     edgeEnter
       .merge(edgeSel as any)
-      .attr('stroke', (d) => (d.required ? '#94a3b8' : '#475569'))
+      .attr('stroke', (d) =>
+        d.id === selectedEdgeId
+          ? '#0A84FF'
+          : d.required
+          ? 'rgba(235, 235, 245, 0.45)'
+          : 'rgba(235, 235, 245, 0.22)',
+      )
+      .attr('stroke-width', (d) => (d.id === selectedEdgeId ? 2.5 : 1.75))
       .attr('stroke-dasharray', (d) => (d.required ? '' : '4 4'))
       .style('cursor', 'pointer')
       .attr('d', (d) => {
         const from = graph.nodes.find((n) => n.id === d.from);
         const to = graph.nodes.find((n) => n.id === d.to);
         if (!from || !to) return '';
-        const x1 = from.position.x + NODE_W;
-        const y1 = from.position.y + NODE_H / 2;
-        const x2 = to.position.x;
-        const y2 = to.position.y + NODE_H / 2;
-        const mx = (x1 + x2) / 2;
-        return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+        return edgePath(from, to);
       })
       .on('click', (event, d) => {
         event.stopPropagation();
         onSelectEdge(d.id);
       });
 
-    // nodes
-    const nodeSel = root.selectAll<SVGGElement, GraphNode>('g.node').data(graph.nodes, (d) => d.id);
+    // Arrowheads at the end of each edge
+    const arrowSel = root
+      .selectAll<SVGPolygonElement, Edge>('polygon.edge-arrow')
+      .data(graph.edges, (d) => d.id);
+    arrowSel.exit().remove();
+    arrowSel
+      .enter()
+      .append('polygon')
+      .attr('class', 'edge-arrow')
+      .attr('points', '0,-3.5 6,0 0,3.5')
+      .merge(arrowSel as any)
+      .attr('fill', (d) =>
+        d.id === selectedEdgeId
+          ? '#0A84FF'
+          : d.required
+          ? 'rgba(235, 235, 245, 0.45)'
+          : 'rgba(235, 235, 245, 0.22)',
+      )
+      .attr('transform', (d) => {
+        const to = graph.nodes.find((n) => n.id === d.to);
+        if (!to) return '';
+        return `translate(${to.position.x - 2}, ${to.position.y + NODE_H / 2})`;
+      });
+
+    // ── Nodes ────────────────────────────────────────────
+    const nodeSel = root
+      .selectAll<SVGGElement, GraphNode>('g.node')
+      .data(graph.nodes, (d) => d.id);
     nodeSel.exit().remove();
-    const ent = nodeSel.enter().append('g').attr('class', 'node').style('cursor', 'move');
-    ent.append('rect').attr('width', NODE_W).attr('height', NODE_H).attr('rx', 8).attr('fill', '#0f172a').attr('stroke', '#1e293b');
-    ent.append('text').attr('class', 'label').attr('x', 10).attr('y', 24).attr('fill', '#e2e8f0').attr('font-size', 13);
-    ent.append('text').attr('class', 'kind').attr('x', 10).attr('y', 44).attr('fill', '#94a3b8').attr('font-size', 10);
-    ent.append('circle').attr('class', 'status').attr('cx', NODE_W - 15).attr('cy', 15).attr('r', 6);
 
-    // anchor circles
-    ent.append('circle').attr('class', 'anchor-out')
-      .attr('cx', NODE_W).attr('cy', NODE_H / 2).attr('r', 6)
-      .attr('fill', '#64748b').style('cursor', 'crosshair');
-    ent.append('circle').attr('class', 'anchor-in')
-      .attr('cx', 0).attr('cy', NODE_H / 2).attr('r', 6)
-      .attr('fill', '#64748b');
+    const ent = nodeSel
+      .enter()
+      .append('g')
+      .attr('class', 'node')
+      .style('cursor', 'grab');
 
+    // glow halo for selection (sits behind the main rect)
+    ent
+      .append('rect')
+      .attr('class', 'halo')
+      .attr('x', -3)
+      .attr('y', -3)
+      .attr('width', NODE_W + 6)
+      .attr('height', NODE_H + 6)
+      .attr('rx', RX + 3)
+      .attr('fill', 'none')
+      .attr('stroke', '#0A84FF')
+      .attr('stroke-width', 2)
+      .attr('opacity', 0);
+
+    // main rect
+    ent
+      .append('rect')
+      .attr('class', 'bg')
+      .attr('width', NODE_W)
+      .attr('height', NODE_H)
+      .attr('rx', RX)
+      .attr('fill', '#2C2C2E') /* surface-200 */
+      .attr('stroke', 'rgba(84, 84, 88, 0.65)')
+      .attr('stroke-width', 1);
+
+    // top-left kind glyph pill
+    ent
+      .append('rect')
+      .attr('class', 'kind-pill')
+      .attr('x', 12)
+      .attr('y', 12)
+      .attr('width', 26)
+      .attr('height', 20)
+      .attr('rx', 6)
+      .attr('fill', 'rgba(10, 132, 255, 0.12)');
+    ent
+      .append('text')
+      .attr('class', 'kind-glyph')
+      .attr('x', 12 + 13)
+      .attr('y', 26)
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'middle')
+      .attr('fill', '#0A84FF')
+      .attr('font-size', 11)
+      .attr('font-weight', 600);
+
+    // label (node.label) — primary text line
+    ent
+      .append('text')
+      .attr('class', 'label')
+      .attr('x', 48)
+      .attr('y', 28)
+      .attr('fill', '#FFFFFF')
+      .attr('font-size', 14)
+      .attr('font-weight', 600)
+      .attr('font-family',
+        '"Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif');
+
+    // kind name — secondary line
+    ent
+      .append('text')
+      .attr('class', 'kind-text')
+      .attr('x', 48)
+      .attr('y', 48)
+      .attr('fill', 'rgba(235, 235, 245, 0.6)')
+      .attr('font-size', 11)
+      .attr('font-weight', 500)
+      .attr('letter-spacing', '0.02em');
+
+    // status dot, top-right
+    ent
+      .append('circle')
+      .attr('class', 'status-dot')
+      .attr('cx', NODE_W - 14)
+      .attr('cy', 18)
+      .attr('r', 4);
+
+    // input anchor
+    ent
+      .append('circle')
+      .attr('class', 'anchor-in')
+      .attr('cx', 0)
+      .attr('cy', NODE_H / 2)
+      .attr('r', 5)
+      .attr('fill', '#1C1C1E')
+      .attr('stroke', 'rgba(235, 235, 245, 0.45)')
+      .attr('stroke-width', 1.5);
+
+    // output anchor
+    ent
+      .append('circle')
+      .attr('class', 'anchor-out')
+      .attr('cx', NODE_W)
+      .attr('cy', NODE_H / 2)
+      .attr('r', 5)
+      .attr('fill', '#1C1C1E')
+      .attr('stroke', 'rgba(235, 235, 245, 0.45)')
+      .attr('stroke-width', 1.5)
+      .style('cursor', 'crosshair');
+
+    // ── Merge ────────────────────────────────────────────
     const merged = ent.merge(nodeSel as any);
     merged
       .attr('transform', (d) => `translate(${d.position.x},${d.position.y})`)
@@ -104,18 +256,30 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
         event.stopPropagation();
         onSelectNode(d.id);
       });
-    merged.select('text.label').text((d) => d.label);
-    merged.select('text.kind').text((d) => d.kind);
-    merged.select('circle.status').attr('fill', (d) => STATUS_COLOR[(liveStatus?.[d.id] as string) ?? 'pending']);
+    merged.select('text.label').text((d) => d.label || '(untitled)');
+    merged.select('text.kind-text').text((d) => d.kind);
+    merged.select('text.kind-glyph').text((d) => KIND_GLYPH[d.kind]);
+    merged.select('circle.status-dot').attr('fill', (d) =>
+      STATUS_COLOR[(liveStatus?.[d.id] as AttemptStatus) ?? 'pending'],
+    );
+    merged.select('rect.halo').attr('opacity', (d) => (d.id === selectedNodeId ? 0.8 : 0));
+    merged
+      .select('rect.bg')
+      .attr('stroke', (d) =>
+        d.id === selectedNodeId ? '#0A84FF' : 'rgba(84, 84, 88, 0.65)',
+      )
+      .attr('stroke-width', (d) => (d.id === selectedNodeId ? 1.5 : 1));
 
     // node drag (move)
     merged.call(
       d3
         .drag<SVGGElement, GraphNode>()
         .filter((event) => {
-          // Don't start move-drag when clicking an anchor
           const t = event.target as Element;
           return !t.classList.contains('anchor-out') && !t.classList.contains('anchor-in');
+        })
+        .on('start', function () {
+          d3.select(this).style('cursor', 'grabbing');
         })
         .on('drag', function (event, d) {
           d.position.x += event.dx;
@@ -128,15 +292,19 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
               const from = graphRef.current.nodes.find((n) => n.id === e.from);
               const to = graphRef.current.nodes.find((n) => n.id === e.to);
               if (!from || !to) return '';
-              const x1 = from.position.x + NODE_W;
-              const y1 = from.position.y + NODE_H / 2;
-              const x2 = to.position.x;
-              const y2 = to.position.y + NODE_H / 2;
-              const mx = (x1 + x2) / 2;
-              return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+              return edgePath(from, to);
+            });
+          d3.select(rootRef.current!)
+            .selectAll<SVGPolygonElement, Edge>('polygon.edge-arrow')
+            .filter((e) => e.from === d.id || e.to === d.id)
+            .attr('transform', (e) => {
+              const to = graphRef.current.nodes.find((n) => n.id === e.to);
+              if (!to) return '';
+              return `translate(${to.position.x - 2}, ${to.position.y + NODE_H / 2})`;
             });
         })
-        .on('end', () => {
+        .on('end', function () {
+          d3.select(this).style('cursor', 'grab');
           onGraphChange({ ...graphRef.current });
         }) as any,
     );
@@ -144,26 +312,38 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
     // anchor-out drag (edge creation)
     merged.select<SVGCircleElement>('circle.anchor-out').each(function (d) {
       d3.select(this).call(
-        d3.drag<SVGCircleElement, GraphNode>()
+        d3
+          .drag<SVGCircleElement, GraphNode>()
           .on('start', (event) => {
             event.sourceEvent.stopPropagation();
             const [x, y] = d3.pointer(event, rootRef.current!);
-            d3.select(rootRef.current!).append('line').attr('class', 'temp-edge')
-              .attr('stroke', '#94a3b8').attr('stroke-dasharray', '4 4').attr('stroke-width', 2)
-              .attr('x1', d.position.x + NODE_W).attr('y1', d.position.y + NODE_H / 2)
-              .attr('x2', x).attr('y2', y);
+            d3.select(rootRef.current!)
+              .append('path')
+              .attr('class', 'temp-edge')
+              .attr('stroke', '#0A84FF')
+              .attr('stroke-dasharray', '4 4')
+              .attr('stroke-width', 2)
+              .attr('fill', 'none')
+              .attr('d', `M${d.position.x + NODE_W},${d.position.y + NODE_H / 2} L${x},${y}`);
           })
-          .on('drag', (event) => {
+          .on('drag', (event, d) => {
             const [x, y] = d3.pointer(event, rootRef.current!);
-            d3.select(rootRef.current!).select('line.temp-edge').attr('x2', x).attr('y2', y);
+            const sx = d.position.x + NODE_W;
+            const sy = d.position.y + NODE_H / 2;
+            const mx = (sx + x) / 2;
+            d3.select(rootRef.current!)
+              .select('path.temp-edge')
+              .attr('d', `M${sx},${sy} C${mx},${sy} ${mx},${y} ${x},${y}`);
           })
           .on('end', (event) => {
-            d3.select(rootRef.current!).select('line.temp-edge').remove();
+            d3.select(rootRef.current!).select('path.temp-edge').remove();
             const hit = document.elementFromPoint(event.sourceEvent.clientX, event.sourceEvent.clientY);
             const toId = hit?.closest('g.node')?.getAttribute('data-node-id') ?? null;
             if (!toId || toId === d.id) return;
             const current = graphRef.current;
-            const ordersOnTarget = current.edges.filter((e) => e.to === toId).map((e) => e.inputOrder);
+            const ordersOnTarget = current.edges
+              .filter((e) => e.to === toId)
+              .map((e) => e.inputOrder);
             const inputOrder = ordersOnTarget.length ? Math.max(...ordersOnTarget) + 1 : 1;
             const next: Graph = {
               ...current,
@@ -176,11 +356,34 @@ export const WorkflowCanvas: FC<Props> = ({ graph, liveStatus, onGraphChange, on
           }) as any,
       );
     });
-  }, [graph, liveStatus, onGraphChange, onSelectNode, onSelectEdge]);
+  }, [graph, liveStatus, selectedNodeId, selectedEdgeId, onGraphChange, onSelectNode, onSelectEdge]);
+
+  const empty = graph.nodes.length === 0;
 
   return (
-    <svg ref={svgRef} className="w-full h-full" style={{ background: '#1C1C1E' }}>
-      <g ref={rootRef} />
-    </svg>
+    <div className="relative h-full w-full bg-surface-100">
+      {/* Dot grid background */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+      <svg ref={svgRef} className="relative h-full w-full">
+        <g ref={rootRef} />
+      </svg>
+      {empty && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="rounded-[var(--radius-lg)] border border-border-default bg-surface-100/70 px-6 py-5 text-center text-sm text-text-secondary backdrop-blur-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">
+              Empty workflow
+            </div>
+            Add a node from the toolbar above to get started
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
