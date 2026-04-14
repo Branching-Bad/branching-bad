@@ -37,6 +37,7 @@ import { spawnProviderSyncWorker } from './provider/syncRoutes.js';
 import { getAppDataDir } from './routes/shared.js';
 import type { AppState } from './state.js';
 import { attachWebSocketHandler } from './websocket.js';
+import { WorkflowScheduler } from './workflow/scheduler.js';
 
 function resolveDbPath(): string {
   return path.join(getAppDataDir(), 'agent.db');
@@ -81,6 +82,11 @@ async function main() {
     registry,
     setupJobs: new Map(),
   };
+
+  // Initialize workflow cron scheduler
+  const scheduler = new WorkflowScheduler(state);
+  state.workflowScheduler = scheduler;
+  scheduler.init();
 
   // Spawn background workers
   spawnAutostartWorker(state);
