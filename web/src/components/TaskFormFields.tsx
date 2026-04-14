@@ -39,9 +39,9 @@ export function TaskFormFields({
   autoFocus,
 }: Props) {
   return (
-    <div className="flex h-full min-h-0 gap-5">
+    <div className="flex h-full min-h-0 gap-4">
       {/* ── Sidebar ─────────────────────────────────────────── */}
-      <aside className="flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto pr-1">
+      <aside className="flex w-[280px] shrink-0 flex-col gap-4 overflow-y-auto">
         <FieldGroup title="Details">
           <Field label="Priority">
             <PriorityPicker value={priority} onChange={setPriority} />

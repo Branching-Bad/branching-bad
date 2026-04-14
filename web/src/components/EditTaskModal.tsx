@@ -80,7 +80,7 @@ export function EditTaskModal({
           onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="min-h-0 flex-1 px-6 py-5">
+          <div className="min-h-0 flex-1 px-5 py-4">
             <TaskFormFields
               title={title} setTitle={setTitle}
               description={description} setDescription={setDescription}
