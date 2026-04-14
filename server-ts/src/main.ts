@@ -67,6 +67,14 @@ async function main() {
   try { db.requeueStaleRunningAutostartJobs(); } catch (e) {
     console.error('Warning: failed to recover stale autostart jobs:', e);
   }
+  try {
+    const staleWorkflowRuns = db.listRunningWorkflowRuns();
+    for (const r of staleWorkflowRuns) {
+      db.updateWorkflowRunStatus(r.id, 'failed', new Date().toISOString());
+    }
+  } catch (e) {
+    console.error('Warning: failed to recover stale workflow runs:', e);
+  }
 
   // Create process manager
   const processManager = new ProcessManager();
