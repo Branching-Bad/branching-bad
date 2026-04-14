@@ -3,7 +3,15 @@ import { useWorkflow } from '../hooks/useWorkflow';
 import { WorkflowList } from './WorkflowList';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import { WorkflowNodeEditor } from './WorkflowNodeEditor';
-import type { GraphNode } from '../types/workflow';
+import { WorkflowEdgeEditor } from './WorkflowEdgeEditor';
+import type { Edge, Graph, GraphNode } from '../types/workflow';
+
+const normalizeInputOrder = (g: Graph, toId: string): Graph => {
+  const onTarget = g.edges.filter((e) => e.to === toId).sort((a, b) => a.inputOrder - b.inputOrder);
+  const others = g.edges.filter((e) => e.to !== toId);
+  const remapped = onTarget.map((e, i) => ({ ...e, inputOrder: i + 1 }));
+  return { ...g, edges: [...others, ...remapped] };
+};
 
 interface Props {
   repoId: string | null;
@@ -16,6 +24,42 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
   const selectedNode = selected?.graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const selectedEdge = selected?.graph.edges.find((e) => e.id === selectedEdgeId) ?? null;
+
+  const edgesOnSameTarget = selectedEdge
+    ? (selected?.graph.edges.filter((e) => e.to === selectedEdge.to) ?? [])
+    : [];
+
+  const handleEdgeChange = (next: Edge) => {
+    if (!selected || !selectedEdgeId) return;
+    const g = selected.graph;
+    const others = g.edges.filter((e) => e.id !== selectedEdgeId);
+    const onTargetCount = others.filter((e) => e.to === next.to).length + 1;
+    const clampedOrder = Math.max(1, Math.min(onTargetCount, Math.floor(next.inputOrder)));
+    const newEdge: Edge = { ...next, inputOrder: clampedOrder };
+    const withReplaced: Graph = { ...g, edges: [...others, newEdge] };
+    void saveGraph(normalizeInputOrder(withReplaced, next.to));
+  };
+
+  const handleEdgeDelete = () => {
+    if (!selected || !selectedEdgeId) return;
+    const g = selected.graph;
+    const doomed = g.edges.find((e) => e.id === selectedEdgeId);
+    if (!doomed) return;
+    const without: Graph = { ...g, edges: g.edges.filter((e) => e.id !== selectedEdgeId) };
+    void saveGraph(normalizeInputOrder(without, doomed.to));
+    setSelectedEdgeId(null);
+  };
+
+  const handleSelectNode = (id: string | null) => {
+    setSelectedNodeId(id);
+    if (id) setSelectedEdgeId(null);
+  };
+
+  const handleSelectEdge = (id: string | null) => {
+    setSelectedEdgeId(id);
+    if (id) setSelectedNodeId(null);
+  };
 
   const handleNodeChange = (next: GraphNode) => {
     if (!selected || !selectedNodeId) return;
@@ -63,10 +107,11 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
         });
         setSelectedNodeId(null);
       } else if (selectedEdgeId) {
-        void saveGraph({
-          ...selected.graph,
-          edges: selected.graph.edges.filter((e) => e.id !== selectedEdgeId),
-        });
+        const doomed = selected.graph.edges.find((e) => e.id === selectedEdgeId);
+        if (doomed) {
+          const without: Graph = { ...selected.graph, edges: selected.graph.edges.filter((e) => e.id !== selectedEdgeId) };
+          void saveGraph(normalizeInputOrder(without, doomed.to));
+        }
         setSelectedEdgeId(null);
       }
     };
@@ -128,15 +173,23 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
                 graph={selected.graph}
                 liveStatus={liveStatus}
                 onGraphChange={(next) => void saveGraph(next)}
-                onSelectNode={setSelectedNodeId}
-                onSelectEdge={setSelectedEdgeId}
+                onSelectNode={handleSelectNode}
+                onSelectEdge={handleSelectEdge}
               />
-              {selectedNode && (
+              {selectedNode && !selectedEdge && (
                 <WorkflowNodeEditor
                   node={selectedNode}
                   agentProfiles={agentProfiles}
                   onChange={handleNodeChange}
                   onDelete={handleNodeDelete}
+                />
+              )}
+              {selectedEdge && !selectedNode && (
+                <WorkflowEdgeEditor
+                  edge={selectedEdge}
+                  edgesOnSameTarget={edgesOnSameTarget}
+                  onChange={handleEdgeChange}
+                  onDelete={handleEdgeDelete}
                 />
               )}
             </div>
