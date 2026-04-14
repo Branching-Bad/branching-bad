@@ -28,6 +28,7 @@ import { useAnalystState } from "./hooks/useAnalystState";
 import { useGlobalRuns } from "./hooks/useGlobalRuns";
 import { useToast } from "./hooks/useToast";
 import { StatusBar } from "./components/StatusBar";
+import { ThanosSnapFilter } from "./effects/thanos-snap";
 import { ToastNotification } from "./components/ToastNotification";
 import type { StreamFunctions } from "./hooks/streamTypes";
 
@@ -100,7 +101,7 @@ export default function App() {
     streamRef, updateTaskRunState: run.updateTaskRunState, setError,
   });
   const { toasts, addToast, dismissToast } = useToast();
-  const { visibleRuns, cancelRun, resumeRun, removeRun } = useGlobalRuns({
+  const { visibleRuns, exitingRunIds, cancelRun, resumeRun, removeRun } = useGlobalRuns({
     onRunFinished: (ev) => {
       addToast({
         type: ev.status === "done" ? "success" : "error",
@@ -583,10 +584,12 @@ export default function App() {
 
       <StatusBar
         runs={visibleRuns}
+        exitingRunIds={exitingRunIds}
         onCancel={cancelRun}
         onResume={resumeRun}
         onNavigate={handleRunNavigate}
       />
+      <ThanosSnapFilter />
       <ToastNotification
         toasts={toasts}
         onDismiss={dismissToast}

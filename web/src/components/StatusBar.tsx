@@ -1,7 +1,9 @@
+import { THANOS_SNAP_CLASS } from "../effects/thanos-snap";
 import type { GlobalActiveRun } from "../types";
 
 interface Props {
   runs: GlobalActiveRun[];
+  exitingRunIds?: Set<string>;
   onCancel: (runId: string) => void;
   onResume: (runId: string) => void;
   onNavigate: (taskId: string, repoId: string) => void;
@@ -18,20 +20,25 @@ function RunSpinner() {
 
 function RunChip({
   run,
+  exiting,
   onCancel,
   onResume,
   onNavigate,
 }: {
   run: GlobalActiveRun;
+  exiting: boolean;
   onCancel: (runId: string) => void;
   onResume: (runId: string) => void;
   onNavigate: (taskId: string, repoId: string) => void;
 }) {
+  const className =
+    "flex items-center gap-2 px-3 py-1.5 rounded-md bg-surface-200 border border-border-strong hover:bg-surface-300 transition-colors cursor-pointer text-left" +
+    (exiting ? ` ${THANOS_SNAP_CLASS}` : "");
   return (
     <button
       type="button"
       onClick={() => onNavigate(run.taskId, run.repoId)}
-      className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-surface-200 border border-border-strong hover:bg-surface-300 transition-colors cursor-pointer text-left"
+      className={className}
     >
       {run.status === "running" && <RunSpinner />}
       {run.status === "done" && (
@@ -71,7 +78,7 @@ function RunChip({
   );
 }
 
-export function StatusBar({ runs, onCancel, onResume, onNavigate }: Props) {
+export function StatusBar({ runs, exitingRunIds, onCancel, onResume, onNavigate }: Props) {
   if (runs.length === 0) return null;
 
   return (
@@ -82,6 +89,7 @@ export function StatusBar({ runs, onCancel, onResume, onNavigate }: Props) {
           <RunChip
             key={run.runId}
             run={run}
+            exiting={exitingRunIds?.has(run.runId) ?? false}
             onCancel={onCancel}
             onResume={onResume}
             onNavigate={onNavigate}
