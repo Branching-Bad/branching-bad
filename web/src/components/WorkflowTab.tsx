@@ -1,5 +1,6 @@
 import { type FC, useState, useEffect } from 'react';
 import { useWorkflow } from '../hooks/useWorkflow';
+import { workflowApi } from '../api/workflow';
 import { WorkflowList } from './WorkflowList';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import { WorkflowNodeEditor } from './WorkflowNodeEditor';
@@ -23,6 +24,22 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
   const { workflows, selected, selectedId, setSelectedId, refreshList, refreshSelected, saveGraph, run, runs, retryNode, liveStatus } = useWorkflow(repoId);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [cronDraft, setCronDraft] = useState('');
+  useEffect(() => { setCronDraft(selected?.cron ?? ''); }, [selected?.id, selected?.cron]);
+
+  const commitCron = async () => {
+    if (!selected) return;
+    const next = cronDraft.trim() || null;
+    if (next === (selected.cron ?? null)) return;
+    await workflowApi.update(selected.id, { cron: next });
+    await refreshSelected();
+  };
+
+  const toggleCron = async () => {
+    if (!selected) return;
+    await workflowApi.toggleCron(selected.id);
+    await refreshSelected();
+  };
 
   const selectedNode = selected?.graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
   const selectedEdge = selected?.graph.edges.find((e) => e.id === selectedEdgeId) ?? null;
@@ -163,11 +180,25 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
               </button>
               <span className="px-2 py-1 text-sm text-text-secondary">{selected.name}</span>
               {selectedNodeId && (
-                <span className="ml-auto text-xs text-text-muted">node: {selectedNodeId}</span>
+                <span className="text-xs text-text-muted">node: {selectedNodeId}</span>
               )}
               {selectedEdgeId && (
-                <span className="ml-auto text-xs text-text-muted">edge: {selectedEdgeId}</span>
+                <span className="text-xs text-text-muted">edge: {selectedEdgeId}</span>
               )}
+              <div className="ml-auto flex items-center gap-2">
+                <input
+                  className="bg-surface-200 px-2 py-1 rounded text-sm font-mono w-44 text-text-primary"
+                  placeholder="*/5 * * * *"
+                  value={cronDraft}
+                  onChange={(e) => setCronDraft(e.target.value)}
+                  onBlur={() => void commitCron()}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                />
+                <label className="text-xs text-text-secondary flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" checked={!!selected.cron_enabled} onChange={() => void toggleCron()} disabled={!selected.cron} />
+                  Cron enabled
+                </label>
+              </div>
             </div>
             <div className="flex-1 overflow-hidden flex">
               <WorkflowCanvas
