@@ -351,27 +351,26 @@ export default function App() {
       )}
 
       {topTab === 'analyst' && (
-        <main className="mx-auto flex max-w-7xl flex-col px-5 py-6" style={{ height: "calc(100vh - 56px)" }}>
+        <section className="flex bg-surface-0 p-3" style={{ height: "calc(100vh - 56px)" }}>
           {repo.selectedRepoId ? (
-            <div className="flex flex-1 overflow-hidden rounded-xl border border-border-default bg-surface-100">
-              <TaskAnalystPanel
-                repoId={repo.selectedRepoId}
-                repos={boot.repos}
-                agentProfiles={boot.agentProfiles}
-                onCreateTask={(prefill) => {
-                  setTaskPrefill(prefill);
-                  setCreateTaskModalOpen(true);
-                }}
-                analystState={analyst}
-                autoFocus={true}
-              />
-            </div>
+            <TaskAnalystPanel
+              repoId={repo.selectedRepoId}
+              repos={boot.repos}
+              agentProfiles={boot.agentProfiles}
+              onCreateTask={(prefill) => {
+                setTaskPrefill(prefill);
+                setCreateTaskModalOpen(true);
+              }}
+              analystState={analyst}
+              autoFocus={true}
+              layout="island"
+            />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-text-muted">
+            <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">
               Select a repository to use the Task Analyst.
             </div>
           )}
-        </main>
+        </section>
       )}
 
       {topTab === 'workflow' && (
