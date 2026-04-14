@@ -2,12 +2,38 @@ import { type FC, useState, useEffect } from 'react';
 import { useWorkflow } from '../hooks/useWorkflow';
 import { WorkflowList } from './WorkflowList';
 import { WorkflowCanvas } from './WorkflowCanvas';
+import { WorkflowNodeEditor } from './WorkflowNodeEditor';
 import type { GraphNode } from '../types/workflow';
 
-export const WorkflowTab: FC<{ repoId: string | null }> = ({ repoId }) => {
+interface Props {
+  repoId: string | null;
+  agentProfiles: Array<{ id: string; name: string }>;
+}
+
+export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
   const { workflows, selected, selectedId, setSelectedId, refreshList, saveGraph, run, liveStatus } = useWorkflow(repoId);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+
+  const selectedNode = selected?.graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
+
+  const handleNodeChange = (next: GraphNode) => {
+    if (!selected || !selectedNodeId) return;
+    void saveGraph({
+      ...selected.graph,
+      nodes: selected.graph.nodes.map((n) => (n.id === selectedNodeId ? next : n)),
+    });
+  };
+
+  const handleNodeDelete = () => {
+    if (!selected || !selectedNodeId) return;
+    void saveGraph({
+      ...selected.graph,
+      nodes: selected.graph.nodes.filter((n) => n.id !== selectedNodeId),
+      edges: selected.graph.edges.filter((e) => e.from !== selectedNodeId && e.to !== selectedNodeId),
+    });
+    setSelectedNodeId(null);
+  };
 
   const addNode = (kind: 'script' | 'agent' | 'merge') => {
     if (!selected) return;
@@ -97,7 +123,7 @@ export const WorkflowTab: FC<{ repoId: string | null }> = ({ repoId }) => {
                 <span className="ml-auto text-xs text-text-muted">edge: {selectedEdgeId}</span>
               )}
             </div>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden flex">
               <WorkflowCanvas
                 graph={selected.graph}
                 liveStatus={liveStatus}
@@ -105,6 +131,14 @@ export const WorkflowTab: FC<{ repoId: string | null }> = ({ repoId }) => {
                 onSelectNode={setSelectedNodeId}
                 onSelectEdge={setSelectedEdgeId}
               />
+              {selectedNode && (
+                <WorkflowNodeEditor
+                  node={selectedNode}
+                  agentProfiles={agentProfiles}
+                  onChange={handleNodeChange}
+                  onDelete={handleNodeDelete}
+                />
+              )}
             </div>
           </>
         ) : (
