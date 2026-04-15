@@ -53,25 +53,11 @@ function ForwardRow({
     f.bindAddress !== '127.0.0.1' || f.remoteHost !== 'localhost',
   );
 
-  // Labels adapt to forward direction so users know what each port means.
-  const labels = f.forwardType === 'local'
-    ? { left: 'Local port', right: 'Server port', hint: 'Listens on your machine, tunnels to a port reachable from the SSH server.' }
-    : { left: 'Server port', right: 'Local port', hint: 'SSH server listens on this port, tunnels back to your machine.' };
-
   return (
     <div className="space-y-2 rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-3 py-2">
       <div className="flex items-center gap-2">
-        <select
-          value={f.forwardType}
-          onChange={(e) => onChange({ forwardType: e.target.value as 'local' | 'remote' })}
-          className="rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
-        >
-          <option value="local">Local (-L)</option>
-          <option value="remote">Remote (-R)</option>
-        </select>
-
         <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-          {labels.left}
+          Local port
           <input
             type="number"
             value={f.bindPort}
@@ -84,7 +70,7 @@ function ForwardRow({
         <span className="text-text-muted">→</span>
 
         <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-          {labels.right}
+          Server port
           <input
             type="number"
             value={f.remotePort}
@@ -113,7 +99,9 @@ function ForwardRow({
         </button>
       </div>
 
-      <p className="text-[10px] text-text-muted">{labels.hint}</p>
+      <p className="text-[10px] text-text-muted">
+        Listens on your machine, tunnels to a port reachable from the SSH server.
+      </p>
 
       {advanced && (
         <div className="flex items-center gap-2 border-t border-border-default/60 pt-2">
