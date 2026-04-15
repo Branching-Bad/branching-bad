@@ -6,11 +6,11 @@ import type { GlossaryTerm } from "../hooks/useGlossaryState";
 import { GlossaryPanel } from "./GlossaryPanel";
 import { ImportDialog } from "./ImportDialog";
 import { api } from "../api";
-import { IconX, IconRefresh, IconFolder } from "./icons";
-import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
-import { AgentProfileMcpPanel } from "../mcp/AgentProfileMcpPanel";
+import { IconX, IconFolder } from "./icons";
+import { inputClass, btnPrimary, btnSecondary } from "./shared";
 import { RulesPanel } from "./sections/RulesPanel";
 import { RepositoryPanel } from "./sections/RepositoryPanel";
+import { AgentProfilesPanel } from "./sections/AgentProfilesPanel";
 
 /* ── Nav item icons ── */
 
@@ -255,41 +255,15 @@ export function SettingsModal({
             )}
 
             {tab === "agent" && (
-              <div className="space-y-5">
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-text-muted uppercase tracking-wider">Agent / Model</label>
-                  <select className={selectClass} value={selectedProfileId} onChange={(e) => setSelectedProfileId(e.target.value)}>
-                    <option value="">Select agent/model</option>
-                    {agentProfiles.map((p) => (
-                      <option key={p.id} value={p.id}>{`${p.agent_name} \u00B7 ${p.model}`}</option>
-                    ))}
-                  </select>
-                  {selectedProfile && (
-                    <p className="mt-2 text-xs text-text-muted">
-                      {selectedProfile.provider} &middot; <code className="text-text-secondary">{selectedProfile.command}</code>
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={saveAgentSelection} disabled={busy} className={btnPrimary}>Save for Repo</button>
-                  <button onClick={discoverAgents} disabled={busy} className={btnSecondary}>
-                    <span className="flex items-center gap-1.5">
-                      <IconRefresh className="h-3.5 w-3.5" />
-                      Discover
-                    </span>
-                  </button>
-                </div>
-                {selectedProfile && (
-                  <section className="space-y-2">
-                    <h4 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-                      MCP servers
-                    </h4>
-                    <div className="rounded-[var(--radius-lg)] border border-border-default bg-surface-0/40 p-2">
-                      <AgentProfileMcpPanel profileId={selectedProfile.id} />
-                    </div>
-                  </section>
-                )}
-              </div>
+              <AgentProfilesPanel
+                agentProfiles={agentProfiles}
+                selectedProfileId={selectedProfileId}
+                setSelectedProfileId={setSelectedProfileId}
+                selectedProfile={selectedProfile}
+                busy={busy}
+                discoverAgents={discoverAgents}
+                saveAgentSelection={saveAgentSelection}
+              />
             )}
 
             {tab === "rules" && (
