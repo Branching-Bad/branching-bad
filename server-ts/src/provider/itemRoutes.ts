@@ -12,6 +12,20 @@ import { SentryClient } from './sentry/client.js';
 export function itemRoutes(): Router {
   const router = Router();
 
+  // ── Pending item counts, grouped by provider, for a given repo ──
+
+  router.get('/api/providers/item-counts', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    const repoId = (req.query.repoId as string | undefined)?.trim();
+    if (!repoId) {
+      return res.json({ counts: {} });
+    }
+    const counts = state.db.countPendingProviderItemsForRepo(repoId);
+    const countsObj: Record<string, number> = {};
+    for (const [k, v] of counts) countsObj[k] = v;
+    return res.json({ counts: countsObj });
+  });
+
   // ── List items for a provider + repo ──
 
   router.get('/api/providers/:providerId/items/:repoId', (req: Request, res: Response) => {

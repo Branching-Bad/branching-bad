@@ -235,7 +235,18 @@ export default function App() {
     } catch { /* silent */ }
   };
 
-  const totalProviderItemCount = Object.values(boot.providerItemCounts).reduce((a, b) => a + b, 0);
+  // Per-repo provider item counts (refreshed when the active repo changes).
+  const [repoProviderItemCounts, setRepoProviderItemCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!repo.selectedRepoId) { setRepoProviderItemCounts({}); return; }
+    const repoId = repo.selectedRepoId;
+    let cancelled = false;
+    api<{ counts: Record<string, number> }>(`/api/providers/item-counts?repoId=${encodeURIComponent(repoId)}`)
+      .then((res) => { if (!cancelled) setRepoProviderItemCounts(res.counts ?? {}); })
+      .catch(() => { if (!cancelled) setRepoProviderItemCounts({}); });
+    return () => { cancelled = true; };
+  }, [repo.selectedRepoId, boot.providerItemCounts]);
+  const totalProviderItemCount = Object.values(repoProviderItemCounts).reduce((a, b) => a + b, 0);
 
   // ── Render ──
   return (
@@ -374,7 +385,7 @@ export default function App() {
             <ExtensionsView
               selectedRepoId={repo.selectedRepoId}
               providerMetas={boot.providerMetas}
-              providerItemCounts={boot.providerItemCounts}
+              providerItemCounts={repoProviderItemCounts}
               busy={busy}
               error={error}
               info={info}

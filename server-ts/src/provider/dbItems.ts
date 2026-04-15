@@ -20,6 +20,7 @@ declare module '../db/index.js' {
     deleteProviderItemsForRepo(providerId: string, repoId: string): number;
     linkProviderItemToTask(itemId: string, taskId: string): void;
     countAllPendingProviderItems(): Map<string, number>;
+    countPendingProviderItemsForRepo(repoId: string): Map<string, number>;
     getLastProviderSyncTime(
       providerAccountId: string,
       providerResourceId: string,
@@ -182,6 +183,29 @@ Db.prototype.countAllPendingProviderItems = function (): Map<string, number> {
       map.set(row.provider_id, row.cnt);
     }
     return map;
+};
+
+Db.prototype.countPendingProviderItemsForRepo = function (
+  repoId: string,
+): Map<string, number> {
+  const db = this.connect();
+  const rows = db
+    .prepare(
+      `SELECT pi.provider_id, COUNT(*) as cnt
+         FROM provider_items pi
+         INNER JOIN provider_bindings pb
+           ON pi.provider_account_id = pb.provider_account_id
+           AND pi.provider_resource_id = pb.provider_resource_id
+        WHERE pb.repo_id = ?
+          AND pi.status IN ('pending', 'regression')
+        GROUP BY pi.provider_id`,
+    )
+    .all(repoId) as any[];
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    map.set(row.provider_id, row.cnt);
+  }
+  return map;
 };
 
 Db.prototype.getLastProviderSyncTime = function (
