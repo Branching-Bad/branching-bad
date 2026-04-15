@@ -169,23 +169,28 @@ export function KanbanBoard({
 
   return (
     <section className="space-y-5">
-      {/* Queue toolbar */}
+      {/* Queue toolbar — dynamic island pill */}
       {(onToggleQueueMode || toolbarContent) && (
-        <div className="flex items-start gap-2">
-          {onToggleQueueMode && (
-            <button
-              onClick={onToggleQueueMode}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition ${
-                queueMode
-                  ? "border-brand/50 bg-brand-tint text-brand shadow-[inset_0_0_0_1px_var(--color-brand-glow)]"
-                  : "border-border-default bg-surface-200 text-text-secondary hover:bg-surface-300 hover:text-text-primary"
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${queueMode ? "bg-brand animate-pulse" : "bg-text-muted"}`} />
-              Queue Mode
-            </button>
-          )}
-          {toolbarContent}
+        <div className="flex items-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-100/80 px-1.5 py-1 shadow-[var(--shadow-sm)] backdrop-blur-md">
+            {onToggleQueueMode && (
+              <button
+                onClick={onToggleQueueMode}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                  queueMode
+                    ? "bg-brand-tint text-brand shadow-[inset_0_0_0_1px_var(--color-brand-glow)]"
+                    : "text-text-secondary hover:bg-surface-200 hover:text-text-primary"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${queueMode ? "bg-brand animate-pulse" : "bg-text-muted"}`} />
+                Queue Mode
+              </button>
+            )}
+            {onToggleQueueMode && toolbarContent && (
+              <span aria-hidden="true" className="h-4 w-px bg-border-default" />
+            )}
+            {toolbarContent}
+          </div>
         </div>
       )}
       {/* ── Kanban columns ── */}

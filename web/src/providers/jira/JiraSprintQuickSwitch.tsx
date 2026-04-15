@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
 import { IconRefresh } from "../../components/icons";
-import { btnSecondary, selectClass } from "../../components/shared";
 
 type Binding = {
   provider_account_id: string;
@@ -126,9 +125,9 @@ export function JiraSprintQuickSwitch({
   if (!binding) return null;
 
   return (
-    <div className="ml-auto flex items-center gap-2 rounded-xl border border-border-default bg-surface-100/80 px-3 py-2">
+    <div className="flex items-center gap-1.5">
       <select
-        className={`${selectClass} min-w-[240px] !py-1.5 !text-xs`}
+        className="min-w-[200px] appearance-none rounded-full border-0 bg-transparent px-2 py-1 text-[11px] text-text-primary focus:outline-none focus:shadow-[0_0_0_2px_var(--color-brand-glow)]"
         value={selectedSprintId}
         disabled={busy}
         onChange={(e) => void syncCurrentSelection(e.target.value)}
@@ -144,10 +143,10 @@ export function JiraSprintQuickSwitch({
         type="button"
         onClick={() => void syncCurrentSelection(selectedSprintId)}
         disabled={busy}
-        className={`${btnSecondary} !px-3 !py-1.5`}
+        className="flex h-6 w-6 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary disabled:opacity-40"
         title="Sync selected sprint"
       >
-        <IconRefresh className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
+        <IconRefresh className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
       </button>
     </div>
   );
