@@ -3,6 +3,7 @@ import { createHostKeyStore, type HostKeyStore } from './hostKeyStore.js';
 import { createSshManager, type SshManager } from './sshManager.js';
 import { createPtyManager, type PtyManager } from './ptyManager.js';
 import { createForwardManager, type ForwardManager } from './forwardManager.js';
+import { broadcastGlobalEvent } from '../websocket.js';
 
 export interface SshModule {
   hostKeys: HostKeyStore;
@@ -16,7 +17,10 @@ let singleton: SshModule | null = null;
 export function getSshModule(db: Db): SshModule {
   if (singleton) return singleton;
   const hostKeys = createHostKeyStore(db);
-  const ssh = createSshManager({ hostKeys });
+  const ssh = createSshManager({
+    hostKeys,
+    onSessionClosed: () => broadcastGlobalEvent({ type: 'ssh_sessions_changed' }),
+  });
   const pty = createPtyManager({ ssh });
   const forwards = createForwardManager({ ssh });
   singleton = { hostKeys, ssh, pty, forwards };
