@@ -378,7 +378,7 @@ export function DetailsSidebar({
                       <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted">You</span>
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-tint text-[10px] font-semibold text-brand">U</span>
                     </div>
-                    <div className="ml-6 rounded-[var(--radius-xl)] rounded-tr-[var(--radius-sm)] border border-brand/30 bg-brand-tint/60 p-3 shadow-[var(--shadow-sm)]">
+                    <div className="rounded-[var(--radius-xl)] rounded-tr-[var(--radius-sm)] border border-brand/30 bg-brand-tint/60 p-3 shadow-[var(--shadow-sm)]">
                       <textarea
                         value={planComment}
                         onChange={(e) => setPlanComment(e.target.value)}
@@ -431,7 +431,7 @@ export function DetailsSidebar({
                         </>
                       )}
                     </div>
-                    <div className="mr-6 rounded-[var(--radius-xl)] rounded-tl-[var(--radius-sm)] border border-border-default bg-surface-200 p-3 shadow-[var(--shadow-sm)]">
+                    <div className="rounded-[var(--radius-xl)] rounded-tl-[var(--radius-sm)] border border-border-default bg-surface-200 p-3 shadow-[var(--shadow-sm)]">
                       {selectedPlan ? (
                         <textarea
                           value={manualPlanMarkdown}
