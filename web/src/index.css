@@ -12,22 +12,22 @@
   /* ── Borders (Apple separator, Dark) ── */
   --color-border-default: rgba(84, 84, 88, 0.35);
   --color-border-strong: rgba(84, 84, 88, 0.65);
-  --color-border-focus: rgba(10, 132, 255, 0.55);
+  --color-border-focus: rgba(253, 146, 1, 0.55);
 
   /* ── Text (Apple label hierarchy, Dark) ── */
   --color-text-primary: #FFFFFF;
   --color-text-secondary: rgba(235, 235, 245, 0.6);
   --color-text-muted: rgba(235, 235, 245, 0.3);
 
-  /* ── Brand (Apple systemBlue, Dark) ── */
-  --color-brand: #0A84FF;
-  --color-brand-dark: #0040DD;
-  --color-brand-glow: rgba(10, 132, 255, 0.25);
-  --color-brand-tint: rgba(10, 132, 255, 0.1);
+  /* ── Brand (Protel orange) ── */
+  --color-brand: #FD9201;
+  --color-brand-dark: #B25400;
+  --color-brand-glow: rgba(253, 146, 1, 0.25);
+  --color-brand-tint: rgba(253, 146, 1, 0.1);
 
   /* ── Semantic status (Apple system colors, Dark) ── */
   --color-status-success: #30D158;    /* systemGreen */
-  --color-status-warning: #FF9F0A;    /* systemOrange — major severity */
+  --color-status-warning: #EAB308;    /* gold-amber — major severity (shifted for color-blind clarity against brand orange) */
   --color-status-caution: #FFD60A;    /* systemYellow — minor severity */
   --color-status-danger:  #FF453A;    /* systemRed */
   --color-status-info:    #64D2FF;    /* systemTeal — info (distinct from brand blue) */
@@ -35,7 +35,7 @@
   --color-status-neutral: #8E8E93;    /* systemGray */
 
   --color-status-success-soft: rgba(48, 209, 88, 0.12);
-  --color-status-warning-soft: rgba(255, 159, 10, 0.12);
+  --color-status-warning-soft: rgba(234, 179, 8, 0.14);
   --color-status-caution-soft: rgba(255, 214, 10, 0.12);
   --color-status-danger-soft:  rgba(255, 69, 58, 0.12);
   --color-status-info-soft:    rgba(100, 210, 255, 0.12);
@@ -43,7 +43,7 @@
   --color-status-neutral-soft: rgba(142, 142, 147, 0.12);
 
   /* ── Tool category palette (LogEntry differentiation) ── */
-  --color-tool-read:     #0A84FF;   /* systemBlue */
+  --color-tool-read:     #64D2FF;   /* systemTeal (shifted off brand blue) */
   --color-tool-edit:     #FF9F0A;   /* systemOrange */
   --color-tool-write:    #30D158;   /* systemGreen */
   --color-tool-search:   #BF5AF2;   /* systemPurple */
@@ -54,9 +54,9 @@
   --color-error-bg: rgba(255, 69, 58, 0.1);
   --color-error-border: rgba(255, 69, 58, 0.3);
   --color-error-text: #FF453A;
-  --color-info-bg: rgba(10, 132, 255, 0.1);
-  --color-info-border: rgba(10, 132, 255, 0.3);
-  --color-info-text: #0A84FF;
+  --color-info-bg: rgba(100, 210, 255, 0.1);
+  --color-info-border: rgba(100, 210, 255, 0.3);
+  --color-info-text: #64D2FF;
 
   /* ── Radius scale ── */
   --radius-sm: 6px;
@@ -70,7 +70,7 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-glow: 0 0 20px rgba(10, 132, 255, 0.06);
+  --shadow-glow: 0 0 20px rgba(253, 146, 1, 0.06);
 }
 
 @layer base {
@@ -278,7 +278,7 @@
 }
 .diff-viewer-content .diff-gutter:hover {
   color: var(--color-brand);
-  background: rgba(10, 132, 255, 0.06);
+  background: rgba(253, 146, 1, 0.06);
 }
 .diff-viewer-content .diff-code {
   background: var(--color-surface-0);
@@ -302,7 +302,7 @@
 }
 .diff-viewer-content .diff-line-selected .diff-code,
 .diff-viewer-content .diff-line-selected .diff-gutter {
-  background: rgba(10, 132, 255, 0.12) !important;
+  background: rgba(253, 146, 1, 0.12) !important;
 }
 .diff-viewer-content .diff-batch-commented .diff-code {
   border-left: 2px solid var(--color-brand);
