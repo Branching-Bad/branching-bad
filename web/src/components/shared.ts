@@ -1,13 +1,13 @@
 import type { LaneKey } from "../types";
 
 export const inputClass =
-  "w-full rounded-md border border-border-strong bg-surface-300 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none transition-colors";
+  "w-full rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted transition focus:border-border-focus focus:outline-none focus:shadow-[0_0_0_3px_var(--color-brand-glow)]";
 export const selectClass =
-  "w-full rounded-md border border-border-strong bg-surface-300 px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none transition-colors appearance-none";
+  "w-full appearance-none rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-3 py-2 pr-8 text-sm text-text-primary transition focus:border-border-focus focus:outline-none focus:shadow-[0_0_0_3px_var(--color-brand-glow)]";
 export const btnPrimary =
-  "rounded-md bg-brand-dark px-4 py-2 text-sm font-medium text-text-primary border border-brand-glow transition hover:bg-brand-dark/80 disabled:bg-surface-400 disabled:border-border-default disabled:text-text-muted disabled:cursor-not-allowed";
+  "rounded-full bg-brand px-4 py-1.5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:bg-brand-dark disabled:opacity-40 disabled:hover:bg-brand";
 export const btnSecondary =
-  "rounded-md bg-surface-300 px-4 py-2 text-sm font-medium text-text-primary border border-border-strong transition hover:bg-surface-200 disabled:bg-surface-300/50 disabled:border-border-default disabled:text-text-muted disabled:cursor-not-allowed";
+  "rounded-full border border-border-default bg-surface-200 px-4 py-1.5 text-sm font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary disabled:opacity-40";
 
 export function formatDate(iso: string) {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
