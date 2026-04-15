@@ -26,6 +26,7 @@ import { sonarqubeRoutes } from './provider/sonarqube/routes.js';
 import { memoryRoutes } from './routes/memories.js';
 import { glossaryRoutes } from './routes/glossary.js';
 import { analystRoutes } from './routes/analyst.js';
+import { chatReplRoutes } from './routes/chatRepl.js';
 import { taskDefaultsRoutes } from './routes/taskDefaults.js';
 import { workflowRoutes } from './routes/workflow.js';
 import { mcpRoutes } from './routes/mcp.js';
@@ -66,6 +67,7 @@ export function createApp(state: AppState): express.Express {
   app.use(memoryRoutes());
   app.use(glossaryRoutes());
   app.use(analystRoutes());
+  app.use(chatReplRoutes());
   app.use(taskDefaultsRoutes());
   app.use('/api/workflow', workflowRoutes(state));
   app.use(mcpRoutes(state));

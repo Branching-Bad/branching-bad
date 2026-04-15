@@ -9,6 +9,7 @@ import {
   sendBatchWS,
 } from './routes/sse.js';
 import { getAnalystStore } from './routes/analyst.js';
+import { getChatReplStore } from './routes/chatRepl.js';
 import type { AppState } from './state.js';
 
 // ---------------------------------------------------------------------------
@@ -81,6 +82,12 @@ export function attachWebSocketHandler(server: Server, state: AppState): void {
     const analystWsMatch = pathname.match(/^\/api\/analyst\/([^/]+)\/ws$/);
     if (analystWsMatch) {
       handleAnalystUpgrade(wss, req, socket, head, analystWsMatch[1], state);
+      return;
+    }
+
+    const chatWsMatch = pathname.match(/^\/api\/chat\/([^/]+)\/ws$/);
+    if (chatWsMatch) {
+      handleChatReplUpgrade(wss, req, socket, head, chatWsMatch[1], state);
       return;
     }
 
@@ -201,6 +208,24 @@ function handleAnalystUpgrade(
     const store = getAnalystStore(sessionId, state);
     if (!store) {
       ws.close(4004, 'Analyst session not found');
+      return;
+    }
+    handleStoreWS(ws, store);
+  });
+}
+
+function handleChatReplUpgrade(
+  wss: WebSocketServer,
+  req: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+  sessionId: string,
+  state: AppState,
+): void {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    const store = getChatReplStore(sessionId, state);
+    if (!store) {
+      ws.close(4004, 'Chat session not found');
       return;
     }
     handleStoreWS(ws, store);

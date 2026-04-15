@@ -4,8 +4,9 @@ import { Db, nowIso } from './index.js';
 export interface TaskMemory {
   id: string;
   repo_id: string;
-  task_id: string;
-  run_id: string;
+  task_id: string | null;
+  run_id: string | null;
+  chat_session_id: string | null;
   title: string;
   summary: string;
   files_changed: string[];
@@ -21,6 +22,12 @@ declare module './index.js' {
       title: string,
       summary: string,
       filesChanged: string[],
+    ): TaskMemory;
+    insertChatMemory(
+      repoId: string,
+      chatSessionId: string,
+      title: string,
+      summary: string,
     ): TaskMemory;
     searchMemories(repoId: string, query: string, limit?: number): TaskMemory[];
     listMemories(repoId: string, limit: number, offset: number): { memories: TaskMemory[]; total: number };
@@ -38,6 +45,7 @@ function rowToMemory(row: any): TaskMemory {
     repo_id: row.repo_id,
     task_id: row.task_id,
     run_id: row.run_id,
+    chat_session_id: row.chat_session_id ?? null,
     title: row.title,
     summary: row.summary,
     files_changed: JSON.parse(row.files_changed || '[]'),
@@ -61,7 +69,29 @@ Db.prototype.insertTaskMemory = function (
     `INSERT INTO task_memories (id, repo_id, task_id, run_id, title, summary, files_changed, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(id, repoId, taskId, runId, title, summary, filesJson, ts);
-  return { id, repo_id: repoId, task_id: taskId, run_id: runId, title, summary, files_changed: filesChanged, created_at: ts };
+  return {
+    id, repo_id: repoId, task_id: taskId, run_id: runId, chat_session_id: null,
+    title, summary, files_changed: filesChanged, created_at: ts,
+  };
+};
+
+Db.prototype.insertChatMemory = function (
+  repoId: string,
+  chatSessionId: string,
+  title: string,
+  summary: string,
+): TaskMemory {
+  const db = this.connect();
+  const id = uuidv4();
+  const ts = nowIso();
+  db.prepare(
+    `INSERT INTO task_memories (id, repo_id, chat_session_id, title, summary, files_changed, created_at)
+     VALUES (?, ?, ?, ?, ?, '[]', ?)`,
+  ).run(id, repoId, chatSessionId, title, summary, ts);
+  return {
+    id, repo_id: repoId, task_id: null, run_id: null, chat_session_id: chatSessionId,
+    title, summary, files_changed: [], created_at: ts,
+  };
 };
 
 Db.prototype.searchMemories = function (

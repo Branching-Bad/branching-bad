@@ -26,6 +26,7 @@ import './db/taskOutputs.js';
 import './db/memories.js';
 import './db/glossary.js';
 import './db/analyst.js';
+import './db/chatRepl.js';
 import './db/workflow.js';
 import './db/taskDefaults.js';
 import './db/mcp.js';

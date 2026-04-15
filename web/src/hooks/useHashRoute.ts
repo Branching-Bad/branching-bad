@@ -4,6 +4,7 @@ export const ROUTES = [
   "board",
   "analyst",
   "workflow",
+  "chat",
   "extensions",
   "agents",
   "rules",

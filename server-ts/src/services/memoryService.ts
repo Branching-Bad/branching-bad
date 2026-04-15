@@ -47,6 +47,32 @@ export function buildMemoriesSection(db: Db, task: TaskWithPayload): string {
 }
 
 /**
+ * Search memories by a free-form query (not tied to a task). Falls back to
+ * recent memories for the repo when FTS finds nothing. Returns a
+ * prompt-ready section or empty string.
+ */
+export function buildMemoriesSectionForQuery(db: Db, repoId: string, query: string, limit = 5): string {
+  const sanitized = (query ?? '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  let memories: TaskMemory[] = [];
+  if (sanitized) {
+    try { memories = db.searchMemories(repoId, sanitized, limit); } catch { /* ignore */ }
+  }
+  if (memories.length === 0) {
+    try {
+      const recent = db.listMemories(repoId, limit * 2, 0);
+      memories = recent.memories.slice(0, limit);
+    } catch { /* ignore */ }
+  }
+  if (memories.length === 0) return '';
+
+  const items = memories.map((m, i) =>
+    `${i + 1}. ${m.title}\n   ${m.summary.split('\n').join('\n   ')}`,
+  );
+  return `\nRelevant memories from this repo:\n${items.join('\n\n')}\n`;
+}
+
+/**
  * Build a task memory from completed run data.
  * Uses agent CLI (Haiku) to generate a meaningful summary.
  * Falls back to deterministic summary if agent call fails.

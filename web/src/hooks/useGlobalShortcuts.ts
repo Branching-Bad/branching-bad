@@ -12,12 +12,13 @@ export function useGlobalShortcuts(navigate: (r: Route) => void, onOpenRepoSwitc
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) {
-        if (!["1", "2", "3"].includes(e.key)) return;
+        if (!["1", "2", "3", "4"].includes(e.key)) return;
       }
 
       if (e.key === "1") { e.preventDefault(); navigate("board"); return; }
       if (e.key === "2") { e.preventDefault(); navigate("analyst"); return; }
       if (e.key === "3") { e.preventDefault(); navigate("workflow"); return; }
+      if (e.key === "4") { e.preventDefault(); navigate("chat"); return; }
       if (e.key === ",") { e.preventDefault(); navigate("repos"); return; }
       if (e.shiftKey && (e.key === "E" || e.key === "e")) {
         e.preventDefault();

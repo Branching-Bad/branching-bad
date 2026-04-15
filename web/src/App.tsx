@@ -13,6 +13,8 @@ import { DataView } from "./views/DataView";
 import { ExtensionsView } from "./views/ExtensionsView";
 import { useSshSessions } from "./hooks/useSshSessions";
 import { SshView } from "./views/SshView";
+import { useChatRepl } from "./hooks/useChatRepl";
+import { ChatView } from "./views/ChatView";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { EditTaskModal } from "./components/EditTaskModal";
 import { KanbanBoard } from "./components/KanbanBoard";
@@ -252,6 +254,7 @@ export default function App() {
   const totalProviderItemCount = Object.values(repoProviderItemCounts).reduce((a, b) => a + b, 0);
 
   const sshSessions = useSshSessions({ setError });
+  const chatRepl = useChatRepl(repo.selectedRepoId || null);
 
   // ── Context menu callbacks ──
   // Kanban right-click actions target a specific task (not necessarily the
@@ -532,6 +535,17 @@ export default function App() {
           {route === "ssh" && (
             <SshView
               sshSessions={sshSessions}
+              setInfo={setInfo}
+              setError={setError}
+            />
+          )}
+
+          {route === "chat" && (
+            <ChatView
+              chat={chatRepl}
+              repos={boot.repos}
+              selectedRepoId={repo.selectedRepoId}
+              agentProfiles={boot.agentProfiles}
               setInfo={setInfo}
               setError={setError}
             />

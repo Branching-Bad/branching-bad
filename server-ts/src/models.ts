@@ -37,3 +37,8 @@ export type {
   AnalystSession,
   AnalystLog,
 } from './models/analyst.js';
+
+export type {
+  ChatSession,
+  ChatLog,
+} from './models/chatRepl.js';

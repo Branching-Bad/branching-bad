@@ -6,6 +6,7 @@ import {
   IconBoard,
   IconAnalyst,
   IconWorkflow,
+  IconChat,
   IconExtensions,
   IconSettings,
 } from "./icons";
@@ -50,6 +51,7 @@ export function SideRail({
     { route: "board", label: "Board", icon: IconBoard, shortcut: `${modLabel}1` },
     { route: "analyst", label: "Task Analyst", icon: IconAnalyst, shortcut: `${modLabel}2` },
     { route: "workflow", label: "Workflow", icon: IconWorkflow, shortcut: `${modLabel}3` },
+    { route: "chat", label: "Chat", icon: IconChat, shortcut: `${modLabel}4` },
   ];
 
   const configureItems: NavItem[] = [
