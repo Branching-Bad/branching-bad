@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FC, type ReactNode } from "react";
 import type { AgentProfile } from "../types";
+import { PRIORITY_COLORS } from "../theme/priority";
 
 interface Props {
   title: string; setTitle: (v: string) => void;
@@ -18,11 +19,11 @@ interface Props {
 // SF system colors by severity
 const PRIORITY_OPTIONS: Array<{ value: string; label: string; dot: string | null }> = [
   { value: "",        label: "No priority", dot: null },
-  { value: "Highest", label: "Highest",     dot: "#FF453A" },
-  { value: "High",    label: "High",        dot: "#FF9F0A" },
-  { value: "Medium",  label: "Medium",      dot: "#FFD60A" },
-  { value: "Low",     label: "Low",         dot: "#64D2FF" },
-  { value: "Lowest",  label: "Lowest",      dot: "#8E8E93" },
+  { value: "Highest", label: "Highest",     dot: PRIORITY_COLORS.Highest },
+  { value: "High",    label: "High",        dot: PRIORITY_COLORS.High },
+  { value: "Medium",  label: "Medium",      dot: PRIORITY_COLORS.Medium },
+  { value: "Low",     label: "Low",         dot: PRIORITY_COLORS.Low },
+  { value: "Lowest",  label: "Lowest",      dot: PRIORITY_COLORS.Lowest },
 ];
 
 export function TaskFormFields({
