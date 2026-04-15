@@ -18,8 +18,16 @@ export function useSshSessions(opts: { setError: (msg: string) => void }) {
 
   useEffect(() => {
     void refresh();
-    const t = setInterval(refresh, 5000);
-    return () => clearInterval(t);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/global`);
+    ws.onopen = () => { void refresh(); };
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data as string) as { type: string };
+        if (msg.type === 'ssh_sessions_changed') void refresh();
+      } catch { /* ignore malformed frames */ }
+    };
+    return () => ws.close();
   }, [refresh]);
 
   const connect = useCallback(async (connectionId: string): Promise<ConnectResult> => {
