@@ -81,6 +81,12 @@ export function attachWebSocketHandler(server: Server, state: AppState): void {
       return;
     }
 
+    const sshPtyWsMatch = pathname.match(/^\/api\/ssh\/pty\/([^/]+)\/ws$/);
+    if (sshPtyWsMatch) {
+      handleSshPtyUpgrade(wss, req, socket, head, sshPtyWsMatch[1], state);
+      return;
+    }
+
     if (pathname === '/api/ws/global') {
       handleGlobalUpgrade(wss, req, socket, head);
       return;
@@ -207,5 +213,45 @@ function handleGlobalUpgrade(
   wss.handleUpgrade(req, socket, head, (ws) => {
     globalClients.add(ws);
     ws.on('close', () => globalClients.delete(ws));
+  });
+}
+
+function handleSshPtyUpgrade(
+  wss: WebSocketServer,
+  req: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+  ptyId: string,
+  state: AppState,
+): void {
+  wss.handleUpgrade(req, socket, head, async (ws) => {
+    // Lazy-import to avoid circular deps at module load
+    const { getSshModule } = await import('./ssh/index.js');
+    const mod = getSshModule(state.db);
+
+    const unsubscribe = mod.pty.subscribe(
+      ptyId,
+      (data) => {
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'data', data }));
+      },
+      () => {
+        try { ws.close(1000, 'pty closed'); } catch {}
+      },
+    );
+
+    ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === 'write' && typeof msg.data === 'string') {
+          mod.pty.write(ptyId, msg.data);
+        } else if (msg.type === 'resize' && typeof msg.cols === 'number' && typeof msg.rows === 'number') {
+          mod.pty.resize(ptyId, msg.cols, msg.rows);
+        }
+      } catch { /* ignore bad frames */ }
+    });
+
+    ws.on('close', () => {
+      try { unsubscribe(); } catch {}
+    });
   });
 }
