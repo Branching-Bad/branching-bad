@@ -2,6 +2,9 @@
 // Background agent spawning for run execution
 // ---------------------------------------------------------------------------
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { MsgStore as MsgStoreClass } from '../msgStore.js';
 import {
   createWorktree,
@@ -10,8 +13,12 @@ import {
   spawnAgent,
 } from '../executor/index.js';
 import type { AppState } from '../state.js';
-import { loadRulesSection } from '../routes/shared.js';
+import { getAppDataDir, loadRulesSection } from '../routes/shared.js';
 import { startTasklistPoller } from './tasklistTracker.js';
+import { loadCatalog } from '../mcp/catalog.js';
+import { resolveMcpServer } from '../mcp/resolver.js';
+import { writeAgentConfig } from '../mcp/configWriter.js';
+import type { AgentFlavor } from '../mcp/model.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,6 +32,7 @@ export interface SpawnRunAgentParams {
   branchName: string;
   baseSha: string | null;
   agentCommand: string;
+  agentProfileId: string;
   issueKey: string;
   useWorktree: boolean;
   carryDirtyState: boolean;
@@ -40,10 +48,68 @@ export interface SpawnRunAgentParams {
 // Spawn agent in background
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// MCP helpers
+// ---------------------------------------------------------------------------
+
+const FLAVOR_KEYWORDS: [string, AgentFlavor][] = [
+  ['claude', 'claude'],
+  ['codex', 'codex'],
+  ['gemini', 'gemini'],
+];
+
+function detectFlavor(agentCommand: string): AgentFlavor | null {
+  const lower = agentCommand.toLowerCase();
+  for (const [kw, flavor] of FLAVOR_KEYWORDS) {
+    if (lower.includes(kw)) return flavor;
+  }
+  return null;
+}
+
+async function buildMcpArgs(
+  state: AppState,
+  agentProfileId: string,
+  agentCommand: string,
+  runId: string,
+): Promise<{ extraArgs: string[]; extraEnv: Record<string, string>; configDir: string | null }> {
+  const mcpServers = state.db.listMcpsForProfile(agentProfileId);
+  if (mcpServers.length === 0) return { extraArgs: [], extraEnv: {}, configDir: null };
+
+  const flavor = detectFlavor(agentCommand);
+  if (!flavor) return { extraArgs: [], extraEnv: {}, configDir: null };
+
+  const catalog = await loadCatalog();
+  const resolved = await Promise.all(
+    mcpServers.map((s) => resolveMcpServer(s, catalog, state.secretStore)),
+  );
+
+  const mcpConfigDir = path.join(getAppDataDir(), 'agent_configs', runId);
+  const emission = await writeAgentConfig(flavor, resolved, mcpConfigDir);
+
+  if (!emission.configPath) return { extraArgs: [], extraEnv: {}, configDir: mcpConfigDir };
+
+  const extraArgs: string[] = [];
+  const extraEnv: Record<string, string> = {};
+
+  if (flavor === 'claude') {
+    extraArgs.push('--mcp-config', emission.configPath);
+  } else if (flavor === 'codex') {
+    extraEnv['CODEX_CONFIG_DIR'] = path.dirname(emission.configPath);
+  } else if (flavor === 'gemini') {
+    extraArgs.push('--settings', emission.configPath);
+  }
+
+  return { extraArgs, extraEnv, configDir: mcpConfigDir };
+}
+
+// ---------------------------------------------------------------------------
+// Spawn agent in background
+// ---------------------------------------------------------------------------
+
 export function spawnRunAgent(state: AppState, params: SpawnRunAgentParams): void {
   const {
     store, runId, taskId, repoPath, branchName, baseSha,
-    agentCommand, issueKey, useWorktree, carryDirtyState, taskTitle, taskDescription,
+    agentCommand, agentProfileId, issueKey, useWorktree, carryDirtyState, taskTitle, taskDescription,
     taskRepoId, executionPlanMarkdown, executionPlanVersion, executionTasklistJson,
   } = params;
   const db = state.db;
@@ -131,8 +197,12 @@ export function spawnRunAgent(state: AppState, params: SpawnRunAgentParams): voi
 
     store.push({ type: 'agent_text', data: 'Starting agent process...' });
 
+    let mcpConfigDir: string | null = null;
     try {
-      const child = spawnAgent(agentCommand, prompt, agentWorkingDir, store);
+      const mcp = await buildMcpArgs(state, agentProfileId, agentCommand, runId);
+      mcpConfigDir = mcp.configDir;
+
+      const child = spawnAgent(agentCommand, prompt, agentWorkingDir, store, null, mcp.extraArgs, mcp.extraEnv);
 
       if (child.pid) {
         db.updateRunPid(runId, child.pid);
@@ -150,6 +220,14 @@ export function spawnRunAgent(state: AppState, params: SpawnRunAgentParams): voi
       if (tasklistPath) {
         const stopPoller = startTasklistPoller(runId, tasklistPath, db, store);
         child.on('exit', () => stopPoller());
+      }
+
+      // Clean up per-run MCP config directory on exit
+      if (mcpConfigDir) {
+        const dirToRemove = mcpConfigDir;
+        child.on('exit', () => {
+          fs.promises.rm(dirToRemove, { recursive: true, force: true }).catch(() => {});
+        });
       }
 
       pm.spawnExitMonitor(runId, taskId, repoPath, agentWorkingDir, baseSha, db);

@@ -105,6 +105,7 @@ export async function startRunInternal(
     branchName,
     baseSha,
     agentCommand,
+    agentProfileId: profile.id,
     issueKey: task.jira_issue_key,
     useWorktree: task.use_worktree || parallelRunActive,
     carryDirtyState: task.carry_dirty_state,
@@ -182,6 +183,7 @@ export async function resumeRunInternal(
     run.id, task.id, repo.path, baseSha,
     state.db, state.processManager, store,
     { command: agentCommand, isResume: true, previousRunId: prevRun.id },
+    state, profile.id,
   );
 
   return { run: { id: run.id, status: run.status, branch_name: run.branch_name }, response };

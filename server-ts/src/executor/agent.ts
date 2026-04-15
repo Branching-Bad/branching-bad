@@ -154,6 +154,9 @@ function setupStdoutReader(child: ChildProcess, agentKind: string, store: MsgSto
 /**
  * Spawn an AI agent process with structured output parsing.
  * Sets up line-by-line stdout/stderr readers that push messages to the MsgStore.
+ *
+ * @param mcpExtraArgs - Additional CLI args to inject before the agent runs (e.g. --mcp-config <path>).
+ * @param mcpExtraEnv  - Additional env vars to merge in (e.g. CODEX_CONFIG_DIR). No secrets are logged.
  */
 export function spawnAgent(
   agentCommand: string,
@@ -161,24 +164,32 @@ export function spawnAgent(
   workingDir: string,
   store: MsgStore,
   sessionId: string | null = null,
+  mcpExtraArgs: string[] = [],
+  mcpExtraEnv: Record<string, string> = {},
 ): ChildProcess {
   const parts = splitCommand(agentCommand);
   if (parts.length === 0) {
     throw new Error('empty agent command');
   }
 
-  const [bin, ...extraArgs] = parts;
+  const [bin, ...baseArgs] = parts;
   const agentKind = detectAgentKind(agentCommand);
-  const { args, useStdinPipe, stdinPrompt } = buildAgentArgs(agentKind, extraArgs, prompt, sessionId);
+  const { args: builtArgs, useStdinPipe, stdinPrompt } = buildAgentArgs(agentKind, baseArgs, prompt, sessionId);
+
+  // Inject MCP args after the built args (global flags accepted anywhere by claude/gemini CLIs).
+  const args = mcpExtraArgs.length > 0 ? [...builtArgs, ...mcpExtraArgs] : builtArgs;
 
   // Strip env vars that trigger "nested Claude Code session" errors
-  const env = { ...process.env };
+  const env: Record<string, string> = { ...process.env } as Record<string, string>;
   for (const key of Object.keys(env)) {
     if (key === 'CLAUDECODE' || key.startsWith('CLAUDE_CODE_')) {
       delete env[key];
     }
   }
-  delete env.CLAUDE_AGENT_SDK_VERSION;
+  delete env['CLAUDE_AGENT_SDK_VERSION'];
+
+  // Merge MCP env vars (done after stripping to avoid leaking internal vars)
+  Object.assign(env, mcpExtraEnv);
 
   const child = spawn(bin, args, {
     cwd: workingDir,
