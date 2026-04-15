@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { flushSync } from "react-dom";
 import { api } from "./api";
 import { SideRail } from "./components/SideRail";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -252,6 +253,43 @@ export default function App() {
 
   const sshSessions = useSshSessions({ setError });
 
+  // ── Context menu callbacks ──
+  // Kanban right-click actions target a specific task (not necessarily the
+  // currently-selected one). The underlying hooks close over selectedTaskId,
+  // so we flushSync the selection to force a re-render, then call the latest
+  // callback via hooksRef (which is reassigned every render).
+  const hooksRef = useRef({ run, task, plan });
+  hooksRef.current = { run, task, plan };
+
+  const selectThen = useCallback((taskId: string, action: () => void) => {
+    flushSync(() => task.setSelectedTaskId(taskId));
+    action();
+  }, [task]);
+
+  const onKanbanStartRun = useCallback((taskId: string) => {
+    selectThen(taskId, () => void hooksRef.current.run.startRun());
+  }, [selectThen]);
+  const onKanbanResumeRun = useCallback((taskId: string) => {
+    selectThen(taskId, () => void hooksRef.current.run.resumeRun());
+  }, [selectThen]);
+  const onKanbanStopRun = useCallback((taskId: string) => {
+    selectThen(taskId, () => void hooksRef.current.run.stopRun());
+  }, [selectThen]);
+  const onKanbanCreatePlan = useCallback((taskId: string) => {
+    selectThen(taskId, () => void hooksRef.current.plan.createPlan());
+  }, [selectThen]);
+  const onKanbanEditTask = useCallback((taskId: string) => {
+    task.setSelectedTaskId(taskId);
+    setEditTaskModalOpen(true);
+  }, [task]);
+  const onKanbanArchiveTask = useCallback((taskId: string) => {
+    selectThen(taskId, () => void hooksRef.current.task.archiveTask());
+  }, [selectThen]);
+  const onKanbanDeleteTask = useCallback((taskId: string) => {
+    const t = task.tasks.find((x) => x.id === taskId);
+    if (t) void task.deleteTask(t);
+  }, [task]);
+
   // ── Render ──
   return (
     <div className="flex h-screen overflow-hidden bg-surface-0 text-text-primary">
@@ -350,6 +388,13 @@ export default function App() {
                     refreshHint={`${info}|${error}|${route}`}
                   />
                 }
+                onStartRun={onKanbanStartRun}
+                onResumeRun={onKanbanResumeRun}
+                onStopRun={onKanbanStopRun}
+                onCreatePlan={onKanbanCreatePlan}
+                onEditTask={onKanbanEditTask}
+                onArchiveTask={onKanbanArchiveTask}
+                onDeleteTask={onKanbanDeleteTask}
               />
             </section>
           )}

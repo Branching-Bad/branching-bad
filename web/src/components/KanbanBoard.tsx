@@ -3,6 +3,7 @@ import type { Task, LaneKey, AgentProfile, TaskRunState } from "../types";
 import { api } from "../api";
 import { IconPlus, IconGitBranch } from "./icons";
 import { formatDate, laneMeta, laneFromStatus } from "./shared";
+import { TaskContextMenu, type ContextMenuItem } from "./TaskContextMenu";
 
 /* ── Lane visual config (SF system palette) ── */
 const laneStyle: Record<string, { accent: string; dotBg: string; badgeBg: string; badgeText: string }> = {
@@ -28,6 +29,13 @@ export function KanbanBoard({
   queueMode,
   onToggleQueueMode,
   toolbarContent,
+  onStartRun,
+  onResumeRun,
+  onStopRun,
+  onCreatePlan,
+  onEditTask,
+  onArchiveTask,
+  onDeleteTask,
 }: {
   groupedTasks: Record<LaneKey, Task[]>;
   selectedTaskId: string;
@@ -43,11 +51,52 @@ export function KanbanBoard({
   queueMode?: boolean;
   onToggleQueueMode?: () => void;
   toolbarContent?: React.ReactNode;
+  onStartRun?: (taskId: string) => void;
+  onResumeRun?: (taskId: string) => void;
+  onStopRun?: (taskId: string) => void;
+  onCreatePlan?: (taskId: string) => void;
+  onEditTask?: (taskId: string) => void;
+  onArchiveTask?: (taskId: string) => void;
+  onDeleteTask?: (taskId: string) => void;
 }) {
   const [dragOverLane, setDragOverLane] = useState<LaneKey | null>(null);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dragSourceId, setDragSourceId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
+
+  function buildContextMenuItems(task: Task): ContextMenuItem[] {
+    const runState = taskRunStates?.[task.id];
+    const isRunning = runState?.activeRun?.status === "running";
+    const hasSession = Boolean(runState?.activeRun?.agent_session_id);
+    const status = task.status.toUpperCase();
+    const lane = laneFromStatus(task.status);
+    const items: ContextMenuItem[] = [];
+
+    if (!isRunning && (status === "TODO" || status === "PLAN_APPROVED") && onStartRun) {
+      items.push({ label: "Start", onClick: () => onStartRun(task.id) });
+    }
+    if (status === "FAILED" && hasSession && onResumeRun) {
+      items.push({ label: "Resume", onClick: () => onResumeRun(task.id) });
+    }
+    if (isRunning && onStopRun) {
+      items.push({ label: "Stop", onClick: () => onStopRun(task.id) });
+    }
+    if (status === "TODO" && task.require_plan && onCreatePlan) {
+      items.push({ label: "Generate Plan", onClick: () => onCreatePlan(task.id) });
+    }
+    if (onEditTask) items.push({ label: "Edit", onClick: () => onEditTask(task.id) });
+    if (onArchiveTask) {
+      items.push({
+        label: lane === "archived" ? "Unarchive" : "Archive",
+        onClick: () => onArchiveTask(task.id),
+      });
+    }
+    if (onDeleteTask) {
+      items.push({ label: "Delete", onClick: () => onDeleteTask(task.id), danger: true });
+    }
+    return items;
+  }
 
   function handleDragStart(e: React.DragEvent, taskId: string) {
     e.dataTransfer.setData("text/plain", taskId);
@@ -250,6 +299,10 @@ export function KanbanBoard({
                         onSelect={() => onSelectTask(task.id)}
                         onDragStart={(e) => handleDragStart(e, task.id)}
                         onDragEnd={handleDragEnd}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setContextMenu({ taskId: task.id, x: e.clientX, y: e.clientY });
+                        }}
                       />
                     </div>
                     {lane.key === "todo" && dragOverIndex === idx + 1 && dragSourceId && idx === groupedTasks[lane.key].length - 1 && (
@@ -306,6 +359,10 @@ export function KanbanBoard({
                 taskRunState={taskRunStates?.[task.id]}
                 onSelect={() => onSelectTask(task.id)}
                 onDragStart={(e) => handleDragStart(e, task.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ taskId: task.id, x: e.clientX, y: e.clientY });
+                }}
                 dimmed
               />
             ))}
@@ -315,6 +372,22 @@ export function KanbanBoard({
           </div>
         )}
       </div>
+
+      {contextMenu && (() => {
+        const allTasks = Object.values(groupedTasks).flat();
+        const task = allTasks.find((t) => t.id === contextMenu.taskId);
+        if (!task) return null;
+        const items = buildContextMenuItems(task);
+        if (items.length === 0) return null;
+        return (
+          <TaskContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={items}
+            onClose={() => setContextMenu(null)}
+          />
+        );
+      })()}
     </section>
   );
 }
@@ -351,7 +424,7 @@ function phaseIndicator(status: string, isRunning: boolean) {
 
 /* ── Task Card ── */
 function TaskCard({
-  task, selected, agentProfiles, taskRunState, onSelect, onDragStart, onDragEnd, dimmed,
+  task, selected, agentProfiles, taskRunState, onSelect, onDragStart, onDragEnd, onContextMenu, dimmed,
 }: {
   task: Task;
   selected: boolean;
@@ -360,6 +433,7 @@ function TaskCard({
   onSelect: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   dimmed?: boolean;
 }) {
   const profile = task.agent_profile_id ? agentProfiles.find((ap) => ap.id === task.agent_profile_id) : null;
@@ -373,6 +447,7 @@ function TaskCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       className={`group relative w-full rounded-[var(--radius-xl)] border p-3.5 text-left transition-all duration-150 cursor-grab active:cursor-grabbing ${dimmed ? "opacity-50" : ""} ${
         selected
           ? "border-brand/50 bg-brand-tint shadow-[0_0_0_1px_var(--color-brand-glow),0_4px_16px_rgba(253,146,1,0.12)]"
