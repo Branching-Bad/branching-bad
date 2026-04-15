@@ -33,6 +33,9 @@ export type GlobalEvent =
       strategy: string;
       committed: boolean;
       filesChanged: number;
+    }
+  | {
+      type: 'ssh_sessions_changed';
     };
 
 export function broadcastGlobalEvent(event: GlobalEvent): void {
