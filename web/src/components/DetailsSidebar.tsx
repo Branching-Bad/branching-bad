@@ -815,7 +815,7 @@ function PriorityChip({ priority }: { priority: string }) {
     p === "highest" ? "#FF453A" :
     p === "high"    ? "#FF9F0A" :
     p === "medium"  ? "#FFD60A" :
-    p === "low"     ? "#0A84FF" :
+    p === "low"     ? "#64D2FF" :
                       "#8E8E93";
   return (
     <span
