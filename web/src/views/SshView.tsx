@@ -5,7 +5,7 @@ import { ConnectionDetail } from "../components/ssh/ConnectionDetail";
 import { ConnectionFormModal, type ConnectionFormValue } from "../components/ssh/ConnectionFormModal";
 import { HostKeyPromptModal } from "../components/ssh/HostKeyPromptModal";
 import { MigrationBanner } from "../components/ssh/MigrationBanner";
-import type { UseSshConnections } from "../hooks/useSshConnections";
+import type { UseSshConnections, CreateConnectionInput } from "../hooks/useSshConnections";
 import type { UseSshSessions } from "../hooks/useSshSessions";
 import type { UseSshPty } from "../hooks/useSshPty";
 import type { UseSshMigration } from "../hooks/useSshMigration";
@@ -39,7 +39,7 @@ export function SshView({
   const openEdit = () => { setFormInitial(selected); setFormOpen(true); };
 
   const handleSave = async (v: ConnectionFormValue) => {
-    const body = {
+    const body: CreateConnectionInput = {
       alias: v.alias, groupId: v.groupId, host: v.host, port: v.port, username: v.username,
       authType: v.authType, keyPath: v.keyPath,
       password: v.password || undefined,
@@ -48,7 +48,7 @@ export function SshView({
     };
     if (formInitial) await update(formInitial.id, body);
     else {
-      const c = await create(body as any);
+      const c = await create(body);
       setSelectedId(c.id);
     }
   };
