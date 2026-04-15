@@ -1,10 +1,10 @@
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { AppState } from '../state.js';
-import type { Graph, ScriptNode, AgentNode } from './model.js';
+import type { Graph, ScriptNode, AgentNode, McpNode } from './model.js';
 import { executeGraph, type NodeExecutor } from './runner.js';
 import { runScriptNode } from './nodeRunner.js';
-import { runAgentNode } from './agentAdapter.js';
+import { runAgentNode, runMcpNode } from './agentAdapter.js';
 import { broadcastWorkflow } from '../websocket.js';
 import { getAppDataDir } from '../routes/shared.js';
 
@@ -73,6 +73,22 @@ export async function startWorkflowRun(state: AppState, opts: StartRunOptions): 
       } else if (node.kind === 'agent') {
         const r = await runAgentNode({
           node: node as AgentNode,
+          stdinText,
+          repoPath: repo.path,
+          outputDir: path.join(outputDir, attemptId),
+          state,
+          onStdout,
+          onStderr,
+        });
+        exitCode = r.exitCode;
+        stdoutInline = r.stdout.inline;
+        stdoutFile = r.stdout.filePath;
+        stderrInline = r.stderr.inline;
+        stderrFile = r.stderr.filePath;
+        durationMs = r.durationMs;
+      } else if (node.kind === 'mcp') {
+        const r = await runMcpNode({
+          node: node as McpNode,
           stdinText,
           repoPath: repo.path,
           outputDir: path.join(outputDir, attemptId),

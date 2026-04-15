@@ -1,6 +1,8 @@
 import { useEffect, useState, type FC, type ReactNode } from 'react';
 import Editor from '@monaco-editor/react';
-import type { Graph, GraphNode, ScriptNode, AgentNode, Edge } from '../types/workflow';
+import type { Graph, GraphNode, ScriptNode, AgentNode, McpNode, Edge } from '../types/workflow';
+import { mcpApi } from '../mcp/api';
+import type { McpServer } from '../mcp/types';
 
 interface Props {
   node: GraphNode;
@@ -16,6 +18,7 @@ const KIND_LABEL: Record<GraphNode['kind'], string> = {
   script: 'Script',
   agent: 'Agent',
   merge: 'Merge',
+  mcp: 'MCP',
 };
 
 export const WorkflowNodeEditor: FC<Props> = ({ node, graph, agentProfiles, onChange, onGraphChange, onDelete, onClose }) => (
@@ -72,6 +75,9 @@ export const WorkflowNodeEditor: FC<Props> = ({ node, graph, agentProfiles, onCh
             Concatenates incoming stdouts by their input order and pipes the result downstream.
           </p>
         </Section>
+      )}
+      {node.kind === 'mcp' && (
+        <McpSection node={node} onChange={onChange as (n: McpNode) => void} profiles={agentProfiles} />
       )}
 
       <InputsSection node={node} graph={graph} onGraphChange={onGraphChange} />
@@ -452,3 +458,45 @@ const AgentSection: FC<{ node: AgentNode; onChange: (n: AgentNode) => void; prof
     </Section>
   </>
 );
+
+const McpSection: FC<{ node: McpNode; onChange: (n: McpNode) => void; profiles: Array<{ id: string; name: string }> }> = ({ node, onChange, profiles }) => {
+  const [servers, setServers] = useState<McpServer[]>([]);
+
+  useEffect(() => {
+    mcpApi.list().then(setServers).catch(() => {});
+  }, []);
+
+  return (
+    <>
+      <Section title="MCP">
+        <Field label="Agent profile" hint="LLM used to interpret the prompt">
+          <Select
+            value={node.agentProfileId}
+            onChange={(v) => onChange({ ...node, agentProfileId: v })}
+            options={[{ v: '', label: '— select —' }, ...profiles.map((p) => ({ v: p.id, label: p.name }))]}
+          />
+        </Field>
+        <Field label="MCP server" hint="Exactly one MCP server is mounted for this node">
+          <Select
+            value={node.mcpServerId}
+            onChange={(v) => onChange({ ...node, mcpServerId: v })}
+            options={[
+              { v: '', label: '— select —' },
+              ...servers.map((s) => ({ v: s.id, label: `${s.name} (${s.catalog_id})` })),
+            ]}
+          />
+        </Field>
+      </Section>
+      <Section title="Prompt template">
+        <Field label="Template" hint="{input} is the concatenated parent stdout · {repo} is the repo path">
+          <textarea
+            value={node.promptTemplate}
+            onChange={(e) => onChange({ ...node, promptTemplate: e.target.value })}
+            placeholder="List your available tools and describe what you can do.&#10;&#10;{input}"
+            className="h-40 w-full resize-none rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-2.5 py-2 text-[12px] font-mono text-text-primary placeholder:text-text-muted transition focus:border-border-focus focus:outline-none focus:shadow-[0_0_0_3px_var(--color-brand-glow)]"
+          />
+        </Field>
+      </Section>
+    </>
+  );
+};

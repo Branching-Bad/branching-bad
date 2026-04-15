@@ -27,6 +27,7 @@ const KIND_GLYPH: Record<GraphNode['kind'], string> = {
   script: '‹›',
   agent: '◆',
   merge: '⑂',
+  mcp: '⚙',
 };
 
 const NODE_W = 196;

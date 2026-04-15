@@ -24,7 +24,14 @@ export interface AgentNode extends NodeBase {
 export interface MergeNode extends NodeBase {
   kind: 'merge';
 }
-export type GraphNode = ScriptNode | AgentNode | MergeNode;
+export interface McpNode extends NodeBase {
+  kind: 'mcp';
+  agentProfileId: string;
+  mcpServerId: string;
+  promptTemplate: string;
+}
+export type NodeKind = 'script' | 'agent' | 'merge' | 'mcp';
+export type GraphNode = ScriptNode | AgentNode | MergeNode | McpNode;
 
 export interface Edge {
   id: string;

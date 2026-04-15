@@ -20,16 +20,18 @@ interface Props {
   agentProfiles: Array<{ id: string; name: string }>;
 }
 
-const KIND_LABEL: Record<'script' | 'agent' | 'merge', string> = {
+const KIND_LABEL: Record<'script' | 'agent' | 'merge' | 'mcp', string> = {
   script: 'Script',
   agent: 'Agent',
   merge: 'Merge',
+  mcp: 'MCP',
 };
 
-const KIND_GLYPH: Record<'script' | 'agent' | 'merge', string> = {
+const KIND_GLYPH: Record<'script' | 'agent' | 'merge' | 'mcp', string> = {
   script: '‹›',
   agent: '◆',
   merge: '⑂',
+  mcp: '⚙',
 };
 
 export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
@@ -124,7 +126,7 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
     setSelectedNodeId(null);
   };
 
-  const addNode = (kind: 'script' | 'agent' | 'merge') => {
+  const addNode = (kind: 'script' | 'agent' | 'merge' | 'mcp') => {
     if (!selected) return;
     const id = crypto.randomUUID();
     const offset = selected.graph.nodes.length * 24;
@@ -135,6 +137,8 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
         ? { ...baseCommon, kind, lang: 'python', source: 'inline', code: '' }
         : kind === 'agent'
         ? { ...baseCommon, kind, agentProfileId: '', promptTemplate: '' }
+        : kind === 'mcp'
+        ? { ...baseCommon, kind, agentProfileId: '', mcpServerId: '', promptTemplate: '' }
         : { ...baseCommon, kind };
     void saveGraph({ ...selected.graph, nodes: [...selected.graph.nodes, newNode] });
     setSelectedNodeId(id);
@@ -265,7 +269,7 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
                 Add node
               </span>
               <div className="flex items-center gap-0.5 rounded-[var(--radius-md)] border border-border-default bg-surface-200 p-0.5">
-                {(['script', 'agent', 'merge'] as const).map((k) => (
+                {(['script', 'agent', 'merge', 'mcp'] as const).map((k) => (
                   <button
                     key={k}
                     onClick={() => addNode(k)}

@@ -1,6 +1,6 @@
 // server-ts/src/workflow/model.ts
 
-export type NodeKind = 'script' | 'agent' | 'merge';
+export type NodeKind = 'script' | 'agent' | 'merge' | 'mcp';
 export type OnFail = 'halt-subtree' | 'halt-all';
 export type Lang = 'python' | 'typescript' | 'csharp' | 'custom';
 export type SourceMode = 'inline' | 'file';
@@ -31,7 +31,14 @@ export interface MergeNode extends NodeBase {
   kind: 'merge';
 }
 
-export type GraphNode = ScriptNode | AgentNode | MergeNode;
+export interface McpNode extends NodeBase {
+  kind: 'mcp';
+  agentProfileId: string;   // LLM that interprets the prompt
+  mcpServerId: string;      // the specific MCP to mount (overrides profile's default MCPs)
+  promptTemplate: string;   // supports {input} and {repo}
+}
+
+export type GraphNode = ScriptNode | AgentNode | MergeNode | McpNode;
 
 export interface Edge {
   id: string;
