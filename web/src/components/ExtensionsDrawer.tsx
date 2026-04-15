@@ -3,6 +3,7 @@ import type { ProviderMeta } from "../types";
 import { getAllProviderUIs } from "../providers/registry";
 import { IconX, IconSettings } from "./icons";
 import { ProviderSettingsModal } from "./ProviderSettingsModal";
+import { McpTab } from "../mcp/McpTab";
 
 export function ExtensionsDrawer({
   open,
@@ -73,6 +74,10 @@ export function ExtensionsDrawer({
 
         {/* Provider sections */}
         <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+          <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-surface-0/40 p-3">
+            <McpTab />
+          </div>
+
           {(error || info) && (
             <div className="space-y-2">
               {error && (
