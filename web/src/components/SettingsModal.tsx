@@ -10,6 +10,7 @@ import { api } from "../api";
 import { IconX, IconRefresh, IconFolder } from "./icons";
 import { inputClass, selectClass, btnPrimary, btnSecondary } from "./shared";
 import { FolderPicker } from "./FolderPicker";
+import { AgentProfileMcpPanel } from "../mcp/AgentProfileMcpPanel";
 
 /* ── Inline Rule Editor Row ── */
 function RuleRow({
@@ -537,6 +538,16 @@ export function SettingsModal({
                     </span>
                   </button>
                 </div>
+                {selectedProfile && (
+                  <section className="space-y-2">
+                    <h4 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                      MCP servers
+                    </h4>
+                    <div className="rounded-[var(--radius-lg)] border border-border-default bg-surface-0/40 p-2">
+                      <AgentProfileMcpPanel profileId={selectedProfile.id} />
+                    </div>
+                  </section>
+                )}
               </div>
             )}
 
