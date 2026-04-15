@@ -46,16 +46,6 @@ export const planStatusColor = (status: string) => {
   }
 };
 
-export const planStatusIcon = (status: string): string => {
-  switch (status) {
-    case "approved": return "✓";
-    case "rejected": return "✕";
-    case "drafted": return "◇";
-    case "revise_requested": return "↻";
-    default: return "·";
-  }
-};
-
 export const runStatusColor = (status: string) => {
   const normalized = status.toLowerCase();
   if (normalized.includes("done") || normalized.includes("success")) return "border-status-success/30 bg-status-success-soft text-status-success";
@@ -64,10 +54,3 @@ export const runStatusColor = (status: string) => {
   return "border-border-strong bg-surface-300 text-text-secondary";
 };
 
-export const runStatusIcon = (status: string): string => {
-  const normalized = status.toLowerCase();
-  if (normalized.includes("done") || normalized.includes("success")) return "✓";
-  if (normalized.includes("cancel")) return "⊘";
-  if (normalized.includes("fail") || normalized.includes("error")) return "✕";
-  return "·";
-};
