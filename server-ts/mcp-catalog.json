@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "entries": {
+    "aws-cloudwatch": {
+      "displayName": "AWS CloudWatch Logs",
+      "publisher": "AWS Labs",
+      "description": "Query CloudWatch log groups and events",
+      "docsUrl": "https://github.com/awslabs/mcp",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.cloudwatch-logs-mcp-server"],
+      "envSchema": {
+        "type": "object",
+        "required": ["AWS_REGION"],
+        "properties": {
+          "AWS_REGION": { "type": "string", "title": "Region", "default": "us-east-1" },
+          "AWS_ACCESS_KEY_ID": { "type": "string", "title": "Access Key ID", "format": "secret" },
+          "AWS_SECRET_ACCESS_KEY": { "type": "string", "title": "Secret Access Key", "format": "secret" },
+          "AWS_PROFILE": { "type": "string", "title": "Profile (alternative to keys)" }
+        }
+      }
+    },
+    "github": {
+      "displayName": "GitHub",
+      "publisher": "GitHub",
+      "description": "Repository, issues, pull requests",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/github",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "envSchema": {
+        "type": "object",
+        "required": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+        "properties": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": { "type": "string", "title": "Personal Access Token", "format": "secret" }
+        }
+      }
+    },
+    "postgres": {
+      "displayName": "PostgreSQL",
+      "publisher": "Model Context Protocol",
+      "description": "Read-only access to a Postgres database",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "envSchema": {
+        "type": "object",
+        "required": ["POSTGRES_CONNECTION_STRING"],
+        "properties": {
+          "POSTGRES_CONNECTION_STRING": {
+            "type": "string",
+            "title": "Connection URL",
+            "format": "secret",
+            "description": "postgres://user:pass@host:5432/db"
+          }
+        }
+      }
+    },
+    "slack": {
+      "displayName": "Slack",
+      "publisher": "Model Context Protocol",
+      "description": "Read channels, send messages",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/slack",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "envSchema": {
+        "type": "object",
+        "required": ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"],
+        "properties": {
+          "SLACK_BOT_TOKEN": { "type": "string", "title": "Bot Token", "format": "secret" },
+          "SLACK_TEAM_ID":   { "type": "string", "title": "Team ID" }
+        }
+      }
+    },
+    "filesystem": {
+      "displayName": "Filesystem",
+      "publisher": "Model Context Protocol",
+      "description": "Scoped filesystem access",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "envSchema": {
+        "type": "object",
+        "properties": {
+          "ALLOWED_PATHS": {
+            "type": "array",
+            "title": "Allowed paths (absolute)",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "custom": {
+      "displayName": "Custom MCP",
+      "description": "Any MCP server, declared by hand",
+      "transport": "stdio",
+      "envSchema": {
+        "type": "object",
+        "required": ["command"],
+        "properties": {
+          "command": { "type": "string", "title": "Command" },
+          "args":    { "type": "array",  "title": "Arguments", "items": { "type": "string" } },
+          "env":     { "type": "object", "title": "Environment", "additionalProperties": { "type": "string" } }
+        }
+      }
+    }
+  }
+}
