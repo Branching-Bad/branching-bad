@@ -15,7 +15,7 @@ interface Props {
 /** Apple systemColor palette, dark. */
 const STATUS_COLOR: Record<AttemptStatus, string> = {
   pending: 'rgba(235, 235, 245, 0.3)',
-  running: '#0A84FF',
+  running: '#FD9201',
   done: '#30D158',
   failed: '#FF453A',
   skipped: 'rgba(235, 235, 245, 0.18)',
@@ -92,7 +92,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .merge(edgeSel as any)
       .attr('stroke', (d) =>
         d.id === selectedEdgeId
-          ? '#0A84FF'
+          ? '#FD9201'
           : d.required
           ? 'rgba(235, 235, 245, 0.45)'
           : 'rgba(235, 235, 245, 0.22)',
@@ -124,7 +124,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .merge(arrowSel as any)
       .attr('fill', (d) =>
         d.id === selectedEdgeId
-          ? '#0A84FF'
+          ? '#FD9201'
           : d.required
           ? 'rgba(235, 235, 245, 0.45)'
           : 'rgba(235, 235, 245, 0.22)',
@@ -147,7 +147,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .data(badgeEdges, (d) => d.id);
     orderGroupSel.exit().remove();
     const orderEnter = orderGroupSel.enter().append('g').attr('class', 'edge-order').style('pointer-events', 'none');
-    orderEnter.append('circle').attr('r', 8).attr('fill', '#0A84FF').attr('stroke', '#1C1C1E').attr('stroke-width', 1.5);
+    orderEnter.append('circle').attr('r', 8).attr('fill', '#FD9201').attr('stroke', '#1C1C1E').attr('stroke-width', 1.5);
     orderEnter.append('text')
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'central')
@@ -187,7 +187,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('height', NODE_H + 6)
       .attr('rx', RX + 3)
       .attr('fill', 'none')
-      .attr('stroke', '#0A84FF')
+      .attr('stroke', '#FD9201')
       .attr('stroke-width', 2)
       .attr('opacity', 0);
 
@@ -211,7 +211,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('width', 26)
       .attr('height', 20)
       .attr('rx', 6)
-      .attr('fill', 'rgba(10, 132, 255, 0.12)');
+      .attr('fill', 'rgba(253, 146, 1, 0.12)');
     ent
       .append('text')
       .attr('class', 'kind-glyph')
@@ -219,7 +219,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('y', 26)
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'middle')
-      .attr('fill', '#0A84FF')
+      .attr('fill', '#FD9201')
       .attr('font-size', 11)
       .attr('font-weight', 600);
 
@@ -296,7 +296,7 @@ export const WorkflowCanvas: FC<Props> = ({
     merged
       .select('rect.bg')
       .attr('stroke', (d) =>
-        d.id === selectedNodeId ? '#0A84FF' : 'rgba(84, 84, 88, 0.65)',
+        d.id === selectedNodeId ? '#FD9201' : 'rgba(84, 84, 88, 0.65)',
       )
       .attr('stroke-width', (d) => (d.id === selectedNodeId ? 1.5 : 1));
 
@@ -350,7 +350,7 @@ export const WorkflowCanvas: FC<Props> = ({
             d3.select(rootRef.current!)
               .append('path')
               .attr('class', 'temp-edge')
-              .attr('stroke', '#0A84FF')
+              .attr('stroke', '#FD9201')
               .attr('stroke-dasharray', '4 4')
               .attr('stroke-width', 2)
               .attr('fill', 'none')
