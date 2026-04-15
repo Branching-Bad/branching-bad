@@ -45,7 +45,13 @@ interface Session {
   bastion?: Client;
 }
 
-export function createSshManager({ hostKeys }: { hostKeys: HostKeyStore }) {
+export function createSshManager({
+  hostKeys,
+  onSessionClosed,
+}: {
+  hostKeys: HostKeyStore;
+  onSessionClosed?: (sessionId: string) => void;
+}) {
   const sessions = new Map<string, Session>();
 
   function buildAuth(conn: SshConnection, password?: string, passphrase?: string) {
@@ -136,6 +142,7 @@ export function createSshManager({ hostKeys }: { hostKeys: HostKeyStore }) {
     client.on('close', () => {
       sessions.delete(sessionId);
       session.bastion?.end();
+      onSessionClosed?.(sessionId);
     });
     return { sessionId };
   }
