@@ -12,7 +12,7 @@
   /* ── Border palette (subtle, layered) ── */
   --color-border-default: rgba(255, 255, 255, 0.06);
   --color-border-strong: rgba(255, 255, 255, 0.1);
-  --color-border-focus: rgba(62, 207, 142, 0.5);
+  --color-border-focus: rgba(253, 146, 1, 0.5);
 
   /* ── Text palette ── */
   --color-text-primary: #ebebeb;
@@ -20,14 +20,14 @@
   --color-text-muted: #636363;
 
   /* ── Brand (accent) ── */
-  --color-brand: #3ECF8E;
-  --color-brand-dark: #006239;
-  --color-brand-glow: rgba(62, 207, 142, 0.25);
-  --color-brand-tint: rgba(62, 207, 142, 0.08);
+  --color-brand: #FD9201;
+  --color-brand-dark: #B25400;
+  --color-brand-glow: rgba(253, 146, 1, 0.25);
+  --color-brand-tint: rgba(253, 146, 1, 0.10);
 
   /* ── Semantic: status colors (colorblind-safe contrast) ── */
-  --color-status-success: #3ECF8E;
-  --color-status-success-soft: rgba(62, 207, 142, 0.1);
+  --color-status-success: #30D158;
+  --color-status-success-soft: rgba(48, 209, 88, 0.1);
   --color-status-warning: #E5A913;
   --color-status-warning-soft: rgba(229, 169, 19, 0.1);
   --color-status-danger: #EF6461;
@@ -49,7 +49,7 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-glow: 0 0 20px rgba(62, 207, 142, 0.06);
+  --shadow-glow: 0 0 20px rgba(253, 146, 1, 0.06);
 
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-up: slide-up 0.25s ease-out;
