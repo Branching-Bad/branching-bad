@@ -1,6 +1,7 @@
 import { type FC, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import type { Graph, GraphNode, Edge, AttemptStatus } from '../types/workflow';
+import { CANVAS } from '../theme/canvas';
 
 interface Props {
   graph: Graph;
@@ -14,12 +15,12 @@ interface Props {
 
 /** Apple systemColor palette, dark. */
 const STATUS_COLOR: Record<AttemptStatus, string> = {
-  pending: 'rgba(235, 235, 245, 0.3)',
+  pending: CANVAS.textMuted30,
   running: '#0A84FF',
-  done: '#30D158',
-  failed: '#FF453A',
-  skipped: 'rgba(235, 235, 245, 0.18)',
-  cancelled: 'rgba(235, 235, 245, 0.18)',
+  done: CANVAS.statusDone,
+  failed: CANVAS.statusFailed,
+  skipped: CANVAS.muted18,
+  cancelled: CANVAS.muted18,
 };
 
 const KIND_GLYPH: Record<GraphNode['kind'], string> = {
@@ -94,8 +95,8 @@ export const WorkflowCanvas: FC<Props> = ({
         d.id === selectedEdgeId
           ? '#0A84FF'
           : d.required
-          ? 'rgba(235, 235, 245, 0.45)'
-          : 'rgba(235, 235, 245, 0.22)',
+          ? CANVAS.muted45
+          : CANVAS.muted22,
       )
       .attr('stroke-width', (d) => (d.id === selectedEdgeId ? 2.5 : 1.75))
       .attr('stroke-dasharray', (d) => (d.required ? '' : '4 4'))
@@ -126,8 +127,8 @@ export const WorkflowCanvas: FC<Props> = ({
         d.id === selectedEdgeId
           ? '#0A84FF'
           : d.required
-          ? 'rgba(235, 235, 245, 0.45)'
-          : 'rgba(235, 235, 245, 0.22)',
+          ? CANVAS.muted45
+          : CANVAS.muted22,
       )
       .attr('transform', (d) => {
         const to = graph.nodes.find((n) => n.id === d.to);
@@ -147,11 +148,11 @@ export const WorkflowCanvas: FC<Props> = ({
       .data(badgeEdges, (d) => d.id);
     orderGroupSel.exit().remove();
     const orderEnter = orderGroupSel.enter().append('g').attr('class', 'edge-order').style('pointer-events', 'none');
-    orderEnter.append('circle').attr('r', 8).attr('fill', '#0A84FF').attr('stroke', '#1C1C1E').attr('stroke-width', 1.5);
+    orderEnter.append('circle').attr('r', 8).attr('fill', '#0A84FF').attr('stroke', CANVAS.surface100).attr('stroke-width', 1.5);
     orderEnter.append('text')
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'central')
-      .attr('fill', '#FFFFFF')
+      .attr('fill', CANVAS.textPrimary)
       .attr('font-size', 9)
       .attr('font-weight', 700);
 
@@ -198,8 +199,8 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('width', NODE_W)
       .attr('height', NODE_H)
       .attr('rx', RX)
-      .attr('fill', '#2C2C2E') /* surface-200 */
-      .attr('stroke', 'rgba(84, 84, 88, 0.65)')
+      .attr('fill', CANVAS.surface200) /* surface-200 */
+      .attr('stroke', CANVAS.borderStrong)
       .attr('stroke-width', 1);
 
     // top-left kind glyph pill
@@ -229,7 +230,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('class', 'label')
       .attr('x', 48)
       .attr('y', 28)
-      .attr('fill', '#FFFFFF')
+      .attr('fill', CANVAS.textPrimary)
       .attr('font-size', 14)
       .attr('font-weight', 600)
       .attr('font-family',
@@ -241,7 +242,7 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('class', 'kind-text')
       .attr('x', 48)
       .attr('y', 48)
-      .attr('fill', 'rgba(235, 235, 245, 0.6)')
+      .attr('fill', CANVAS.textSecondary)
       .attr('font-size', 11)
       .attr('font-weight', 500)
       .attr('letter-spacing', '0.02em');
@@ -261,8 +262,8 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('cx', 0)
       .attr('cy', NODE_H / 2)
       .attr('r', 5)
-      .attr('fill', '#1C1C1E')
-      .attr('stroke', 'rgba(235, 235, 245, 0.45)')
+      .attr('fill', CANVAS.surface100)
+      .attr('stroke', CANVAS.muted45)
       .attr('stroke-width', 1.5);
 
     // output anchor
@@ -272,8 +273,8 @@ export const WorkflowCanvas: FC<Props> = ({
       .attr('cx', NODE_W)
       .attr('cy', NODE_H / 2)
       .attr('r', 5)
-      .attr('fill', '#1C1C1E')
-      .attr('stroke', 'rgba(235, 235, 245, 0.45)')
+      .attr('fill', CANVAS.surface100)
+      .attr('stroke', CANVAS.muted45)
       .attr('stroke-width', 1.5)
       .style('cursor', 'crosshair');
 
@@ -296,7 +297,7 @@ export const WorkflowCanvas: FC<Props> = ({
     merged
       .select('rect.bg')
       .attr('stroke', (d) =>
-        d.id === selectedNodeId ? '#0A84FF' : 'rgba(84, 84, 88, 0.65)',
+        d.id === selectedNodeId ? '#0A84FF' : CANVAS.borderStrong,
       )
       .attr('stroke-width', (d) => (d.id === selectedNodeId ? 1.5 : 1));
 
@@ -397,7 +398,7 @@ export const WorkflowCanvas: FC<Props> = ({
         className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage:
-            'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)',
+            `radial-gradient(${CANVAS.dotGrid} 1px, transparent 1px)`,
           backgroundSize: '24px 24px',
         }}
       />
