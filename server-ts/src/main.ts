@@ -32,6 +32,7 @@ import './db/mcp.js';
 
 import { ProcessManager, recoverOrphans } from './processManager.js';
 import { ProviderRegistry, registerAll } from './provider/index.js';
+import { createSecretStore } from './mcp/secretStore.js';
 import { createApp } from './app.js';
 import { spawnAutostartWorker } from './routes/autostart.js';
 import { spawnProviderSyncWorker } from './provider/syncRoutes.js';
@@ -84,12 +85,16 @@ async function main() {
   const registry = new ProviderRegistry();
   registerAll(registry);
 
+  // Initialize secret store
+  const secretStore = createSecretStore(getAppDataDir());
+
   // Build app state
   const state: AppState = {
     db,
     processManager,
     registry,
     setupJobs: new Map(),
+    secretStore,
   };
 
   // Initialize workflow cron scheduler
