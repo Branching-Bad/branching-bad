@@ -167,7 +167,6 @@ export function sshRoutes(): Router {
     m.pty.closeAllForSession(req.params.sessionId);
     await m.ssh.disconnect(req.params.sessionId);
     res.json({ ok: true });
-    broadcastGlobalEvent({ type: 'ssh_sessions_changed' });
   });
 
   router.get('/api/ssh/sessions', (req, res) => {
