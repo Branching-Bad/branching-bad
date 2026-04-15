@@ -54,8 +54,10 @@ export default function App() {
   const [editTaskModalOpen, setEditTaskModalOpen] = useState(false);
   const [analystOpen, setAnalystOpen] = useState(false);
   const [taskPrefill, setTaskPrefill] = useState<{ title: string; description: string } | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const { route, navigate } = useHashRoute();
+  useEffect(() => { setMobileNavOpen(false); }, [route]);
   const [repoSwitcherOpen, setRepoSwitcherOpen] = useState(false);
   useGlobalShortcuts(navigate, () => setRepoSwitcherOpen(true));
 
@@ -238,21 +240,43 @@ export default function App() {
   // ── Render ──
   return (
     <div className="flex h-screen overflow-hidden bg-surface-0 text-text-primary">
-      <SideRail
-        route={route}
-        navigate={navigate}
-        repos={boot.repos}
-        selectedRepoId={repo.selectedRepoId}
-        setSelectedRepoId={repo.setSelectedRepoId}
-        providerItemCount={totalProviderItemCount}
-        repoSwitcherOpen={repoSwitcherOpen}
-        setRepoSwitcherOpen={setRepoSwitcherOpen}
-        onClearQueue={() => void task.clearAllPipelines()}
-        clearQueueDisabled={busy}
-        modLabel={SHORTCUT_LABELS.modKey}
-      />
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
 
-      <main className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${detailsOpen ? "lg:pr-[540px]" : ""}`}>
+      <div
+        className={`fixed inset-y-0 left-0 z-50 transition-transform lg:static lg:z-auto lg:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        } lg:!translate-x-0`}
+      >
+        <SideRail
+          route={route}
+          navigate={navigate}
+          repos={boot.repos}
+          selectedRepoId={repo.selectedRepoId}
+          setSelectedRepoId={repo.setSelectedRepoId}
+          providerItemCount={totalProviderItemCount}
+          repoSwitcherOpen={repoSwitcherOpen}
+          setRepoSwitcherOpen={setRepoSwitcherOpen}
+          onClearQueue={() => void task.clearAllPipelines()}
+          clearQueueDisabled={busy}
+          modLabel={SHORTCUT_LABELS.modKey}
+        />
+      </div>
+
+      <main className={`relative flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${detailsOpen ? "lg:pr-[540px]" : ""}`}>
+        <button
+          onClick={() => setMobileNavOpen(true)}
+          className="absolute left-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-md border border-border-default bg-surface-200 text-text-secondary shadow-sm lg:hidden"
+          aria-label="Open navigation"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </button>
         {(error || info) && (
           <div className="px-6 pt-4">
             {error && (
