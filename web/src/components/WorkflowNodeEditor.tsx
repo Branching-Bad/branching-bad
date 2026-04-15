@@ -151,6 +151,7 @@ const ScriptSection: FC<{ node: ScriptNode; onChange: (n: ScriptNode) => void }>
           options={[
             { v: 'python', label: 'Python' },
             { v: 'typescript', label: 'TypeScript' },
+            { v: 'csharp', label: 'C#' },
             { v: 'custom', label: 'Custom' },
           ]}
         />
@@ -204,7 +205,11 @@ const ScriptSection: FC<{ node: ScriptNode; onChange: (n: ScriptNode) => void }>
 
 const CodeSection: FC<{ node: ScriptNode; onChange: (n: ScriptNode) => void }> = ({ node, onChange }) => {
   const [expanded, setExpanded] = useState(false);
-  const monacoLang = node.lang === 'python' ? 'python' : node.lang === 'typescript' ? 'typescript' : 'shell';
+  const monacoLang =
+    node.lang === 'python'     ? 'python'     :
+    node.lang === 'typescript' ? 'typescript' :
+    node.lang === 'csharp'     ? 'csharp'     :
+    'shell';
 
   useEffect(() => {
     if (!expanded) return;

@@ -35,6 +35,10 @@ function planCommand(node: ScriptNode, resolvedFile: string): CommandPlan {
   if (node.lang === 'typescript') {
     return { bin: 'npx', args: ['-y', 'tsx', resolvedFile], ext: '.ts' };
   }
+  if (node.lang === 'csharp') {
+    // dotnet-script interprets .csx files. Install: dotnet tool install -g dotnet-script
+    return { bin: 'dotnet', args: ['script', resolvedFile], ext: '.csx' };
+  }
   const template = node.runCommand ?? '';
   const parts = template.split(/\s+/).filter(Boolean);
   if (parts.length === 0) throw new Error('empty runCommand');

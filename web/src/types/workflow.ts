@@ -1,5 +1,5 @@
 export type OnFail = 'halt-subtree' | 'halt-all';
-export type Lang = 'python' | 'typescript' | 'custom';
+export type Lang = 'python' | 'typescript' | 'csharp' | 'custom';
 export type SourceMode = 'inline' | 'file';
 
 export interface NodeBase {
