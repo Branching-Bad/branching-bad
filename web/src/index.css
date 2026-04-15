@@ -379,3 +379,8 @@
 .diff-viewer-content .token.namespace {
   color: #8b949e;
 }
+
+@keyframes ssh-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 0.9; transform: scale(1.25); }
+}
