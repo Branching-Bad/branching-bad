@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { api } from "./api";
-import { IconSettings, IconExtensions, IconAnalyst } from "./components/icons";
+import { IconSettings, IconExtensions, IconAnalyst, IconBoard, IconWorkflow } from "./components/icons";
 import { SettingsModal } from "./components/SettingsModal";
 import { ExtensionsDrawer } from "./components/ExtensionsDrawer";
 import { CreateTaskModal } from "./components/CreateTaskModal";
@@ -249,17 +249,20 @@ export default function App() {
             <div className="ml-2 flex items-center gap-0.5 rounded-full border border-border-default bg-surface-200 p-0.5">
               {(["board", "analyst", "workflow"] as const).map((tab) => {
                 const labels: Record<typeof tab, string> = { board: "Board", analyst: "Task Analyst", workflow: "Workflow" };
+                const active = topTab === tab;
+                const Icon = tab === "board" ? IconBoard : tab === "analyst" ? IconAnalyst : IconWorkflow;
+                const iconTone = active ? "text-brand" : "text-text-muted";
                 return (
                   <button
                     key={tab}
                     onClick={() => setTopTab(tab)}
                     className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition ${
-                      topTab === tab
+                      active
                         ? "bg-surface-0 text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
                         : "text-text-muted hover:text-text-secondary"
                     }`}
                   >
-                    {tab === "analyst" && <IconAnalyst className="w-3 h-3 text-status-warning" />}
+                    <Icon className={`w-3 h-3 ${iconTone}`} />
                     {labels[tab]}
                   </button>
                 );

@@ -143,6 +143,27 @@ export function IconAnalyst({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+export function IconBoard({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75A1.5 1.5 0 0 1 5.25 5.25h1.5A1.5 1.5 0 0 1 8.25 6.75v10.5a1.5 1.5 0 0 1-1.5 1.5h-1.5a1.5 1.5 0 0 1-1.5-1.5V6.75Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 6.75a1.5 1.5 0 0 1 1.5-1.5h1.5a1.5 1.5 0 0 1 1.5 1.5v6.5a1.5 1.5 0 0 1-1.5 1.5h-1.5a1.5 1.5 0 0 1-1.5-1.5V6.75Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6.75a1.5 1.5 0 0 1 1.5-1.5h1.5a1.5 1.5 0 0 1 1.5 1.5v3.5a1.5 1.5 0 0 1-1.5 1.5h-1.5a1.5 1.5 0 0 1-1.5-1.5V6.75Z" />
+    </svg>
+  );
+}
+
+export function IconWorkflow({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <circle cx="5.5" cy="6.5" r="2.25" />
+      <circle cx="18.5" cy="6.5" r="2.25" />
+      <circle cx="12" cy="17.5" r="2.25" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.6 8A5 5 0 0 0 12 15.25M16.4 8A5 5 0 0 1 12 15.25" />
+    </svg>
+  );
+}
+
 export function IconBolt({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
