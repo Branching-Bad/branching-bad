@@ -135,6 +135,36 @@ export const WorkflowCanvas: FC<Props> = ({
         return `translate(${to.position.x - 2}, ${to.position.y + NODE_H / 2})`;
       });
 
+    // Input order badges at target end (visible when target has 2+ inputs)
+    const incomingCountByNode = new Map<string, number>();
+    for (const e of graph.edges) {
+      incomingCountByNode.set(e.to, (incomingCountByNode.get(e.to) ?? 0) + 1);
+    }
+    const badgeEdges = graph.edges.filter((e) => (incomingCountByNode.get(e.to) ?? 0) >= 2);
+
+    const orderGroupSel = root
+      .selectAll<SVGGElement, Edge>('g.edge-order')
+      .data(badgeEdges, (d) => d.id);
+    orderGroupSel.exit().remove();
+    const orderEnter = orderGroupSel.enter().append('g').attr('class', 'edge-order').style('pointer-events', 'none');
+    orderEnter.append('circle').attr('r', 8).attr('fill', '#0A84FF').attr('stroke', '#1C1C1E').attr('stroke-width', 1.5);
+    orderEnter.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'central')
+      .attr('fill', '#FFFFFF')
+      .attr('font-size', 9)
+      .attr('font-weight', 700);
+
+    const orderMerged = orderEnter.merge(orderGroupSel as any);
+    orderMerged
+      .attr('transform', (d) => {
+        const to = graph.nodes.find((n) => n.id === d.to);
+        if (!to) return '';
+        // place just to the left of the target input anchor
+        return `translate(${to.position.x - 14}, ${to.position.y + NODE_H / 2})`;
+      });
+    orderMerged.select('text').text((d) => String(d.inputOrder));
+
     // ── Nodes ────────────────────────────────────────────
     const nodeSel = root
       .selectAll<SVGGElement, GraphNode>('g.node')

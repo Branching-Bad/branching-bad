@@ -308,8 +308,10 @@ export const WorkflowTab: FC<Props> = ({ repoId, agentProfiles }) => {
               {selectedNode && !selectedEdge && (
                 <WorkflowNodeEditor
                   node={selectedNode}
+                  graph={selected.graph}
                   agentProfiles={agentProfiles}
                   onChange={handleNodeChange}
+                  onGraphChange={(next) => void saveGraph(next)}
                   onDelete={handleNodeDelete}
                   onClose={() => setSelectedNodeId(null)}
                 />

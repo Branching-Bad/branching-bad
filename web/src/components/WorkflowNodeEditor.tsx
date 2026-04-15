@@ -1,11 +1,13 @@
 import { useEffect, useState, type FC, type ReactNode } from 'react';
 import Editor from '@monaco-editor/react';
-import type { GraphNode, ScriptNode, AgentNode } from '../types/workflow';
+import type { Graph, GraphNode, ScriptNode, AgentNode, Edge } from '../types/workflow';
 
 interface Props {
   node: GraphNode;
+  graph: Graph;
   agentProfiles: Array<{ id: string; name: string }>;
   onChange: (next: GraphNode) => void;
+  onGraphChange: (next: Graph) => void;
   onDelete: () => void;
   onClose: () => void;
 }
@@ -16,7 +18,7 @@ const KIND_LABEL: Record<GraphNode['kind'], string> = {
   merge: 'Merge',
 };
 
-export const WorkflowNodeEditor: FC<Props> = ({ node, agentProfiles, onChange, onDelete, onClose }) => (
+export const WorkflowNodeEditor: FC<Props> = ({ node, graph, agentProfiles, onChange, onGraphChange, onDelete, onClose }) => (
   <aside className="m-3 flex w-[380px] shrink-0 flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-default bg-surface-100 shadow-[var(--shadow-md)]">
     <header className="flex items-center justify-between gap-2 border-b border-border-default px-4 py-3">
       <div className="flex items-center gap-2">
@@ -68,10 +70,11 @@ export const WorkflowNodeEditor: FC<Props> = ({ node, agentProfiles, onChange, o
         <Section title="Merge">
           <p className="text-[12px] leading-relaxed text-text-secondary">
             Concatenates incoming stdouts by their input order and pipes the result downstream.
-            Configure input order on each incoming edge.
           </p>
         </Section>
       )}
+
+      <InputsSection node={node} graph={graph} onGraphChange={onGraphChange} />
     </div>
 
     <footer className="border-t border-border-default px-4 py-3">
@@ -140,6 +143,122 @@ const Select: FC<{ value: string; onChange: (v: string) => void; options: Array<
 );
 
 // ── sections ─────────────────────────────────────────────────────────────────
+
+const InputsSection: FC<{ node: GraphNode; graph: Graph; onGraphChange: (g: Graph) => void }> = ({ node, graph, onGraphChange }) => {
+  const incoming = graph.edges
+    .filter((e) => e.to === node.id)
+    .sort((a, b) => a.inputOrder - b.inputOrder);
+
+  if (incoming.length === 0) return null;
+
+  const nodeLabel = (id: string) => graph.nodes.find((n) => n.id === id)?.label ?? id.slice(0, 6);
+
+  const renumber = (edges: Edge[]): Edge[] => {
+    const others = graph.edges.filter((e) => e.to !== node.id);
+    const remapped = edges.map((e, i) => ({ ...e, inputOrder: i + 1 }));
+    return [...others, ...remapped];
+  };
+
+  const move = (idx: number, dir: -1 | 1) => {
+    const next = [...incoming];
+    const j = idx + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[idx], next[j]] = [next[j], next[idx]];
+    onGraphChange({ ...graph, edges: renumber(next) });
+  };
+
+  const toggleRequired = (edgeId: string) => {
+    const next = incoming.map((e) => (e.id === edgeId ? { ...e, required: !e.required } : e));
+    onGraphChange({ ...graph, edges: renumber(next) });
+  };
+
+  const remove = (edgeId: string) => {
+    const next = incoming.filter((e) => e.id !== edgeId);
+    onGraphChange({ ...graph, edges: renumber(next) });
+  };
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+          Inputs
+          <span className="ml-1.5 font-normal normal-case tracking-normal text-text-muted/70">
+            stdin order
+          </span>
+        </h3>
+        <span className="text-[10px] text-text-muted">{incoming.length}</span>
+      </div>
+      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-surface-0/50">
+        {incoming.map((edge, idx) => (
+          <div
+            key={edge.id}
+            className={`flex items-center gap-2 px-2.5 py-1.5 text-[12px] ${
+              idx > 0 ? 'border-t border-border-default/50' : ''
+            }`}
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-tint text-[10px] font-semibold text-brand">
+              {edge.inputOrder}
+            </span>
+            <span className="flex-1 truncate text-text-primary" title={nodeLabel(edge.from)}>
+              {nodeLabel(edge.from)}
+            </span>
+            <button
+              type="button"
+              onClick={() => toggleRequired(edge.id)}
+              title={edge.required ? 'Required — failed source skips this node' : 'Optional — failed source does not block this node'}
+              className={`rounded-full px-1.5 py-0 text-[9px] font-medium uppercase tracking-wider transition ${
+                edge.required
+                  ? 'bg-status-warning-soft text-status-warning hover:bg-status-warning/20'
+                  : 'bg-surface-200 text-text-muted hover:bg-surface-300 hover:text-text-secondary'
+              }`}
+            >
+              {edge.required ? 'req' : 'opt'}
+            </button>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => move(idx, -1)}
+                disabled={idx === 0}
+                aria-label="Move up"
+                className="flex h-5 w-5 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                  <path d="M2.5 6L5 3.5L7.5 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => move(idx, 1)}
+                disabled={idx === incoming.length - 1}
+                aria-label="Move down"
+                className="flex h-5 w-5 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-200 hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                  <path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(edge.id)}
+                aria-label="Remove input"
+                className="flex h-5 w-5 items-center justify-center rounded-full text-text-muted transition hover:bg-status-danger/20 hover:text-status-danger"
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                  <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {incoming.length > 1 && (
+        <p className="px-1 text-[10px] leading-relaxed text-text-muted">
+          Parent stdouts are concatenated in this order and piped to stdin. Use ↑/↓ to reorder.
+        </p>
+      )}
+    </section>
+  );
+};
 
 const ScriptSection: FC<{ node: ScriptNode; onChange: (n: ScriptNode) => void }> = ({ node, onChange }) => (
   <>
