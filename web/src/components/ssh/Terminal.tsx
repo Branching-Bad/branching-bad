@@ -18,6 +18,8 @@ export function Terminal({
   onClose: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -50,7 +52,7 @@ export function Terminal({
         }
       } catch { /* ignore */ }
     };
-    ws.onclose = () => { onClose(); };
+    ws.onclose = () => { onCloseRef.current(); };
 
     const sendWrite = (data: string) => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -75,7 +77,7 @@ export function Terminal({
       try { ws.close(); } catch { /* ignore */ }
       term.dispose();
     };
-  }, [ptyId, onClose]);
+  }, [ptyId]);
 
   return <div ref={containerRef} className={active ? "h-full w-full" : "hidden h-full w-full"} />;
 }

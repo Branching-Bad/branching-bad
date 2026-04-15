@@ -16,7 +16,7 @@ export interface CreateConnectionInput {
   forwards: Omit<SshForward, 'id' | 'connectionId' | 'createdAt'>[];
 }
 
-export function useSshConnections(opts: { setError: (msg: string) => void }) {
+export function useSshConnections({ setError }: { setError: (msg: string) => void }) {
   const [connections, setConnections] = useState<SshConnection[]>([]);
   const [groups, setGroups] = useState<SshGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,11 +31,11 @@ export function useSshConnections(opts: { setError: (msg: string) => void }) {
       setConnections(c.connections ?? []);
       setGroups(g.groups ?? []);
     } catch (e) {
-      opts.setError((e as Error).message);
+      setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [opts]);
+  }, [setError]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 

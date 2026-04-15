@@ -5,26 +5,24 @@ import { ConnectionDetail } from "../components/ssh/ConnectionDetail";
 import { ConnectionFormModal, type ConnectionFormValue } from "../components/ssh/ConnectionFormModal";
 import { HostKeyPromptModal } from "../components/ssh/HostKeyPromptModal";
 import { MigrationBanner } from "../components/ssh/MigrationBanner";
-import type { UseSshConnections, CreateConnectionInput } from "../hooks/useSshConnections";
+import { useSshConnections, type CreateConnectionInput } from "../hooks/useSshConnections";
+import { useSshPty } from "../hooks/useSshPty";
+import { useSshMigration } from "../hooks/useSshMigration";
 import type { UseSshSessions } from "../hooks/useSshSessions";
-import type { UseSshPty } from "../hooks/useSshPty";
-import type { UseSshMigration } from "../hooks/useSshMigration";
 
 export function SshView({
-  sshConnections,
   sshSessions,
-  sshPty,
-  migration,
   setInfo,
   setError,
 }: {
-  sshConnections: UseSshConnections;
   sshSessions: UseSshSessions;
-  sshPty: UseSshPty;
-  migration: UseSshMigration;
   setInfo: (m: string) => void;
   setError: (m: string) => void;
 }) {
+  const sshConnections = useSshConnections({ setError });
+  const sshPty = useSshPty();
+  const migration = useSshMigration();
+
   const { connections, groups, create, update, remove, createGroup, refresh: refreshConnections } = sshConnections;
   const { sessions, connect, approveHostKey } = sshSessions;
 

@@ -56,14 +56,15 @@ export function ConnectionDetail({
     }
   }, [sessions, conn.id, tabs, activeTabId]);
 
+  const { getForwardStatus } = sshSessions;
   useEffect(() => {
     const mine = sessions.filter((s) => s.connectionId === conn.id);
     if (mine.length === 0) { setForwardStatuses([]); return; }
     let cancelled = false;
-    Promise.all(mine.map((s) => sshSessions.getForwardStatus(s.sessionId)))
+    Promise.all(mine.map((s) => getForwardStatus(s.sessionId)))
       .then((lists) => { if (!cancelled) setForwardStatuses(lists.flat()); });
     return () => { cancelled = true; };
-  }, [sessions, conn.id, sshSessions]);
+  }, [sessions, conn.id, getForwardStatus]);
 
   const newSession = useCallback(async () => {
     if (connecting) return;
