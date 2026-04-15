@@ -6,6 +6,7 @@ import {
   launchSystemTerminal, exportAll, importAll, detectSshmaster, importSshmaster,
 } from '../ssh/index.js';
 import { encrypt, decrypt } from '../ssh/crypto.js';
+import { broadcastGlobalEvent } from '../websocket.js';
 
 export function sshRoutes(): Router {
   const router = Router();
@@ -144,6 +145,7 @@ export function sshRoutes(): Router {
         catch (e: any) { m.forwards.recordError(sessionId, f.id, e.message); }
       }
       res.json({ sessionId });
+      broadcastGlobalEvent({ type: 'ssh_sessions_changed' });
     } catch (e: any) {
       state.db.appendSshHistory({ connectionId: conn.id, attemptedAt: startedAt.toISOString(), status: 'failed', errorCode: e.code ?? 'UNKNOWN', durationSec: null });
       if (e instanceof HostKeyPromptError) {
@@ -165,6 +167,7 @@ export function sshRoutes(): Router {
     m.pty.closeAllForSession(req.params.sessionId);
     await m.ssh.disconnect(req.params.sessionId);
     res.json({ ok: true });
+    broadcastGlobalEvent({ type: 'ssh_sessions_changed' });
   });
 
   router.get('/api/ssh/sessions', (req, res) => {
