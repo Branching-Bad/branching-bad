@@ -16,6 +16,7 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>;
   shortcut?: string;
   badge?: number;
+  pulse?: boolean;
 };
 
 export function SideRail({
@@ -30,6 +31,7 @@ export function SideRail({
   onClearQueue,
   clearQueueDisabled,
   modLabel,
+  sshLiveCount,
 }: {
   route: Route;
   navigate: (r: Route) => void;
@@ -42,6 +44,7 @@ export function SideRail({
   onClearQueue: () => void;
   clearQueueDisabled: boolean;
   modLabel: string;
+  sshLiveCount: number;
 }) {
   const workspaceItems: NavItem[] = [
     { route: "board", label: "Board", icon: IconBoard, shortcut: `${modLabel}1` },
@@ -57,6 +60,10 @@ export function SideRail({
     { route: "glossary", label: "Glossary", icon: IconGlossaryRail },
     { route: "repos", label: "Repositories", icon: IconReposRail },
     { route: "data", label: "Data", icon: IconDataRail },
+  ];
+
+  const remoteItems: NavItem[] = [
+    { route: "ssh", label: "SSH", icon: IconSshRail, pulse: sshLiveCount > 0 },
   ];
 
   return (
@@ -82,6 +89,7 @@ export function SideRail({
       <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2.5 py-3">
         <NavGroup title="Workspace" items={workspaceItems} route={route} navigate={navigate} />
         <NavGroup title="Configure" items={configureItems} route={route} navigate={navigate} />
+        <NavGroup title="Remote" items={remoteItems} route={route} navigate={navigate} />
       </nav>
 
       <div className="border-t border-border-default p-2.5">
@@ -133,6 +141,12 @@ function NavGroup({
                 <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-status-danger px-1 text-[9px] font-bold text-white">
                   {item.badge}
                 </span>
+              )}
+              {item.pulse && !item.badge && (
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full bg-status-success"
+                  style={{ animation: 'ssh-pulse 1.5s ease-in-out infinite' }}
+                />
               )}
               {item.shortcut && !item.badge && (
                 <span className="text-[10px] text-text-muted/70">{item.shortcut}</span>
@@ -189,6 +203,14 @@ function IconDataRail({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+    </svg>
+  );
+}
+
+function IconSshRail({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3H5.25A2.25 2.25 0 003 5.25v13.5A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V5.25A2.25 2.25 0 0018.75 3h-3M8.25 3v3.75M15.75 3v3.75M7.5 12l2.25 2.25L7.5 16.5M12 16.5h4.5" />
     </svg>
   );
 }

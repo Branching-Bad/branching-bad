@@ -11,6 +11,7 @@ export const ROUTES = [
   "glossary",
   "repos",
   "data",
+  "ssh",
 ] as const;
 
 export type Route = typeof ROUTES[number];

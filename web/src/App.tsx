@@ -10,6 +10,11 @@ import { MemoriesView } from "./views/MemoriesView";
 import { GlossaryView } from "./views/GlossaryView";
 import { DataView } from "./views/DataView";
 import { ExtensionsView } from "./views/ExtensionsView";
+import { useSshConnections } from "./hooks/useSshConnections";
+import { useSshSessions } from "./hooks/useSshSessions";
+import { useSshPty } from "./hooks/useSshPty";
+import { useSshMigration } from "./hooks/useSshMigration";
+import { SshView } from "./views/SshView";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { EditTaskModal } from "./components/EditTaskModal";
 import { KanbanBoard } from "./components/KanbanBoard";
@@ -248,6 +253,11 @@ export default function App() {
   }, [repo.selectedRepoId, boot.providerItemCounts]);
   const totalProviderItemCount = Object.values(repoProviderItemCounts).reduce((a, b) => a + b, 0);
 
+  const sshConnections = useSshConnections({ setError });
+  const sshSessions = useSshSessions({ setError });
+  const sshPty = useSshPty();
+  const sshMigration = useSshMigration();
+
   // ── Render ──
   return (
     <div className="flex h-screen overflow-hidden bg-surface-0 text-text-primary">
@@ -275,6 +285,7 @@ export default function App() {
           onClearQueue={() => void task.clearAllPipelines()}
           clearQueueDisabled={busy}
           modLabel={SHORTCUT_LABELS.modKey}
+          sshLiveCount={sshSessions.liveCount}
         />
       </div>
 
@@ -476,6 +487,17 @@ export default function App() {
                 await api("/api/outputs", { method: "DELETE" });
                 setInfo("All output logs cleared.");
               }}
+            />
+          )}
+
+          {route === "ssh" && (
+            <SshView
+              sshConnections={sshConnections}
+              sshSessions={sshSessions}
+              sshPty={sshPty}
+              migration={sshMigration}
+              setInfo={setInfo}
+              setError={setError}
             />
           )}
         </div>
