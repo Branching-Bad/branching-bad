@@ -9,10 +9,12 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
+    "@types/ssh2": "^1.15.5",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "keytar": "^7.9.0",
     "node-cron": "^4.2.1",
+    "ssh2": "^1.17.0",
     "tree-kill": "^1.2.2",
     "uuid": "^11.1.0",
     "which": "^5.0.0",
