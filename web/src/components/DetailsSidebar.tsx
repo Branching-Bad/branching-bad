@@ -1,8 +1,9 @@
 import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage, ApplyToMainOptions, GitStatusInfo } from "../types";
 import { IconX, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconExpand } from "./icons";
-import { LogViewer } from "./LogViewer";
+import { useEffect, useRef } from "react";
+import { LogEntry } from "./LogEntry";
 import { RunConversation } from "./RunConversation";
-import { formatDate, laneFromStatus, inputClass, selectClass, btnPrimary, btnSecondary, planStatusColor } from "./shared";
+import { formatDate, laneFromStatus, inputClass, btnPrimary, btnSecondary, planStatusColor } from "./shared";
 import { DiffReviewPanel } from "./DiffReviewPanel";
 import { AgentProfileSelect } from "./AgentProfileSelect";
 
@@ -306,27 +307,35 @@ export function DetailsSidebar({
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {detailsTab === "plan" && (
               <>
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-text-secondary">Plan Status</p>
+                {/* Compact header strip */}
+                <div className="rounded-[var(--radius-lg)] border border-border-default bg-surface-100/70 px-3 py-2 backdrop-blur-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        (activePlanJob?.status === "running" || activePlanJob?.status === "pending")
+                          ? "animate-pulse bg-brand"
+                          : latestPlan?.status === "approved" ? "bg-status-success"
+                          : latestPlan?.status === "drafted" ? "bg-status-warning"
+                          : latestPlan?.status === "revise_requested" ? "bg-status-pending"
+                          : "bg-text-muted"
+                      }`} />
                       {latestPlan ? (
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${planStatusColor(latestPlan.status)}`}>
+                        <>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] ${planStatusColor(latestPlan.status)}`}>
                             {latestPlan.status}
                           </span>
-                          <span className="text-[11px] text-text-muted">v{latestPlan.version}</span>
-                        </div>
+                          <span className="text-text-muted">v{latestPlan.version}</span>
+                        </>
                       ) : (
-                        <span className="text-xs text-text-muted">No plan generated</span>
+                        <span className="text-text-muted">No plan yet</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-1.5">
                       {plans.length > 0 && (
                         <select
                           value={selectedPlanId}
                           onChange={(e) => setSelectedPlanId(e.target.value)}
-                          className={`${selectClass} !w-[140px] !py-1.5 !text-xs`}
+                          className="rounded-full border border-border-default bg-surface-200 px-2.5 py-1 text-[11px] text-text-secondary focus:border-border-focus focus:outline-none"
                         >
                           {plans.map((plan) => (
                             <option key={plan.id} value={plan.id}>
@@ -338,35 +347,29 @@ export function DetailsSidebar({
                       <button
                         onClick={onCreatePlan}
                         disabled={busy || activePlanJob?.status === "running" || activePlanJob?.status === "pending"}
-                        className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
+                        className="rounded-full bg-brand px-3 py-1 text-[11px] font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:bg-brand-dark disabled:opacity-40"
                       >
                         {activePlanJob?.status === "running" || activePlanJob?.status === "pending"
-                          ? "Planning..."
-                          : (latestPlan ? "Regenerate" : "Generate Plan")}
+                          ? "Planning…"
+                          : (latestPlan ? "Regenerate" : "Generate")}
                       </button>
                     </div>
                   </div>
                   {!taskRequiresPlan && (
-                    <p className="mt-2 text-[11px] text-text-muted">
-                      Plan is optional for this task. You can run directly from the Run tab.
+                    <p className="mt-2 text-[10px] text-text-muted">
+                      Plan is optional for this task · you can run directly from the Run tab.
                     </p>
                   )}
-                  {activePlanJob && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                      <span className={`rounded-full border px-2 py-0.5 font-medium ${
-                        activePlanJob.status === "done"
-                          ? "border-brand/40 bg-brand-tint text-brand"
-                          : activePlanJob.status === "failed"
-                            ? "border-error-border bg-error-bg text-error-text"
-                            : "border-border-strong bg-surface-300 text-text-secondary"
-                      }`}>
-                        plan job: {activePlanJob.status}
-                      </span>
-                      <span className="text-text-muted">{activePlanJob.mode}</span>
-                      <span className="text-text-muted">{formatDate(activePlanJob.updated_at)}</span>
-                    </div>
-                  )}
                 </div>
+
+                {/* Live plan output — conversational feed when generating or when logs exist */}
+                {(activePlanJob || planLogs.length > 0) && (
+                  <PlanLiveOutput
+                    logs={planLogs}
+                    isRunning={activePlanJob?.status === "running" || activePlanJob?.status === "pending"}
+                    finished={planFinished}
+                  />
+                )}
 
                 {/* Plan Draft */}
                 <div className="rounded-xl border border-border-default bg-surface-200 p-3">
@@ -519,49 +522,29 @@ export function DetailsSidebar({
                       <span className="text-xs font-medium text-brand">{planActionInProgress}</span>
                     </div>
                   ) : (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        onClick={() => onPlanAction("approve")}
-                        disabled={busy || !latestPlan}
-                        className={`${btnPrimary} !px-3 !py-1.5 text-xs`}
-                      >
-                        Approve
-                      </button>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => onPlanAction("revise")}
                         disabled={busy || !latestPlan}
-                        className={`${btnSecondary} !px-3 !py-1.5 text-xs`}
+                        className="flex items-center gap-1.5 rounded-full border border-border-default bg-surface-200 px-3 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary disabled:opacity-40"
                       >
-                        Request Revision
+                        <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                          <path d="M1.5 6A4.5 4.5 0 0 1 9.5 3M10.5 6A4.5 4.5 0 0 1 2.5 9M8 1l2 2-2 2M4 11l-2-2 2-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                        </svg>
+                        Request revision
                       </button>
                       <button
-                        onClick={() => onPlanAction("reject")}
+                        onClick={() => onPlanAction("approve")}
                         disabled={busy || !latestPlan}
-                        className="rounded-md border border-error-border bg-error-bg px-3 py-1.5 text-xs font-medium text-error-text transition hover:bg-surface-200 disabled:bg-surface-300/50 disabled:text-text-muted/40 disabled:cursor-not-allowed"
+                        className="ml-auto flex items-center gap-1.5 rounded-full bg-status-success px-3 py-1 text-[11px] font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:brightness-110 disabled:opacity-40"
                       >
-                        Reject
+                        <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                          <path d="M2 6.3L5 9L10 3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Approve
                       </button>
                     </div>
                   )}
-                </div>
-
-                {/* Live Plan Output */}
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-text-secondary">Live Plan Output</h4>
-                    {activePlanJob && (
-                      <span className="text-[11px] text-text-muted">job {activePlanJob.id.slice(0, 8)}</span>
-                    )}
-                  </div>
-                  <LogViewer
-                    logs={planLogs}
-                    className="h-[480px]"
-                    emptyMessage={
-                      activePlanJob
-                        ? (planFinished ? "Plan output stream finished." : "Waiting for plan output...")
-                        : "No active plan job."
-                    }
-                  />
                 </div>
               </>
             )}
@@ -825,6 +808,56 @@ function PriorityChip({ priority }: { priority: string }) {
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
       {priority}
     </span>
+  );
+}
+
+function PlanLiveOutput({ logs, isRunning, finished }: { logs: RunLogEntry[]; isRunning: boolean; finished: boolean }) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const filtered = logs.filter((l) => {
+    if (l.type !== "db_event") return true;
+    try { const p = JSON.parse(l.data) as { type?: string }; return !["tasklist_progress", "working_tree_diff", "run_finished"].includes(p.type ?? ""); }
+    catch { return true; }
+  });
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [filtered.length]);
+
+  return (
+    <div className="flex min-h-[200px] max-h-[420px] flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-surface-0/40">
+      <div className="flex items-center justify-between border-b border-border-default/60 px-3 py-1.5">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted">
+          {isRunning && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />}
+          Live output
+        </div>
+        {finished && !isRunning && (
+          <span className="rounded-full bg-status-success-soft px-2 py-0.5 text-[10px] font-medium text-status-success">
+            finished
+          </span>
+        )}
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2">
+        {filtered.length === 0 ? (
+          <div className="flex h-full min-h-[150px] items-center justify-center">
+            <p className="text-[11px] text-text-muted">
+              {isRunning ? "Waiting for output…" : "No output."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {filtered.map((log, i) => <LogEntry key={i} type={log.type} data={log.data} />)}
+            {isRunning && (
+              <div className="mt-2 flex items-center gap-1 px-1">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand [animation-delay:0ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand [animation-delay:150ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand [animation-delay:300ms]" />
+                <span className="ml-1 text-[10px] text-text-muted">planner working…</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
