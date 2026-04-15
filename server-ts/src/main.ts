@@ -29,6 +29,7 @@ import './db/analyst.js';
 import './db/workflow.js';
 import './db/taskDefaults.js';
 import './db/mcp.js';
+import './db/ssh.js';
 
 import { ProcessManager, recoverOrphans } from './processManager.js';
 import { ProviderRegistry, registerAll } from './provider/index.js';
