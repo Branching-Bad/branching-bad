@@ -6,15 +6,15 @@ export type ConnectResult =
   | { ok: true; sessionId: string }
   | { ok: false; hostKeyPrompt?: HostKeyPromptPayload; errorCode?: string; message?: string };
 
-export function useSshSessions(opts: { setError: (msg: string) => void }) {
+export function useSshSessions({ setError }: { setError: (msg: string) => void }) {
   const [sessions, setSessions] = useState<SshSessionInfo[]>([]);
 
   const refresh = useCallback(async () => {
     try {
       const res = await api<{ sessions: SshSessionInfo[] }>('/api/ssh/sessions');
       setSessions(res.sessions ?? []);
-    } catch (e) { opts.setError((e as Error).message); }
-  }, [opts]);
+    } catch (e) { setError((e as Error).message); }
+  }, [setError]);
 
   useEffect(() => {
     void refresh();
