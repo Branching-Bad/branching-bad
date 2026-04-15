@@ -6,6 +6,7 @@ import { RunConversation } from "./RunConversation";
 import { formatDate, laneFromStatus, inputClass, btnPrimary, btnSecondary, planStatusColor } from "./shared";
 import { DiffReviewPanel } from "./DiffReviewPanel";
 import { AgentProfileSelect } from "./AgentProfileSelect";
+import { PRIORITY_COLORS } from "../theme/priority";
 
 export function DetailsSidebar({
   selectedTask,
@@ -811,11 +812,11 @@ function StatusPill({ status }: { status: string }) {
 function PriorityChip({ priority }: { priority: string }) {
   const p = priority.toLowerCase();
   const color =
-    p === "highest" ? "#FF453A" :
-    p === "high"    ? "#FF9F0A" :
-    p === "medium"  ? "#FFD60A" :
-    p === "low"     ? "#0A84FF" :
-                      "#8E8E93";
+    p === "highest" ? PRIORITY_COLORS.Highest :
+    p === "high"    ? PRIORITY_COLORS.High :
+    p === "medium"  ? PRIORITY_COLORS.Medium :
+    p === "low"     ? PRIORITY_COLORS.Low :
+                      PRIORITY_COLORS.Lowest;
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full bg-surface-200 px-1.5 py-0.5 text-[10px] font-medium text-text-secondary"
