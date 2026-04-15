@@ -21,7 +21,7 @@ const PRIORITY_OPTIONS: Array<{ value: string; label: string; dot: string | null
   { value: "Highest", label: "Highest",     dot: "#FF453A" },
   { value: "High",    label: "High",        dot: "#FF9F0A" },
   { value: "Medium",  label: "Medium",      dot: "#FFD60A" },
-  { value: "Low",     label: "Low",         dot: "#0A84FF" },
+  { value: "Low",     label: "Low",         dot: "#64D2FF" },
   { value: "Lowest",  label: "Lowest",      dot: "#8E8E93" },
 ];
 

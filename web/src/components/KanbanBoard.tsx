@@ -370,7 +370,7 @@ function TaskCard({
       onClick={onSelect}
       className={`group relative w-full rounded-[var(--radius-xl)] border p-3.5 text-left transition-all duration-150 cursor-grab active:cursor-grabbing ${dimmed ? "opacity-50" : ""} ${
         selected
-          ? "border-brand/50 bg-brand-tint shadow-[0_0_0_1px_var(--color-brand-glow),0_4px_16px_rgba(10,132,255,0.12)]"
+          ? "border-brand/50 bg-brand-tint shadow-[0_0_0_1px_var(--color-brand-glow),0_4px_16px_rgba(253,146,1,0.12)]"
           : "border-border-default bg-surface-200/80 hover:border-border-strong hover:bg-surface-200 hover:shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
       }`}
     >
