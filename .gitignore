@@ -42,5 +42,8 @@ Thumbs.db
 # Superpowers session state (brainstorm mockups, etc.)
 .superpowers/
 
+# Claude Code session state (worktrees, plans, etc.)
+.claude/
+
 # Reference project (not part of active app)
 reference/
