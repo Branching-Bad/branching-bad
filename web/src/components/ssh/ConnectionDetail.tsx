@@ -28,6 +28,7 @@ export function ConnectionDetail({
   const [tabs, setTabs] = useState<TabRef[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [forwardStatuses, setForwardStatuses] = useState<SshForwardStatus[]>([]);
+  const [connecting, setConnecting] = useState(false);
 
   // Keep tabs in sync with server-reported PTYs for this connection.
   useEffect(() => {
@@ -65,16 +66,22 @@ export function ConnectionDetail({
   }, [sessions, conn.id, sshSessions]);
 
   const newSession = useCallback(async () => {
-    let sessionId = sessions.find((s) => s.connectionId === conn.id)?.sessionId;
-    if (!sessionId) {
-      const sid = await onRequestConnect();
-      if (!sid) return;
-      sessionId = sid;
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      let sessionId = sessions.find((s) => s.connectionId === conn.id)?.sessionId;
+      if (!sessionId) {
+        const sid = await onRequestConnect();
+        if (!sid) return;
+        sessionId = sid;
+      }
+      const ptyId = await pty.openPty(sessionId, 80, 24);
+      setTabs((p) => [...p, { id: ptyId, label: shortId(ptyId), ptyId, sessionId: sessionId! }]);
+      setActiveTabId(ptyId);
+    } finally {
+      setConnecting(false);
     }
-    const ptyId = await pty.openPty(sessionId, 80, 24);
-    setTabs((p) => [...p, { id: ptyId, label: shortId(ptyId), ptyId, sessionId: sessionId! }]);
-    setActiveTabId(ptyId);
-  }, [sessions, conn.id, pty, onRequestConnect]);
+  }, [connecting, sessions, conn.id, pty, onRequestConnect]);
 
   const closeTab = useCallback(async (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId);
@@ -103,7 +110,14 @@ export function ConnectionDetail({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => void newSession()} className={btnSecondary + ' text-[11px]'}>+ New Session</button>
+          <button
+            onClick={() => void newSession()}
+            disabled={connecting}
+            className={btnSecondary + ' flex items-center gap-1.5 text-[11px] disabled:opacity-60'}
+          >
+            {connecting && <MiniSpinner />}
+            {connecting ? 'Connecting…' : '+ New Session'}
+          </button>
           <button onClick={onEdit} className={btnSecondary + ' text-[11px]'}>Edit</button>
           <button
             onClick={onDelete}
@@ -153,7 +167,14 @@ export function ConnectionDetail({
         </>
       ) : (
         <div className="flex flex-1 items-center justify-center">
-          <button onClick={() => void newSession()} className={btnSecondary}>+ New Session</button>
+          <button
+            onClick={() => void newSession()}
+            disabled={connecting}
+            className={btnSecondary + ' flex items-center gap-2 disabled:opacity-60'}
+          >
+            {connecting && <MiniSpinner />}
+            {connecting ? 'Connecting…' : '+ New Session'}
+          </button>
         </div>
       )}
     </div>
@@ -161,3 +182,12 @@ export function ConnectionDetail({
 }
 
 function shortId(id: string): string { return id.slice(0, 6); }
+
+function MiniSpinner() {
+  return (
+    <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
