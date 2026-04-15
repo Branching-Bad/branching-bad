@@ -179,9 +179,23 @@ export default function App() {
   // ── Load rules when repo changes ──
   useEffect(() => { void rulesState.loadRules(repo.selectedRepoId || undefined); }, [repo.selectedRepoId, rulesState.loadRules]);
 
-  // ── Load memories when repo changes ──
-  useEffect(() => { if (repo.selectedRepoId) void memoryState.loadMemories(repo.selectedRepoId); }, [repo.selectedRepoId, memoryState.loadMemories]);
-  useEffect(() => { if (repo.selectedRepoId) void glossaryState.loadTerms(repo.selectedRepoId); }, [repo.selectedRepoId, glossaryState.loadTerms]);
+  // ── Load memories / glossary on repo change, and re-load when the user
+  //    navigates to the view so updates made elsewhere (e.g. "Save as
+  //    Memory" from chat) show up on return. ──
+  useEffect(() => {
+    if (repo.selectedRepoId) void memoryState.loadMemories(repo.selectedRepoId);
+  }, [repo.selectedRepoId, memoryState.loadMemories]);
+  useEffect(() => {
+    if (repo.selectedRepoId) void glossaryState.loadTerms(repo.selectedRepoId);
+  }, [repo.selectedRepoId, glossaryState.loadTerms]);
+  useEffect(() => {
+    if (route === "memories" && repo.selectedRepoId) {
+      void memoryState.loadMemories(repo.selectedRepoId, memoryState.searchQuery || undefined, memoryState.page);
+    } else if (route === "glossary" && repo.selectedRepoId) {
+      void glossaryState.loadTerms(repo.selectedRepoId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route]);
 
   // ── Tasklist progress polling ──
   const [tasklistProgress, setTasklistProgress] = useState<Record<string, string>>({});
