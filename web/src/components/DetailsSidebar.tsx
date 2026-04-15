@@ -371,26 +371,81 @@ export function DetailsSidebar({
                   />
                 )}
 
-                {/* Plan Draft */}
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-text-secondary">Plan Draft</h4>
-                    {selectedPlan && (
-                      <span className="text-[11px] text-text-muted">{formatDate(selectedPlan.created_at)}</span>
-                    )}
+                {/* ── Review composer (YOU bubble) — moved above ─ */}
+                <div className="flex justify-end">
+                  <div className="w-full">
+                    <div className="mb-1 flex items-center justify-end gap-1.5 pr-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted">You</span>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-tint text-[10px] font-semibold text-brand">U</span>
+                    </div>
+                    <div className="ml-6 rounded-[var(--radius-xl)] rounded-tr-[var(--radius-sm)] border border-brand/30 bg-brand-tint/60 p-3 shadow-[var(--shadow-sm)]">
+                      <textarea
+                        value={planComment}
+                        onChange={(e) => setPlanComment(e.target.value)}
+                        className="min-h-[64px] w-full resize-y bg-transparent text-[12px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none"
+                        placeholder="Add an approval or revision note…"
+                      />
+                      {planActionInProgress ? (
+                        <div className="mt-2 flex items-center gap-2 rounded-full bg-brand-tint px-3 py-1.5">
+                          <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+                          <span className="text-[11px] font-medium text-brand">{planActionInProgress}</span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center gap-2 border-t border-brand/20 pt-2">
+                          <button
+                            onClick={() => onPlanAction("revise")}
+                            disabled={busy || !latestPlan}
+                            className="flex items-center gap-1.5 rounded-full border border-border-default bg-surface-200 px-3 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary disabled:opacity-40"
+                          >
+                            <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                              <path d="M1.5 6A4.5 4.5 0 0 1 9.5 3M10.5 6A4.5 4.5 0 0 1 2.5 9M8 1l2 2-2 2M4 11l-2-2 2-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                            </svg>
+                            Request revision
+                          </button>
+                          <button
+                            onClick={() => onPlanAction("approve")}
+                            disabled={busy || !latestPlan}
+                            className="ml-auto flex items-center gap-1.5 rounded-full bg-status-success px-3 py-1 text-[11px] font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:brightness-110 disabled:opacity-40"
+                          >
+                            <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                              <path d="M2 6.3L5 9L10 3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            Approve
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {selectedPlan ? (
-                    <textarea
-                      value={manualPlanMarkdown}
-                      onChange={(e) => setManualPlanMarkdown(e.target.value)}
-                      className={`${inputClass} min-h-[220px] resize-y font-mono text-[12px] leading-relaxed`}
-                      placeholder="Plan markdown..."
-                    />
-                  ) : (
-                    <p className="rounded-lg border border-dashed border-border-strong px-3 py-6 text-center text-xs text-text-muted">
-                      Select a task and generate a plan to see details.
-                    </p>
-                  )}
+                </div>
+
+                {/* ── Plan Draft (AGENT bubble) — moved below ── */}
+                <div className="flex justify-start">
+                  <div className="w-full">
+                    <div className="mb-1 flex items-center gap-1.5 pl-1">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-300 text-[10px] font-semibold text-text-secondary">A</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted">Agent draft</span>
+                      {selectedPlan && (
+                        <>
+                          <span className="rounded-full bg-surface-200 px-1.5 py-0 text-[10px] text-text-secondary">v{selectedPlan.version}</span>
+                          <span className="text-[10px] text-text-muted">· {formatDate(selectedPlan.created_at)}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="mr-6 rounded-[var(--radius-xl)] rounded-tl-[var(--radius-sm)] border border-border-default bg-surface-200 p-3 shadow-[var(--shadow-sm)]">
+                      {selectedPlan ? (
+                        <textarea
+                          value={manualPlanMarkdown}
+                          onChange={(e) => setManualPlanMarkdown(e.target.value)}
+                          className="min-h-[240px] w-full resize-y bg-transparent font-mono text-[12px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none"
+                          placeholder="Plan markdown…"
+                        />
+                      ) : (
+                        <p className="rounded-[var(--radius-md)] border border-dashed border-border-default/60 px-3 py-6 text-center text-[12px] text-text-muted">
+                          No plan yet · hit Generate above to draft one.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* AI Review trigger + Feedback */}
@@ -507,45 +562,6 @@ export function DetailsSidebar({
                   </div>
                 )}
 
-                {/* Review Comment + Actions */}
-                <div className="rounded-xl border border-border-default bg-surface-200 p-3">
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Review Comment</label>
-                  <textarea
-                    value={planComment}
-                    onChange={(e) => setPlanComment(e.target.value)}
-                    className={`${inputClass} min-h-[72px] resize-y`}
-                    placeholder="Add approval/revision note..."
-                  />
-                  {planActionInProgress ? (
-                    <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2.5">
-                      <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-                      <span className="text-xs font-medium text-brand">{planActionInProgress}</span>
-                    </div>
-                  ) : (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={() => onPlanAction("revise")}
-                        disabled={busy || !latestPlan}
-                        className="flex items-center gap-1.5 rounded-full border border-border-default bg-surface-200 px-3 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-300 hover:text-text-primary disabled:opacity-40"
-                      >
-                        <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
-                          <path d="M1.5 6A4.5 4.5 0 0 1 9.5 3M10.5 6A4.5 4.5 0 0 1 2.5 9M8 1l2 2-2 2M4 11l-2-2 2-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                        </svg>
-                        Request revision
-                      </button>
-                      <button
-                        onClick={() => onPlanAction("approve")}
-                        disabled={busy || !latestPlan}
-                        className="ml-auto flex items-center gap-1.5 rounded-full bg-status-success px-3 py-1 text-[11px] font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:brightness-110 disabled:opacity-40"
-                      >
-                        <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6.3L5 9L10 3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Approve
-                      </button>
-                    </div>
-                  )}
-                </div>
               </>
             )}
 
