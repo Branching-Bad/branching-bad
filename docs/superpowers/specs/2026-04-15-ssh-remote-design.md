@@ -11,26 +11,32 @@ Port the sshmaster feature set into the main app as a first-class page. Users ca
 
 ## Scope
 
-### v1 (this spec)
+All of the following ship in a single release. Cross-platform (macOS, Linux, Windows) from day one.
 
-- Connection CRUD: name, host, port, username, auth type (password or PEM key path + optional passphrase).
-- Multiple simultaneous sessions, including multiple sessions to the same host.
-- Embedded xterm.js terminal, tabbed per session within the selected connection.
-- "Launch System Terminal" per session (Terminal.app / Windows Terminal / gnome-terminal).
+- Connection CRUD: alias, host, port, username, auth type (password or PEM key path + optional passphrase), optional jump host, optional port forwards list.
+- **Groups**: connections belong to zero or one group. UI collapses/expands groups in the left pane.
+- **Search** input in the left pane filters connections by alias / host / username (client-side, plain substring).
+- Multiple simultaneous SSH sessions, including multiple sessions to the same host.
+- Embedded xterm.js terminal, tabbed per PTY within the selected connection.
+- **Scrollback preservation across UI navigation**: the server keeps a per-PTY ring buffer (capped at 256 KiB) of recent output. On (re)subscribe, the server replays the buffer so the xterm shows the same recent history.
+- "Launch System Terminal" per connection (Terminal.app / Windows Terminal / gnome-terminal / xterm fallback).
+- **Port forwarding**: per connection, user defines `local` (`-L`) or `remote` (`-R`) forwards. Activated on connect, deactivated on disconnect. Errors surface as toasts.
+- **Jump host (one level of bastion)**: connection may reference another connection as a bastion; the app dials the bastion first, opens a TCP-forwarded stream, and dials the target through it.
 - `known_hosts` management with trust-on-first-use. Mismatched fingerprint prompts for re-approval.
-- Connection history (last-N attempts with timestamp, status).
+- Connection history: every attempt logged with timestamp and status (connected / failed), retained last 200 rows.
+- **JSON import/export**: export produces a single file with connections, groups, known hosts, history. Import accepts the same format with a strategy switch (skip / update).
+- **One-time migration** from `~/.sshmaster/connections.json` (if present) on first SSH view mount. User gets a one-shot banner "Import 12 connections from SSHMaster?" with [Import] / [Dismiss]. Dismissal is remembered so the banner never reappears.
 - PEM files are referenced by absolute path — the app never reads the key into SQLite, never copies the file.
-- Active session indicator on the SSH rail nav item (muted pulsing dot) and on each connection card in the left list (badge + pulsing dot).
-- Session persistence across UI navigation: leaving `#ssh` does not disconnect; returning restores the same tabs.
+- **Passwords and passphrases are encrypted at rest** using AES-256-GCM with a per-install master key stored at `<APP_DATA_DIR>/.ssh_master_key` with `0600` permissions (Unix) / ACL-restricted (Windows via `fs.chmod` no-op + file attribute best-effort).
+- Active session indicator on the SSH rail nav item (muted pulsing dot) and on each connection card in the left list.
+- Session persistence across UI navigation: leaving `#ssh` does not disconnect; returning restores the same tabs with replayed scrollback.
 
-### Out of scope (v2+)
+### Explicitly out of scope (future)
 
-- Groups and client-side search/filter (v1 ships with a plain list).
-- Port forwarding (local `-L` / remote `-R`).
-- Jump host / bastion (one level).
-- JSON import/export.
-- Auto-migration from `~/.sshmaster/connections.json`.
-- Agent forwarding (`-A`), X11 forwarding, sftp browser.
+- Agent forwarding (`-A`), X11 forwarding, sftp file browser.
+- Multi-level jump hosts (more than one bastion in the chain).
+- OS keychain integration (our per-install master key is strictly on-disk with restricted perms).
+- GUI terminal theming / font customization (uses xterm defaults).
 
 ## Layout (Task Analyst pattern)
 
@@ -68,20 +74,45 @@ Port the sshmaster feature set into the main app as a first-class page. Users ca
 
 ### New / Edit Connection modal
 
-A `CreateTaskModal`-style modal opened from the left pane's `+ New` button or the right pane's `Edit` button. Fields:
+A `CreateTaskModal`-style modal opened from the left pane's `+ New` button or the right pane's `Edit` button. The modal has three sections:
+
+**Section 1 — Identity**
 
 | Field         | Type                              |
 |---------------|-----------------------------------|
 | Alias         | text (required, unique)           |
+| Group         | select (existing groups + "— None —" + "+ New group…") |
 | Host          | text (required)                   |
 | Port          | number, default 22                |
 | Username      | text (required)                   |
 | Auth type     | radio: `password` / `key`         |
 | Password      | password input (shown if `password`) |
-| Key path      | `FolderPicker`-style file picker (shown if `key`) |
+| Key path      | file picker via `FolderPicker`-style component (shown if `key`) |
 | Passphrase    | password input (optional, shown if `key`) |
 
-Validation: alias non-empty and unique, host non-empty, port in `[1, 65535]`, username non-empty, `password` or `keyPath` set based on auth type. Save: POST new, PATCH existing. Modal closes on success.
+**Section 2 — Jump host (optional, collapsible)**
+
+| Field         | Type                              |
+|---------------|-----------------------------------|
+| Via           | select of existing connections + "— None —" |
+
+Only one level of chaining is permitted — if connection A uses B as a jump, B itself must not have a jump host. Validation rejects circular references.
+
+**Section 3 — Port forwards (optional, expandable list)**
+
+A dynamic list where each row has:
+
+| Field         | Type                              |
+|---------------|-----------------------------------|
+| Type          | select: `local` (`-L`) / `remote` (`-R`) |
+| Bind address  | text, default `127.0.0.1`         |
+| Bind port     | number `[1, 65535]`               |
+| Remote host   | text (required)                   |
+| Remote port   | number `[1, 65535]`               |
+
+Each row has a trash button to remove it. Below the list: `+ Add Forward` button.
+
+Validation: alias non-empty and unique, host non-empty, port `[1, 65535]`, username non-empty, `password` or `keyPath` set based on auth type, jump host (if set) points to a connection without its own jump host, each forward row complete. Save: POST new, PATCH existing. Modal closes on success.
 
 ### Host key prompt
 
@@ -107,28 +138,36 @@ Update `SideRail.tsx`:
 
 ```
 server-ts/src/ssh/
-  index.ts                ← exports registerSshRoutes, sshManager singleton
-  sshManager.ts           ← SSH client lifecycle (ssh2 Client), sessions map
-  ptyManager.ts           ← shell() stream wrapping, attaches to SSH client
+  index.ts                ← exports registerSshRoutes, manager singletons
+  sshManager.ts           ← SSH client lifecycle (ssh2 Client + jump chaining), sessions map
+  ptyManager.ts           ← shell() stream wrapping + per-PTY scrollback ring buffer
+  forwardManager.ts       ← activate/deactivate port forwards for a session
   hostKeyStore.ts         ← fingerprint verify using ssh_host_keys table
-  terminalLauncher.ts     ← spawn native terminal with ssh cmd
-  types.ts                ← SshConnection, SshSession, SshHostKey interfaces
-server-ts/src/routes/ssh.ts    ← HTTP routes (CRUD + connect + disconnect + history + known_hosts)
+  terminalLauncher.ts     ← spawn native terminal with ssh cmd (per-OS)
+  crypto.ts               ← AES-256-GCM helper, master-key file management
+  importExport.ts         ← serialize / deserialize connections+groups+knownHosts+history
+  migration.ts            ← one-shot import from ~/.sshmaster/connections.json
+  types.ts                ← SshConnection, SshSession, SshHostKey, SshForward, SshGroup interfaces
+server-ts/src/routes/ssh.ts    ← HTTP routes (CRUD + connect + disconnect + history + known_hosts + groups + forwards + import/export + migration)
 server-ts/src/db/ssh.ts        ← DB methods via `declare module` pattern
 server-ts/migrations/V14__add_ssh_tables.sql
 ```
 
 ### Responsibilities
 
-- `sshManager.ts`: `connect(conn, onHostKey) → sessionId`, `disconnect(sessionId)`, `getClient(sessionId)`, `listSessions() → {sessionId, connectionId, connectedAt}[]`. Uses `ssh2.Client`. Error-code wrapping mirrors sshmaster's `wrapError` (AUTH_FAILED / HOST_UNREACHABLE / TIMEOUT / HOST_KEY_MISMATCH / KEY_READ_ERROR / UNKNOWN).
-- `ptyManager.ts`: `openShell(sessionId, {cols, rows}) → ptyId`, `write(ptyId, data)`, `resize(ptyId, cols, rows)`, `close(ptyId)`. Each PTY is a `ClientChannel` from `client.shell(...)`. Data events bridged to WebSocket broadcast per-pty-subscriber.
+- `sshManager.ts`: `connect(conn, onHostKey) → sessionId`, `disconnect(sessionId)`, `getClient(sessionId)`, `listSessions() → {sessionId, connectionId, connectedAt}[]`. Uses `ssh2.Client`. Handles jump-host chaining: if `conn.jumpHostId` set, first establish the bastion client, then `bastionClient.forwardOut('127.0.0.1', 0, target.host, target.port)` to get a stream, then ssh2-connect the target using `opts.sock = stream`. Error-code wrapping mirrors sshmaster's `wrapError` (AUTH_FAILED / HOST_UNREACHABLE / TIMEOUT / HOST_KEY_MISMATCH / KEY_READ_ERROR / JUMP_HOST_FAILED / UNKNOWN).
+- `ptyManager.ts`: `openShell(sessionId, {cols, rows}) → ptyId`, `write(ptyId, data)`, `resize(ptyId, cols, rows)`, `close(ptyId)`, `subscribe(ptyId, onData, onClose) → unsubscribe`, `getScrollback(ptyId) → string`. Each PTY is a `ClientChannel` from `client.shell(...)`. Data events fan out to subscribers and also append to an in-memory ring buffer (256 KiB cap, older bytes dropped). When a new subscriber attaches, it receives the full buffer first, then live data.
+- `forwardManager.ts`: `activate(sessionId, forward) → void`, `deactivate(sessionId, forwardId) → void`, `deactivateAll(sessionId) → void`, `status(sessionId) → {forwardId, state: 'active' | 'error', message?}[]`. Uses `client.forwardIn(...)` for remote and `net.createServer()` wrapping `client.forwardOut(...)` for local.
 - `hostKeyStore.ts`: `checkHostKey(host, port, fingerprint) → 'unknown' | 'match' | 'mismatch'`, `approveHostKey(host, port, fingerprint)`, `listKnownHosts()`, `deleteKnownHost(host, port)`.
 - `terminalLauncher.ts`: per-platform command builder:
-  - macOS: `open -a Terminal "$(command)"` with a wrapper shell script, OR `osascript -e 'tell app "Terminal" to do script "..."'`.
-  - Windows: `wt.exe new-tab ssh ...` with `cmd /c`.
-  - Linux: try `gnome-terminal -- ssh ...`, fallback `xterm -e ssh ...`, fallback `x-terminal-emulator -e`.
-  - Cross-platform: build args as `string[]`, `spawnSync(bin, args)`, `shell: process.platform === 'win32'` as needed. No string shell-escaping.
-- `routes/ssh.ts`: standard REST + a `POST /api/ssh/connections/:id/connect` that returns `{sessionId}` after host-key dance + auth, and a `DELETE /api/ssh/sessions/:sessionId` for disconnect. See endpoint list below.
+  - macOS: `osascript -e 'tell app "Terminal" to do script "ssh user@host -p port -i keyPath"' -e 'activate'`.
+  - Windows: `wt.exe -w 0 nt ssh user@host -p port -i keyPath` (Windows Terminal). Fallback `cmd /k ssh ...` via `spawnSync('cmd', ['/c', 'start', 'cmd', '/k', 'ssh', ...args])`.
+  - Linux: try `gnome-terminal -- ssh ...`, then `konsole -e ssh ...`, then `x-terminal-emulator -e ssh ...`, then `xterm -e ssh ...`. Return `NO_TERMINAL` if none resolves via `which` / `spawnSync`.
+  - Cross-platform: build args as `string[]`, `spawnSync(bin, args)`, `shell: process.platform === 'win32'` only where necessary (`.cmd` shims). No string shell escaping. Paths with spaces handled by array-args.
+- `crypto.ts`: `getMasterKey() → Buffer` loads or creates `<APP_DATA_DIR>/.ssh_master_key` (32 random bytes, `0600` on Unix). `encrypt(plaintext: string) → string` returns `base64(iv | ciphertext | tag)`. `decrypt(blob: string) → string` reverses. On master-key file loss, decrypt returns `null` and callers treat the field as "password missing; user must re-enter".
+- `importExport.ts`: `serialize() → ImportExportBlob` emits JSON `{ version: 1, connections, groups, knownHosts, history }` with encrypted secrets **re-encrypted as empty** (i.e. exports strip passwords/passphrases; key paths included as-is). `deserialize(blob, strategy)` inserts with `skip` or `update`. Returns a report `{ created, updated, skipped }`.
+- `migration.ts`: `detectSshmaster() → string | null` returns path to `~/.sshmaster/connections.json` if readable, else null. `importSshmaster(path) → ImportReport` parses sshmaster format, maps fields, writes via existing DB methods.
+- `routes/ssh.ts`: standard REST + `POST /api/ssh/connections/:id/connect` returning `{sessionId}` after host-key dance + auth, `DELETE /api/ssh/sessions/:sessionId` for disconnect, `POST /api/ssh/migrations/sshmaster` to trigger import. See endpoint list below.
 
 ### Host-key prompt flow (HTTP)
 
@@ -163,48 +202,79 @@ Server → client:
 
 ### HTTP routes
 
-| Method | Path                                      | Purpose                                |
-|--------|-------------------------------------------|----------------------------------------|
-| GET    | `/api/ssh/connections`                    | List all connections                   |
-| POST   | `/api/ssh/connections`                    | Create                                 |
-| PATCH  | `/api/ssh/connections/:id`                | Update                                 |
-| DELETE | `/api/ssh/connections/:id`                | Delete                                 |
-| POST   | `/api/ssh/connections/:id/connect`        | Open SSH client → `{sessionId}` (or 409 HOST_KEY_PROMPT) |
-| DELETE | `/api/ssh/sessions/:sessionId`            | Disconnect an SSH client               |
-| GET    | `/api/ssh/sessions`                       | List live sessions `{sessionId, connectionId, connectedAt}` |
-| POST   | `/api/ssh/sessions/:sessionId/pty`        | Open a PTY on a session → `{ptyId}`   |
-| DELETE | `/api/ssh/ptys/:ptyId`                    | Close a PTY                            |
-| POST   | `/api/ssh/sessions/:sessionId/launch-terminal` | Launch system terminal (server spawns) |
-| GET    | `/api/ssh/known-hosts`                    | List known hosts                       |
-| POST   | `/api/ssh/known-hosts`                    | Approve/add host key                   |
-| DELETE | `/api/ssh/known-hosts/:host/:port`        | Remove known host entry                |
-| GET    | `/api/ssh/history?limit=50`               | Recent connection attempts             |
+| Method | Path                                            | Purpose                                |
+|--------|-------------------------------------------------|----------------------------------------|
+| GET    | `/api/ssh/connections`                          | List all connections (secrets masked)  |
+| POST   | `/api/ssh/connections`                          | Create                                 |
+| PATCH  | `/api/ssh/connections/:id`                      | Update                                 |
+| DELETE | `/api/ssh/connections/:id`                      | Delete                                 |
+| GET    | `/api/ssh/groups`                               | List groups                            |
+| POST   | `/api/ssh/groups`                               | Create group                           |
+| PATCH  | `/api/ssh/groups/:id`                           | Rename group                           |
+| DELETE | `/api/ssh/groups/:id`                           | Delete group (connections' group set to null) |
+| POST   | `/api/ssh/connections/:id/connect`              | Open SSH client → `{sessionId}` (or 409 HOST_KEY_PROMPT) |
+| DELETE | `/api/ssh/sessions/:sessionId`                  | Disconnect an SSH client               |
+| GET    | `/api/ssh/sessions`                             | List live sessions                     |
+| POST   | `/api/ssh/sessions/:sessionId/pty`              | Open a PTY → `{ptyId}`                |
+| DELETE | `/api/ssh/ptys/:ptyId`                          | Close a PTY                            |
+| GET    | `/api/ssh/sessions/:sessionId/forwards`         | Forward statuses for this session      |
+| POST   | `/api/ssh/connections/:id/launch-terminal`      | Launch system terminal (server spawns) |
+| GET    | `/api/ssh/known-hosts`                          | List known hosts                       |
+| POST   | `/api/ssh/known-hosts`                          | Approve/add host key                   |
+| DELETE | `/api/ssh/known-hosts/:host/:port`              | Remove known host entry                |
+| GET    | `/api/ssh/history?limit=50`                     | Recent connection attempts             |
+| GET    | `/api/ssh/export`                               | JSON blob download (strips secrets)    |
+| POST   | `/api/ssh/import`                               | Accept a JSON blob + `strategy` query  |
+| GET    | `/api/ssh/migration/sshmaster`                  | Detect `~/.sshmaster/connections.json` |
+| POST   | `/api/ssh/migration/sshmaster`                  | Import from detected sshmaster file    |
+| POST   | `/api/ssh/migration/sshmaster/dismiss`          | Mark banner dismissed (stored in DB KV)|
 
 ### Data model (SQLite)
 
 New migration file `server-ts/migrations/V14__add_ssh_tables.sql`:
 
 ```sql
+CREATE TABLE IF NOT EXISTS ssh_groups (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ssh_connections (
   id TEXT PRIMARY KEY,
   alias TEXT NOT NULL UNIQUE,
+  group_id TEXT REFERENCES ssh_groups(id) ON DELETE SET NULL,
   host TEXT NOT NULL,
   port INTEGER NOT NULL DEFAULT 22,
   username TEXT NOT NULL,
   auth_type TEXT NOT NULL CHECK (auth_type IN ('password', 'key')),
-  key_path TEXT,              -- absolute filesystem path, nullable for password auth
-  password_cipher TEXT,       -- encrypted password blob (optional, see Security)
+  key_path TEXT,
+  password_cipher TEXT,           -- AES-256-GCM encrypted blob (base64)
   has_passphrase INTEGER NOT NULL DEFAULT 0,
-  passphrase_cipher TEXT,     -- encrypted passphrase blob (optional)
+  passphrase_cipher TEXT,
+  jump_host_id TEXT REFERENCES ssh_connections(id) ON DELETE SET NULL,
   last_connected_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS ssh_forwards (
+  id TEXT PRIMARY KEY,
+  connection_id TEXT NOT NULL REFERENCES ssh_connections(id) ON DELETE CASCADE,
+  forward_type TEXT NOT NULL CHECK (forward_type IN ('local', 'remote')),
+  bind_address TEXT NOT NULL DEFAULT '127.0.0.1',
+  bind_port INTEGER NOT NULL,
+  remote_host TEXT NOT NULL,
+  remote_port INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ssh_forwards_conn ON ssh_forwards(connection_id);
+
 CREATE TABLE IF NOT EXISTS ssh_host_keys (
   host TEXT NOT NULL,
   port INTEGER NOT NULL,
-  fingerprint TEXT NOT NULL,   -- SHA256:... format
+  fingerprint TEXT NOT NULL,
   approved_at TEXT NOT NULL,
   PRIMARY KEY (host, port)
 );
@@ -213,40 +283,58 @@ CREATE TABLE IF NOT EXISTS ssh_history (
   id TEXT PRIMARY KEY,
   connection_id TEXT NOT NULL,
   attempted_at TEXT NOT NULL,
-  status TEXT NOT NULL,        -- 'connected' | 'failed'
+  status TEXT NOT NULL,            -- 'connected' | 'failed'
   error_code TEXT,
   duration_sec INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_ssh_history_conn ON ssh_history(connection_id, attempted_at DESC);
+
+CREATE TABLE IF NOT EXISTS ssh_kv (
+  key TEXT PRIMARY KEY,            -- arbitrary internal flags, e.g. 'sshmaster_migration_dismissed'
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 ```
+
+Jump-host validation is enforced at the route layer (not DB): we reject `jump_host_id` pointing to a connection whose own `jump_host_id` is non-null.
 
 ### Security
 
 - **PEM files never stored.** We store `key_path` only. On connect, `fs.readFileSync(key_path)` in-memory, passed to ssh2 and discarded. If file is unreadable, return `KEY_READ_ERROR`.
-- **Passwords**: encrypted at rest using the system keychain via Electron `safeStorage`? We're not Electron. Alternative: Node's `crypto.createCipheriv('aes-256-gcm', …)` with a key derived from a per-install random value stored outside SQLite (e.g. `<APP_DATA_DIR>/.ssh_key`). Simpler v1: store passwords as plain base64 in the DB, mark field `password_cipher` for future migration. **v1 ships with base64 storage but the column is named `_cipher` so we can migrate without schema change.** Document this clearly in code comments.
+- **Passwords and passphrases encrypted at rest** with AES-256-GCM. Master key: 32 random bytes generated on first use and stored at `<APP_DATA_DIR>/.ssh_master_key`.
+  - Unix: `fs.chmodSync(path, 0o600)` after write. `fs.openSync(path, 'wx', 0o600)` on create to avoid race.
+  - Windows: `chmod` is a no-op; we rely on the default NTFS ACL inheritance from `APP_DATA_DIR` which is user-scoped by default.
+  - On decrypt failure (tag mismatch, missing master key): return `null`, route responds with a field-level warning so the UI prompts re-entry. Connection is still listed; auth attempts fail with `AUTH_FAILED` until corrected.
+- **Secrets never sent to the client.** GET endpoints mask `password_cipher` / `passphrase_cipher` as `has_password: boolean` only. POST/PATCH accept plaintext in the body; the server encrypts before persistence.
 - **Known hosts**: fingerprint comparison rejects silently on mismatch until user approves. `ssh_host_keys` table keyed by `(host, port)`.
-- **Launched system terminals** receive the ssh command, not the password. Password auth with system terminals is not supported (falls back to key-based or interactive prompt in the terminal).
+- **Launched system terminals** receive the ssh command (no password). Password-auth connections cannot be launched as system terminals — the Launch button is disabled with a tooltip ("Password auth: use the embedded terminal or configure key-based auth"). Key-auth connections pass `-i keyPath`.
+- **Exports strip secrets.** `/api/ssh/export` returns connections with `password_cipher = null`, `passphrase_cipher = null`, `has_password = false`. Users re-enter secrets after import. This is intentional: export files are portable, passwords stay per-install.
 
 ## Frontend Architecture
 
 ### New files
 
 ```
-web/src/views/SshView.tsx                        ← root view: 2-column layout
+web/src/views/SshView.tsx                         ← root view: 2-column layout + migration banner
 web/src/components/ssh/
-  ConnectionList.tsx                              ← left pane list + search + new button
-  ConnectionCard.tsx                              ← single row in list
+  ConnectionList.tsx                              ← left pane: search + group sections + new button
+  ConnectionCard.tsx                              ← single row (with pulsing dot + badge)
   ConnectionDetail.tsx                            ← right pane for selected connection
   SessionTabBar.tsx                               ← tabs above xterm
-  Terminal.tsx                                    ← wraps xterm + addon-fit + WS hookup
-  ConnectionFormModal.tsx                         ← new/edit
+  Terminal.tsx                                    ← wraps xterm + addon-fit + WS hookup + scrollback replay
+  ConnectionFormModal.tsx                         ← new/edit (3 sections incl. jump host + forwards)
+  ForwardsEditor.tsx                              ← dynamic forward list inside ConnectionFormModal
   HostKeyPromptModal.tsx                          ← approval dialog
+  KnownHostsPanel.tsx                             ← list / delete known hosts (opened from right pane "..." menu)
+  ImportExportMenu.tsx                            ← action menu for left-pane "+ New" button dropdown
+  MigrationBanner.tsx                             ← one-shot prompt for ~/.sshmaster import
 web/src/hooks/
-  useSshConnections.ts                            ← connection CRUD + list state
-  useSshSessions.ts                               ← open/close sessions, subscribes to WS 'ssh:session.closed'
-  useSshPty.ts                                    ← per-PTY lifecycle (open, write, data, resize, close)
-web/src/types.ts                                  ← add SshConnection, SshSession, SshPtyRef types
+  useSshConnections.ts                            ← connection CRUD + groups + list state
+  useSshSessions.ts                               ← open/close sessions, subscribes to WS 'ssh:session.closed', forward statuses
+  useSshPty.ts                                    ← per-PTY lifecycle (open, write, data, resize, close, scrollback request)
+  useSshMigration.ts                              ← detect + trigger + dismiss sshmaster import
+web/src/types.ts                                  ← SshConnection, SshSession, SshPtyRef, SshForward, SshGroup, SshHostKey
 ```
 
 ### State management
@@ -275,7 +363,13 @@ Passed down to `SshView` as props. `sshSessions.liveSessionCount` drives the pul
 
 ### Session persistence across navigation
 
-The SSH sessions live on the server. When the user navigates away from `#ssh`, we keep the WebSocket subscriptions open (don't unsubscribe). When the user navigates back, the hook `useSshSessions` already has the full state. The `Terminal` components re-mount but immediately re-subscribe to existing ptyIds — scrollback is lost (xterm DOM was unmounted), but the SSH session and PTY stay alive on the server. If we want to preserve scrollback, we'd need a server-side scrollback buffer — **out of scope for v1**. Document this as a known limitation.
+The SSH sessions live on the server. When the user navigates away from `#ssh`, the client may keep WebSocket subscriptions open or drop them; sessions continue either way. When the user navigates back, `useSshSessions` fetches the current live-session list, and each `Terminal` component on mount:
+
+1. Subscribes to its `ptyId` via `ssh:pty.subscribe`.
+2. The server responds with a `ssh:pty.data` burst containing the full scrollback ring buffer (up to 256 KiB).
+3. xterm renders the buffer, then receives live events.
+
+Scrollback survives because the server retains it per-PTY. Closing a PTY drops the buffer.
 
 ## Routing & nav changes
 
@@ -310,30 +404,38 @@ Render a third `NavGroup` titled `REMOTE`. Icon: a small monitor/terminal glyph.
 ## Success Criteria
 
 - Rail shows `REMOTE > SSH`. Clicking routes to `#ssh`.
+- Rail SSH item shows a muted pulsing dot when any SSH session is live.
 - `SshView` renders left list + right detail in Task Analyst layout.
 - Creating a connection opens the form modal, saving persists to SQLite, the new entry appears in the list.
-- Selecting a connection and clicking "New Session" opens an SSH client, opens a PTY, and renders an xterm. Typing in xterm reaches the remote host; remote output renders.
-- Multiple PTYs per connection work: tabs switch instantly, no stream cross-talk.
+- Password and passphrase fields, when supplied, are encrypted on server (AES-256-GCM), never returned in GETs.
+- Group picker in the form supports creating a new group inline. Deleting a group leaves member connections with `group_id = null`.
+- Left pane search filters connections by alias/host/username substring (case-insensitive). Groups reduce to members matching the filter; empty groups hidden.
+- Selecting a connection and clicking "New Session" opens an SSH client, opens a PTY, renders an xterm. Typing reaches the remote host; remote output renders.
+- Jump host works: connection B with `jump_host_id = A` dials A first then tunnels to B. Circular references and multi-level chains rejected at the route layer.
+- Port forwards activate on connect (local + remote). Forward errors surface as toasts; the forward row in the connection detail shows `active` / `error` state.
+- Multiple PTYs per connection work: tabs switch instantly, no stream cross-talk. Scrollback preserved on tab switch and on re-navigation to `#ssh`.
 - Multiple connections open simultaneously: each maintains its own xterm tab state.
-- Closing the last tab on a connection disconnects the SSH client.
-- Disconnecting triggers the rail indicator to disappear (animation stops when `liveSessionCount` returns to 0).
-- Launching system terminal spawns the native terminal emulator with `ssh user@host -p port -i keyPath` (or omits `-i` for password auth).
-- Host key TOFU: connecting to a new host prompts; approving saves the fingerprint; subsequent connects silently proceed; forged fingerprint (simulated by editing `ssh_host_keys`) triggers the mismatch modal.
-- Leaving `#ssh` and returning re-displays the tabs for all still-live sessions. (Scrollback lost — documented limitation.)
+- Closing the last tab on a connection disconnects the SSH client and deactivates its forwards.
+- Disconnecting triggers the rail indicator to disappear when `liveSessionCount` returns to 0.
+- Launching system terminal spawns the native terminal emulator with the correct ssh args per platform:
+  - macOS: `osascript` → Terminal.app opens a new tab with `ssh user@host -p port -i keyPath`.
+  - Windows: `wt.exe` opens a new tab with the same command; if wt absent, `cmd /c start cmd /k ssh ...`.
+  - Linux: first available of gnome-terminal / konsole / x-terminal-emulator / xterm; if none, toast `NO_TERMINAL`.
+- Host key TOFU: connecting to a new host prompts; approving saves the fingerprint; subsequent connects silently proceed; forged fingerprint triggers the mismatch modal with expected + actual shown.
+- Known hosts panel lists approved entries and supports delete.
+- Leaving `#ssh` and returning re-displays the tabs for all still-live sessions; scrollback replays from the server-side buffer.
+- Export downloads a valid JSON blob; import with `skip` / `update` strategies updates the DB accordingly; secrets are stripped on export and re-prompted on import.
+- On first `#ssh` mount with a readable `~/.sshmaster/connections.json`, a banner offers import; clicking Import runs the migration; clicking Dismiss records the preference and suppresses the banner forever.
 - `npm run build` passes. `npm run check:server` passes. ESLint on `web/` introduces zero new errors.
-- Cross-platform: tested on macOS (dev). Windows/Linux guarded by spawn patterns and per-OS branches, no platform-locked shell calls.
+- Cross-platform: test matrix — macOS primary dev target, Linux headless bootstrap test (spawn patterns), Windows code-path guarded (no shell strings, path-join, wt.exe detection).
 
-## Out of Scope (explicitly, v2+)
+## Out of Scope (explicitly, future work)
 
-- Groups and search (the list may grow; we'll add search when >20 typical).
-- Port forwarding panel in the form and active status on the connection detail.
-- Jump host picker and bastion chaining.
-- JSON import/export dialog.
-- Migration from `~/.sshmaster/connections.json` (one-time opt-in import).
-- Scrollback preservation across navigation.
 - SFTP / file browser.
-- Agent / X11 forwarding.
-- Password credential encryption using OS keychain (v1 uses base64 with `_cipher`-suffixed columns for future migration).
+- Agent forwarding (`-A`), X11 forwarding.
+- Multi-level jump hosts (more than one bastion in the chain).
+- OS-keychain integration (master-key-file approach is sufficient per spec).
+- GUI terminal theming / font customization beyond xterm defaults.
 
 ## Open Questions
 
