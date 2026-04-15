@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SshForward } from "../../types";
 
 type Forward = Omit<SshForward, 'id' | 'connectionId' | 'createdAt'>;
@@ -22,48 +23,12 @@ export function ForwardsEditor({
         <p className="text-[11px] italic text-text-muted">No port forwards configured.</p>
       )}
       {forwards.map((f, i) => (
-        <div key={i} className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-3 py-2">
-          <select
-            value={f.forwardType}
-            onChange={(e) => set(i, { forwardType: e.target.value as 'local' | 'remote' })}
-            className="rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
-          >
-            <option value="local">Local (-L)</option>
-            <option value="remote">Remote (-R)</option>
-          </select>
-          <input
-            value={f.bindAddress}
-            onChange={(e) => set(i, { bindAddress: e.target.value })}
-            className="w-28 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
-            placeholder="127.0.0.1"
-          />
-          <input
-            type="number" value={f.bindPort}
-            onChange={(e) => set(i, { bindPort: Number(e.target.value) || 0 })}
-            className="w-20 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
-            placeholder="port"
-          />
-          <span className="text-text-muted">→</span>
-          <input
-            value={f.remoteHost}
-            onChange={(e) => set(i, { remoteHost: e.target.value })}
-            className="flex-1 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
-            placeholder="localhost"
-          />
-          <input
-            type="number" value={f.remotePort}
-            onChange={(e) => set(i, { remotePort: Number(e.target.value) || 0 })}
-            className="w-20 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
-            placeholder="port"
-          />
-          <button
-            onClick={() => remove(i)}
-            className="text-text-muted hover:text-status-danger"
-            title="Remove"
-          >
-            ×
-          </button>
-        </div>
+        <ForwardRow
+          key={i}
+          forward={f}
+          onChange={(patch) => set(i, patch)}
+          onRemove={() => remove(i)}
+        />
       ))}
       <button
         onClick={add}
@@ -71,6 +36,107 @@ export function ForwardsEditor({
       >
         + Add Forward
       </button>
+    </div>
+  );
+}
+
+function ForwardRow({
+  forward: f,
+  onChange,
+  onRemove,
+}: {
+  forward: Forward;
+  onChange: (patch: Partial<Forward>) => void;
+  onRemove: () => void;
+}) {
+  const [advanced, setAdvanced] = useState(
+    f.bindAddress !== '127.0.0.1' || f.remoteHost !== 'localhost',
+  );
+
+  // Labels adapt to forward direction so users know what each port means.
+  const labels = f.forwardType === 'local'
+    ? { left: 'Local port', right: 'Server port', hint: 'Listens on your machine, tunnels to a port reachable from the SSH server.' }
+    : { left: 'Server port', right: 'Local port', hint: 'SSH server listens on this port, tunnels back to your machine.' };
+
+  return (
+    <div className="space-y-2 rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <select
+          value={f.forwardType}
+          onChange={(e) => onChange({ forwardType: e.target.value as 'local' | 'remote' })}
+          className="rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
+        >
+          <option value="local">Local (-L)</option>
+          <option value="remote">Remote (-R)</option>
+        </select>
+
+        <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
+          {labels.left}
+          <input
+            type="number"
+            value={f.bindPort}
+            onChange={(e) => onChange({ bindPort: Number(e.target.value) || 0 })}
+            className="w-20 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
+            placeholder="port"
+          />
+        </label>
+
+        <span className="text-text-muted">→</span>
+
+        <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
+          {labels.right}
+          <input
+            type="number"
+            value={f.remotePort}
+            onChange={(e) => onChange({ remotePort: Number(e.target.value) || 0 })}
+            className="w-20 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
+            placeholder="port"
+          />
+        </label>
+
+        <div className="flex-1" />
+
+        <button
+          onClick={() => setAdvanced(!advanced)}
+          className="text-[10px] font-medium text-text-muted hover:text-text-primary"
+          title="Bind address and remote host (advanced)"
+        >
+          {advanced ? '▾ Advanced' : '▸ Advanced'}
+        </button>
+
+        <button
+          onClick={onRemove}
+          className="text-text-muted hover:text-status-danger"
+          title="Remove"
+        >
+          ×
+        </button>
+      </div>
+
+      <p className="text-[10px] text-text-muted">{labels.hint}</p>
+
+      {advanced && (
+        <div className="flex items-center gap-2 border-t border-border-default/60 pt-2">
+          <label className="flex items-center gap-1.5 text-[10px] text-text-muted">
+            Bind address
+            <input
+              value={f.bindAddress}
+              onChange={(e) => onChange({ bindAddress: e.target.value })}
+              className="w-28 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
+              placeholder="127.0.0.1"
+            />
+          </label>
+          <label className="flex flex-1 items-center gap-1.5 text-[10px] text-text-muted">
+            Remote host
+            <input
+              value={f.remoteHost}
+              onChange={(e) => onChange({ remoteHost: e.target.value })}
+              className="flex-1 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
+              placeholder="localhost"
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }
