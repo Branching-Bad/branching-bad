@@ -39,10 +39,18 @@ export function ConnectionFormModal({
   onSave: (value: ConnectionFormValue) => Promise<void>;
 }) {
   const [v, setV] = useState<ConnectionFormValue>(() => valueFromInitial(initial));
+  const [portInput, setPortInput] = useState<string>(() => String(valueFromInitial(initial).port));
   const [error, setError] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (open) { setV(valueFromInitial(initial)); setError(""); } }, [open, initial]);
+  useEffect(() => {
+    if (open) {
+      const init = valueFromInitial(initial);
+      setV(init);
+      setPortInput(String(init.port));
+      setError("");
+    }
+  }, [open, initial]);
 
   if (!open) return null;
 
@@ -51,7 +59,8 @@ export function ConnectionFormModal({
     if (!v.alias.trim()) return setError("Alias required");
     if (!v.host.trim()) return setError("Host required");
     if (!v.username.trim()) return setError("Username required");
-    const effectivePort = v.port || 22;
+    if (!/^\d*$/.test(portInput.trim())) return setError("Port must be numeric");
+    const effectivePort = portInput.trim() === "" ? 22 : Number(portInput);
     if (effectivePort < 1 || effectivePort > 65535) return setError("Port out of range");
     if (v.authType === 'key' && !v.keyPath) return setError("Key path required");
     setSaving(true);
@@ -110,7 +119,7 @@ export function ConnectionFormModal({
                 </select>
               </Field>
               <Field label="Host *"><input className={inputClass} value={v.host} onChange={(e) => setV((p) => ({ ...p, host: e.target.value }))} /></Field>
-              <Field label="Port"><input type="number" className={inputClass} value={v.port || ""} placeholder="22" onChange={(e) => setV((p) => ({ ...p, port: e.target.value === "" ? 0 : Number(e.target.value) }))} /></Field>
+              <Field label="Port"><input inputMode="numeric" className={inputClass} value={portInput} placeholder="22" onChange={(e) => setPortInput(e.target.value)} /></Field>
               <Field label="Username *"><input className={inputClass} value={v.username} onChange={(e) => setV((p) => ({ ...p, username: e.target.value }))} /></Field>
               <Field label="Auth type">
                 <div className="flex gap-3">
