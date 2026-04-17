@@ -33,6 +33,22 @@ function wrapError(err: any): SshError {
   return new SshError(code, msg);
 }
 
+function shQuote(s: string): string {
+  return /^[A-Za-z0-9@%+=:,./_-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+export function equivalentSshCommand(conn: SshConnection, jump?: SshConnection): string {
+  const parts = ['ssh'];
+  if (conn.port !== 22) parts.push('-p', String(conn.port));
+  if (conn.authType === 'key' && conn.keyPath) parts.push('-i', shQuote(conn.keyPath));
+  if (jump) {
+    const spec = `${jump.username}@${jump.host}${jump.port !== 22 ? ':' + jump.port : ''}`;
+    parts.push('-J', shQuote(spec));
+  }
+  parts.push(shQuote(`${conn.username}@${conn.host}`));
+  return parts.join(' ');
+}
+
 export interface ConnectInput {
   conn: SshConnection;
   password?: string;
@@ -139,6 +155,7 @@ export function createSshManager({
 
   async function connect(input: ConnectInput): Promise<{ sessionId: string }> {
     const { conn, password, passphrase, jumpHost, jumpHostSecrets } = input;
+    console.error(`[ssh] dialing — equivalent CLI: ${equivalentSshCommand(conn, jumpHost)}`);
     let client: Client;
     let bastion: Client | undefined;
     if (jumpHost) {
