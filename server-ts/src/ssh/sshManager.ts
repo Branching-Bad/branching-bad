@@ -1,4 +1,7 @@
-import { Client, utils as sshUtils } from 'ssh2';
+import ssh2pkg from 'ssh2';
+import type { Client as ClientType } from 'ssh2';
+const { Client, utils: sshUtils } = ssh2pkg;
+type Client = ClientType;
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
 import type { SshConnection, SshSessionInfo } from './types.js';
