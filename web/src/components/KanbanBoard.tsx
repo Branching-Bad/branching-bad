@@ -235,9 +235,6 @@ export function KanbanBoard({
                 Queue Mode
               </button>
             )}
-            {onToggleQueueMode && toolbarContent && (
-              <span aria-hidden="true" className="h-4 w-px bg-border-default" />
-            )}
             {toolbarContent}
           </div>
         </div>

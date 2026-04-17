@@ -126,6 +126,7 @@ export function JiraSprintQuickSwitch({
 
   return (
     <div className="flex items-center gap-1.5">
+      <span aria-hidden="true" className="h-4 w-px bg-border-default" />
       <select
         className="min-w-[200px] appearance-none rounded-full border-0 bg-transparent px-2 py-1 text-[11px] text-text-primary focus:outline-none focus:shadow-[0_0_0_2px_var(--color-brand-glow)]"
         value={selectedSprintId}
