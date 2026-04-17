@@ -39,7 +39,15 @@ function shQuote(s: string): string {
 
 export function equivalentSshCommand(conn: SshConnection, jump?: SshConnection): string {
   const parts = ['ssh'];
+  const forwards = conn.forwards ?? [];
+  if (forwards.length > 0) parts.push('-N');
   if (conn.port !== 22) parts.push('-p', String(conn.port));
+  for (const f of forwards) {
+    const flag = f.forwardType === 'local' ? '-L' : '-R';
+    const bind = f.bindAddress && f.bindAddress !== '127.0.0.1' && f.bindAddress !== 'localhost'
+      ? `${f.bindAddress}:` : '';
+    parts.push(flag, shQuote(`${bind}${f.bindPort}:${f.remoteHost}:${f.remotePort}`));
+  }
   if (conn.authType === 'key' && conn.keyPath) parts.push('-i', shQuote(conn.keyPath));
   if (jump) {
     const spec = `${jump.username}@${jump.host}${jump.port !== 22 ? ':' + jump.port : ''}`;
