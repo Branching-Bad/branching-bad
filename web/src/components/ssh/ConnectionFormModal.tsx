@@ -109,7 +109,7 @@ export function ConnectionFormModal({
                 </select>
               </Field>
               <Field label="Host *"><input className={inputClass} value={v.host} onChange={(e) => setV((p) => ({ ...p, host: e.target.value }))} /></Field>
-              <Field label="Port *"><input type="number" className={inputClass} value={v.port} onChange={(e) => setV((p) => ({ ...p, port: Number(e.target.value) || 22 }))} /></Field>
+              <Field label="Port"><input type="number" className={inputClass} value={v.port} placeholder="22" onChange={(e) => setV((p) => ({ ...p, port: Number(e.target.value) || 22 }))} /></Field>
               <Field label="Username *"><input className={inputClass} value={v.username} onChange={(e) => setV((p) => ({ ...p, username: e.target.value }))} /></Field>
               <Field label="Auth type">
                 <div className="flex gap-3">
