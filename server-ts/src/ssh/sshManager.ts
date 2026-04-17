@@ -1,4 +1,4 @@
-import { Client } from 'ssh2';
+import { Client, utils as sshUtils } from 'ssh2';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
 import type { SshConnection, SshSessionInfo } from './types.js';
@@ -65,14 +65,34 @@ export function createSshManager({
       opts.password = password;
     } else {
       if (!conn.keyPath) throw new SshError('AUTH_FAILED', 'Key path not set');
+      let keyData: Buffer;
       try {
-        opts.privateKey = fs.readFileSync(conn.keyPath);
+        keyData = fs.readFileSync(conn.keyPath);
       } catch (e: any) {
-        throw new SshError('KEY_READ_ERROR', e.message);
+        throw new SshError('KEY_READ_ERROR', `Cannot read key file: ${e.message}`);
       }
-      if (conn.hasPassphrase && passphrase) opts.passphrase = passphrase;
+      const parsed = sshUtils.parseKey(keyData, passphrase);
+      if (parsed instanceof Error) {
+        throw keyParseError(parsed, Boolean(passphrase));
+      }
+      opts.privateKey = keyData;
+      if (passphrase) opts.passphrase = passphrase;
     }
     return opts;
+  }
+
+  function keyParseError(err: Error, hasPassphrase: boolean): SshError {
+    const msg = err.message;
+    if (/encrypted.*no passphrase/i.test(msg)) {
+      return new SshError('PASSPHRASE_REQUIRED', 'Key is encrypted — passphrase required. Edit the connection and enter the passphrase.');
+    }
+    if (/bad passphrase|bad decrypt|integrity check|HMAC/i.test(msg)) {
+      return new SshError('BAD_PASSPHRASE', 'Incorrect passphrase for this key.');
+    }
+    if (/public key|no such/i.test(msg) && !hasPassphrase) {
+      return new SshError('PUBLIC_KEY_SELECTED', 'Selected file is a public key. Pick the matching private key (without .pub).');
+    }
+    return new SshError('KEY_PARSE_ERROR', `Invalid private key: ${msg}`);
   }
 
   function dialOnce(conn: SshConnection, password: string | undefined, passphrase: string | undefined, sock?: any): Promise<Client> {
@@ -93,6 +113,10 @@ export function createSshManager({
       cb(false);
     };
 
+    if (process.env.SSH_DEBUG) {
+      opts.debug = (msg: string) => console.error(`[ssh2] ${conn.host}:${conn.port} ${msg}`);
+    }
+
     return new Promise<Client>((resolve, reject) => {
       const client = new Client();
       let settled = false;
@@ -102,6 +126,7 @@ export function createSshManager({
         settled = true;
         try { client.end(); } catch {}
         if (hostKeyError) return reject(hostKeyError);
+        console.error(`[ssh] connect failed ${conn.username}@${conn.host}:${conn.port} keyPath=${conn.keyPath ?? '-'} err=${e.message}`);
         reject(wrapError(e));
       });
       client.on('close', () => {});
