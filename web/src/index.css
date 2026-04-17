@@ -74,12 +74,25 @@
 }
 
 @layer base {
+  html {
+    color-scheme: dark;
+  }
   body {
     font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
     background-color: var(--color-surface-0);
     color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Native select popup — Windows/Chromium renders <option> with OS theme
+     unless we explicitly set bg/fg on them. Enforce dark-on-light here. */
+  select {
+    color-scheme: dark;
+  }
+  select option {
+    background-color: var(--color-surface-200);
+    color: var(--color-text-primary);
   }
 
   code, pre {
