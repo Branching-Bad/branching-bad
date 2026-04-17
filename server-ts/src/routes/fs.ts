@@ -13,6 +13,11 @@ interface DirEntry {
   isGit: boolean;
 }
 
+interface FileEntry {
+  name: string;
+  path: string;
+}
+
 interface DriveInfo {
   letter: string;
   path: string;
@@ -50,6 +55,8 @@ export function fsRoutes(): Router {
   router.get('/api/fs/list', (req: Request, res: Response) => {
     try {
       const queryPath = (req.query.path as string)?.trim();
+      const includeFiles = req.query.files === '1';
+      const includeHidden = req.query.hidden === '1';
       const base = queryPath || homeDir();
 
       let canonical: string;
@@ -74,17 +81,22 @@ export function fsRoutes(): Router {
       }
 
       const dirs: DirEntry[] = [];
+      const files: FileEntry[] = [];
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        if (entry.name.startsWith('.')) continue;
+        if (!includeHidden && entry.name.startsWith('.')) continue;
         const fullPath = path.join(canonical, entry.name);
-        const isGit = fsNode.existsSync(path.join(fullPath, '.git'));
-        dirs.push({ name: entry.name, path: fullPath, isGit });
+        if (entry.isDirectory()) {
+          const isGit = fsNode.existsSync(path.join(fullPath, '.git'));
+          dirs.push({ name: entry.name, path: fullPath, isGit });
+        } else if (includeFiles && entry.isFile()) {
+          files.push({ name: entry.name, path: fullPath });
+        }
       }
 
-      dirs.sort((a, b) =>
-        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
-      );
+      const byName = (a: { name: string }, b: { name: string }) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+      dirs.sort(byName);
+      files.sort(byName);
 
       const parentDir = path.dirname(canonical);
       const atRoot = isRootPath(canonical);
@@ -99,6 +111,7 @@ export function fsRoutes(): Router {
         path: canonical,
         parent: atRoot ? null : parentDir,
         dirs,
+        ...(includeFiles ? { files } : {}),
         ...(drives ? { drives } : {}),
       });
     } catch (e) {

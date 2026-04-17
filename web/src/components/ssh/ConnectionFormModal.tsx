@@ -125,7 +125,7 @@ export function ConnectionFormModal({
               {v.authType === 'key' && (
                 <>
                   <Field label="Key path *">
-                    <FolderPicker value={v.keyPath ?? ""} onChange={(val) => setV((p) => ({ ...p, keyPath: val }))} />
+                    <FolderPicker mode="file" value={v.keyPath ?? ""} onChange={(val) => setV((p) => ({ ...p, keyPath: val }))} />
                   </Field>
                   <Field label={initial ? "Passphrase (leave blank to keep)" : "Passphrase (optional)"}>
                     <input type="password" className={inputClass} value={v.passphrase} onChange={(e) => setV((p) => ({ ...p, passphrase: e.target.value }))} />

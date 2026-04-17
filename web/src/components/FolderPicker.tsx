@@ -1,42 +1,68 @@
 import { useState, useCallback } from "react";
 import { api } from "../api";
-import { IconFolder, IconChevronUp, IconX } from "./icons";
+import { IconFolder, IconChevronUp, IconX, IconDocument } from "./icons";
 import { btnPrimary } from "./shared";
 
 type FsDir = { name: string; path: string; isGit: boolean };
+type FsFile = { name: string; path: string };
 type FsDrive = { letter: string; path: string };
-type FsListResponse = { path: string; parent: string | null; dirs: FsDir[]; drives?: FsDrive[] };
+type FsListResponse = {
+  path: string;
+  parent: string | null;
+  dirs: FsDir[];
+  files?: FsFile[];
+  drives?: FsDrive[];
+};
 
-export function FolderPicker({ value, onChange }: { value: string; onChange: (path: string) => void }) {
+export function FolderPicker({
+  value,
+  onChange,
+  mode = "folder",
+}: {
+  value: string;
+  onChange: (path: string) => void;
+  mode?: "folder" | "file";
+}) {
   const [open, setOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState("");
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [dirs, setDirs] = useState<FsDir[]>([]);
+  const [files, setFiles] = useState<FsFile[]>([]);
   const [drives, setDrives] = useState<FsDrive[]>([]);
   const [loading, setLoading] = useState(false);
   const [fsError, setFsError] = useState("");
+
+  const fileMode = mode === "file";
 
   const loadDir = useCallback(async (path?: string) => {
     setLoading(true);
     setFsError("");
     try {
-      const qs = path ? `?path=${encodeURIComponent(path)}` : "";
+      const params = new URLSearchParams();
+      if (path) params.set("path", path);
+      if (fileMode) {
+        params.set("files", "1");
+        params.set("hidden", "1");
+      }
+      const qs = params.toString() ? `?${params.toString()}` : "";
       const res = await api<FsListResponse>(`/api/fs/list${qs}`);
       setCurrentPath(res.path);
       setParentPath(res.parent);
       setDirs(res.dirs);
+      setFiles(res.files ?? []);
       setDrives(res.drives ?? []);
     } catch (e) {
       setFsError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fileMode]);
 
   const handleOpen = useCallback(() => {
     setOpen(true);
-    void loadDir(value || undefined);
-  }, [value, loadDir]);
+    const initial = value && fileMode ? parentOfPath(value) : value || undefined;
+    void loadDir(initial);
+  }, [value, fileMode, loadDir]);
 
   const handleSelect = useCallback((path: string) => {
     onChange(path);
@@ -52,13 +78,21 @@ export function FolderPicker({ value, onChange }: { value: string; onChange: (pa
       >
         {value ? (
           <span className="flex items-center gap-2">
-            <IconFolder className="h-4 w-4 shrink-0 text-brand" />
+            {fileMode ? (
+              <IconDocument className="h-4 w-4 shrink-0 text-brand" />
+            ) : (
+              <IconFolder className="h-4 w-4 shrink-0 text-brand" />
+            )}
             <span className="truncate text-text-primary">{value}</span>
           </span>
         ) : (
           <span className="flex items-center gap-2 text-text-muted">
-            <IconFolder className="h-4 w-4 shrink-0" />
-            Choose folder…
+            {fileMode ? (
+              <IconDocument className="h-4 w-4 shrink-0" />
+            ) : (
+              <IconFolder className="h-4 w-4 shrink-0" />
+            )}
+            {fileMode ? "Choose file…" : "Choose folder…"}
           </span>
         )}
       </button>
@@ -69,7 +103,9 @@ export function FolderPicker({ value, onChange }: { value: string; onChange: (pa
           <div className="relative w-full max-w-[480px] rounded-2xl border border-border-default bg-surface-100 shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-border-default px-5 py-3">
-              <h3 className="text-sm font-medium text-text-primary">Select Folder</h3>
+              <h3 className="text-sm font-medium text-text-primary">
+                {fileMode ? "Select File" : "Select Folder"}
+              </h3>
               <button onClick={() => setOpen(false)} className="rounded-md p-1 text-text-muted transition hover:bg-surface-300 hover:text-text-primary">
                 <IconX className="h-4 w-4" />
               </button>
@@ -121,47 +157,75 @@ export function FolderPicker({ value, onChange }: { value: string; onChange: (pa
 
               {loading ? (
                 <div className="py-8 text-center text-xs text-text-muted">Loading…</div>
-              ) : dirs.length === 0 ? (
-                <div className="py-8 text-center text-xs text-text-muted">No subdirectories</div>
+              ) : dirs.length === 0 && files.length === 0 ? (
+                <div className="py-8 text-center text-xs text-text-muted">
+                  {fileMode ? "Empty" : "No subdirectories"}
+                </div>
               ) : (
-                dirs.map((dir) => (
-                  <div key={dir.path} className="group flex items-center rounded-lg transition hover:bg-surface-300">
-                    <button
-                      onClick={() => void loadDir(dir.path)}
-                      className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
-                    >
-                      <IconFolder className={`h-4 w-4 shrink-0 ${dir.isGit ? "text-brand" : "text-text-muted"}`} />
-                      <span className="truncate text-sm text-text-primary">{dir.name}</span>
-                      {dir.isGit && (
-                        <span className="ml-auto shrink-0 rounded-full border border-brand/30 bg-brand-tint px-1.5 py-0.5 text-[10px] text-brand">
-                          git
-                        </span>
+                <>
+                  {dirs.map((dir) => (
+                    <div key={dir.path} className="group flex items-center rounded-lg transition hover:bg-surface-300">
+                      <button
+                        onClick={() => void loadDir(dir.path)}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
+                      >
+                        <IconFolder className={`h-4 w-4 shrink-0 ${dir.isGit ? "text-brand" : "text-text-muted"}`} />
+                        <span className="truncate text-sm text-text-primary">{dir.name}</span>
+                        {dir.isGit && (
+                          <span className="ml-auto shrink-0 rounded-full border border-brand/30 bg-brand-tint px-1.5 py-0.5 text-[10px] text-brand">
+                            git
+                          </span>
+                        )}
+                      </button>
+                      {!fileMode && (
+                        <button
+                          onClick={() => handleSelect(dir.path)}
+                          className="mr-2 shrink-0 rounded-md border border-brand-glow bg-brand-dark px-2 py-1 text-[11px] font-medium text-brand opacity-0 transition group-hover:opacity-100"
+                        >
+                          Select
+                        </button>
                       )}
-                    </button>
+                    </div>
+                  ))}
+                  {files.map((file) => (
                     <button
-                      onClick={() => handleSelect(dir.path)}
-                      className="mr-2 shrink-0 rounded-md border border-brand-glow bg-brand-dark px-2 py-1 text-[11px] font-medium text-brand opacity-0 transition group-hover:opacity-100"
+                      key={file.path}
+                      onClick={() => handleSelect(file.path)}
+                      className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left transition hover:bg-surface-300"
                     >
-                      Select
+                      <IconDocument className="h-4 w-4 shrink-0 text-text-muted" />
+                      <span className="truncate text-sm text-text-primary">{file.name}</span>
                     </button>
-                  </div>
-                ))
+                  ))}
+                </>
               )}
             </div>
 
-            {/* Footer: select current dir */}
-            <div className="flex items-center justify-between border-t border-border-default px-5 py-3">
-              <span className="truncate text-xs text-text-muted">{currentPath}</span>
-              <button
-                onClick={() => handleSelect(currentPath)}
-                className={`${btnPrimary} !py-1.5 !px-3 text-xs`}
-              >
-                Select This Folder
-              </button>
-            </div>
+            {/* Footer: select current dir (folder mode only) */}
+            {fileMode ? (
+              <div className="border-t border-border-default px-5 py-2.5">
+                <span className="truncate text-xs text-text-muted">{currentPath}</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between border-t border-border-default px-5 py-3">
+                <span className="truncate text-xs text-text-muted">{currentPath}</span>
+                <button
+                  onClick={() => handleSelect(currentPath)}
+                  className={`${btnPrimary} !py-1.5 !px-3 text-xs`}
+                >
+                  Select This Folder
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
     </>
   );
+}
+
+function parentOfPath(p: string): string | undefined {
+  const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  if (idx <= 0) return undefined;
+  return p.slice(0, idx);
 }
