@@ -95,6 +95,7 @@ export function ConnectionDetail({
   }, [tabs, pty, activeTabId]);
 
   const launchSystemTerminal = () => { void sshSessions.launchSystemTerminal(conn.id); };
+  const hasActiveSession = sessions.some((s) => s.connectionId === conn.id);
   const disconnectAll = async () => {
     const mine = sessions.filter((s) => s.connectionId === conn.id);
     for (const s of mine) { await sshSessions.disconnect(s.sessionId); }
@@ -119,6 +120,14 @@ export function ConnectionDetail({
             {connecting && <MiniSpinner />}
             {connecting ? 'Connecting…' : '+ New Session'}
           </button>
+          {hasActiveSession && (
+            <button
+              onClick={() => void disconnectAll()}
+              className="rounded-md bg-status-danger/10 px-2.5 py-1 text-[11px] font-medium text-status-danger hover:bg-status-danger/20"
+            >
+              Disconnect
+            </button>
+          )}
           <button onClick={onEdit} className={btnSecondary + ' text-[11px]'}>Edit</button>
           <button
             onClick={onDelete}
@@ -160,9 +169,6 @@ export function ConnectionDetail({
           <footer className="flex items-center justify-end gap-2 border-t border-border-default px-6 py-2 text-[11px]">
             <button onClick={launchSystemTerminal} disabled={conn.authType === 'password'} className={btnSecondary + ' text-[11px] disabled:opacity-50'} title={conn.authType === 'password' ? 'Password auth: use embedded terminal or key-based auth' : undefined}>
               System Terminal
-            </button>
-            <button onClick={() => void disconnectAll()} className="rounded-md bg-status-danger/10 px-2.5 py-1 font-medium text-status-danger hover:bg-status-danger/20">
-              Disconnect
             </button>
           </footer>
         </>
