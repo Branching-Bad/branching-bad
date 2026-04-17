@@ -51,18 +51,27 @@ export function createForwardManager({ ssh }: { ssh: SshManager }) {
           else resolve();
         });
       });
-      if (!(session.client as any).__forwardInWired) {
-        (session.client as any).__forwardInWired = true;
-        (session.client as any).on('tcp connection', (_info: any, accept: any) => {
-          const stream = accept();
-          const target = net.connect(fwd.remotePort, fwd.remoteHost, () => {
-            stream.pipe(target).pipe(stream);
-          });
-          target.on('error', () => stream.end());
-        });
-      }
+      const routes = wireRemoteRouter(session.client, sessionId);
+      routes.set(fwd.bindPort, { host: fwd.remoteHost, port: fwd.remotePort });
       state.active.push({ forwardId: fwd.id, type: 'remote', bindAddress: fwd.bindAddress, bindPort: fwd.bindPort });
     }
+  }
+
+  function wireRemoteRouter(client: any, sessionId: string): Map<number, { host: string; port: number }> {
+    if (client.__forwardInRoutes) return client.__forwardInRoutes as Map<number, { host: string; port: number }>;
+    const routes = new Map<number, { host: string; port: number }>();
+    client.__forwardInRoutes = routes;
+    client.on('tcp connection', (info: { destPort: number }, accept: () => any) => {
+      const route = routes.get(info.destPort);
+      const stream = accept();
+      if (!route) { stream.end(); return; }
+      const target = net.connect(route.port, route.host, () => {
+        stream.pipe(target).pipe(stream);
+      });
+      target.on('error', () => stream.end());
+    });
+    void sessionId;
+    return routes;
   }
 
   async function deactivate(sessionId: string, forwardId: string): Promise<void> {
@@ -76,6 +85,8 @@ export function createForwardManager({ ssh }: { ssh: SshManager }) {
     } else {
       const session = ssh.get(sessionId);
       if (session) {
+        const routes = (session.client as any).__forwardInRoutes as Map<number, unknown> | undefined;
+        routes?.delete(entry.bindPort);
         await new Promise<void>((resolve) => session.client.unforwardIn(entry.bindAddress, entry.bindPort, () => resolve()));
       }
     }
