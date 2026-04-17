@@ -57,11 +57,11 @@ function ForwardRow({
     <div className="space-y-2 rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-3 py-2">
       <div className="flex items-center gap-2">
         <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-          Local port
+          Server port
           <input
             type="number"
-            value={f.bindPort}
-            onChange={(e) => onChange({ bindPort: Number(e.target.value) || 0 })}
+            value={f.remotePort}
+            onChange={(e) => onChange({ remotePort: Number(e.target.value) || 0 })}
             className="w-20 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
             placeholder="port"
           />
@@ -70,11 +70,11 @@ function ForwardRow({
         <span className="text-text-muted">→</span>
 
         <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-          Server port
+          Local port
           <input
             type="number"
-            value={f.remotePort}
-            onChange={(e) => onChange({ remotePort: Number(e.target.value) || 0 })}
+            value={f.bindPort}
+            onChange={(e) => onChange({ bindPort: Number(e.target.value) || 0 })}
             className="w-20 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
             placeholder="port"
           />
@@ -100,7 +100,7 @@ function ForwardRow({
       </div>
 
       <p className="text-[10px] text-text-muted">
-        Listens on your machine, tunnels to a port reachable from the SSH server.
+        Server's port (reachable from the SSH host) becomes available on your local port.
       </p>
 
       {advanced && (
