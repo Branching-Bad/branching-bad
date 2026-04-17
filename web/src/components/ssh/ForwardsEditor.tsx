@@ -49,13 +49,21 @@ function ForwardRow({
   onChange: (patch: Partial<Forward>) => void;
   onRemove: () => void;
 }) {
-  const [advanced, setAdvanced] = useState(
-    f.bindAddress !== '127.0.0.1' || f.remoteHost !== 'localhost',
-  );
+  const [advanced, setAdvanced] = useState(f.bindAddress !== '127.0.0.1');
 
   return (
     <div className="space-y-2 rounded-[var(--radius-md)] border border-border-default bg-surface-200 px-3 py-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex flex-1 min-w-[140px] items-center gap-1.5 text-[11px] text-text-muted">
+          Target host
+          <input
+            value={f.remoteHost}
+            onChange={(e) => onChange({ remoteHost: e.target.value })}
+            className="flex-1 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
+            placeholder="localhost"
+          />
+        </label>
+
         <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
           Server port
           <input
@@ -80,12 +88,10 @@ function ForwardRow({
           />
         </label>
 
-        <div className="flex-1" />
-
         <button
           onClick={() => setAdvanced(!advanced)}
           className="text-[10px] font-medium text-text-muted hover:text-text-primary"
-          title="Bind address and remote host (advanced)"
+          title="Bind address (advanced)"
         >
           {advanced ? '▾ Advanced' : '▸ Advanced'}
         </button>
@@ -100,7 +106,9 @@ function ForwardRow({
       </div>
 
       <p className="text-[10px] text-text-muted">
-        Server's port (reachable from the SSH host) becomes available on your local port.
+        <code>target host:server port</code> reachable <em>from the SSH server</em> (use
+        <code> localhost</code> for services on the SSH host itself). Exposed on your
+        machine at <code>local port</code>.
       </p>
 
       {advanced && (
@@ -112,15 +120,6 @@ function ForwardRow({
               onChange={(e) => onChange({ bindAddress: e.target.value })}
               className="w-28 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
               placeholder="127.0.0.1"
-            />
-          </label>
-          <label className="flex flex-1 items-center gap-1.5 text-[10px] text-text-muted">
-            Remote host
-            <input
-              value={f.remoteHost}
-              onChange={(e) => onChange({ remoteHost: e.target.value })}
-              className="flex-1 rounded bg-surface-300 px-2 py-1 text-[11px] text-text-primary"
-              placeholder="localhost"
             />
           </label>
         </div>
