@@ -13,6 +13,10 @@ export interface TaskMemory {
   created_at: string;
 }
 
+export interface TaskMemoryWithRank extends TaskMemory {
+  rank: number;
+}
+
 declare module './index.js' {
   interface Db {
     insertTaskMemory(
@@ -30,6 +34,7 @@ declare module './index.js' {
       summary: string,
     ): TaskMemory;
     searchMemories(repoId: string, query: string, limit?: number): TaskMemory[];
+    searchMemoriesWithRank(repoId: string, query: string, limit?: number): TaskMemoryWithRank[];
     listMemories(repoId: string, limit: number, offset: number): { memories: TaskMemory[]; total: number };
     getMemoriesByTask(taskId: string): TaskMemory[];
     hasMemoriesForTask(taskId: string): boolean;
@@ -107,6 +112,21 @@ Db.prototype.searchMemories = function (
      ORDER BY bm25(task_memories_fts) LIMIT ?`,
   ).all(query, repoId, limit) as any[];
   return rows.map(rowToMemory);
+};
+
+Db.prototype.searchMemoriesWithRank = function (
+  repoId: string,
+  query: string,
+  limit = 10,
+): TaskMemoryWithRank[] {
+  const db = this.connect();
+  const rows = db.prepare(
+    `SELECT m.*, bm25(task_memories_fts) AS rank FROM task_memories m
+     JOIN task_memories_fts fts ON m.rowid = fts.rowid
+     WHERE task_memories_fts MATCH ? AND m.repo_id = ?
+     ORDER BY rank LIMIT ?`,
+  ).all(query, repoId, limit) as any[];
+  return rows.map((r) => ({ ...rowToMemory(r), rank: typeof r.rank === 'number' ? r.rank : 0 }));
 };
 
 Db.prototype.listMemories = function (

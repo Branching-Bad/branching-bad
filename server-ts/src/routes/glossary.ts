@@ -1,9 +1,33 @@
 import { Router, type Request, type Response } from 'express';
 import { ApiError } from '../errors.js';
+import { sanitizeFtsQuery, buildFtsMatchExpr } from '../db/ftsQuery.js';
 import type { AppState } from '../state.js';
 
 export function glossaryRoutes(): Router {
   const router = Router();
+
+  // GET /api/glossary/fts-test?repoId=...&q=... — FTS diagnostic: sanitized query + BM25-ranked results
+  router.get('/api/glossary/fts-test', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const repoId = String(req.query.repoId ?? '');
+      if (!repoId) return ApiError.badRequest('repoId is required').toResponse(res);
+      const raw = String(req.query.q ?? '');
+      const sanitized = sanitizeFtsQuery(raw);
+      const matchExpr = buildFtsMatchExpr(sanitized);
+      const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '10'), 10) || 10));
+      if (!matchExpr) return res.json({ raw, sanitized, matchExpr: '', results: [] });
+      try {
+        const results = state.db.searchGlossaryTermsWithRank(repoId, matchExpr, limit);
+        return res.json({ raw, sanitized, matchExpr, results });
+      } catch (err) {
+        return res.json({ raw, sanitized, matchExpr, results: [], error: err instanceof Error ? err.message : String(err) });
+      }
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
 
   // GET /api/glossary?repoId=...&q=...
   router.get('/api/glossary', (req: Request, res: Response) => {
@@ -14,9 +38,9 @@ export function glossaryRoutes(): Router {
 
       const query = String(req.query.q ?? '');
       if (query) {
-        const sanitized = query.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (!sanitized) return res.json({ terms: [] });
-        const terms = state.db.searchGlossaryTerms(repoId, sanitized);
+        const matchExpr = buildFtsMatchExpr(sanitizeFtsQuery(query));
+        if (!matchExpr) return res.json({ terms: [] });
+        const terms = state.db.searchGlossaryTerms(repoId, matchExpr);
         return res.json({ terms });
       }
 

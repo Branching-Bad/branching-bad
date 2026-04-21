@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { GlossaryTerm } from "../hooks/useGlossaryState";
 import { ImportDialog } from "./ImportDialog";
+import { FtsTestBox } from "./FtsTestBox";
 import { IconX } from "./icons";
 import { inputClass, btnPrimary, btnSecondary } from "./shared";
 
@@ -55,6 +56,18 @@ export function GlossaryPanel({
 
   return (
     <div className="space-y-4">
+      <FtsTestBox<GlossaryTerm & { rank: number }>
+        repoId={selectedRepoId}
+        endpoint="/api/glossary/fts-test"
+        placeholder="Paste a task prompt to see which glossary terms the planner would surface..."
+        renderItem={(r) => (
+          <>
+            <div className="text-xs font-medium text-text-primary">{r.term}</div>
+            <div className="text-[11px] text-text-secondary leading-relaxed whitespace-pre-wrap">{r.description}</div>
+          </>
+        )}
+      />
+
       <div>
         <label className="mb-1.5 block text-xs font-semibold text-text-muted uppercase tracking-wider">Add Term</label>
         <div className="flex flex-col gap-1.5">

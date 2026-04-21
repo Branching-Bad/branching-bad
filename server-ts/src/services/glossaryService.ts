@@ -1,15 +1,16 @@
 import type { Db } from '../db/index.js';
+import { sanitizeFtsQuery, buildFtsMatchExpr } from '../db/ftsQuery.js';
 
 /**
  * Search glossary for terms relevant to the given text and format as a prompt section.
  */
 export function buildGlossarySection(db: Db, repoId: string, text: string): string {
-  const sanitized = text.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!sanitized) return '';
+  const matchExpr = buildFtsMatchExpr(sanitizeFtsQuery(text));
+  if (!matchExpr) return '';
 
   let terms;
   try {
-    terms = db.searchGlossaryTerms(repoId, sanitized, 5);
+    terms = db.searchGlossaryTerms(repoId, matchExpr, 5);
   } catch {
     return '';
   }

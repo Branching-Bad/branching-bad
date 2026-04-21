@@ -2,6 +2,7 @@ import type { Db } from '../db/index.js';
 import type { TaskMemory } from '../db/memories.js';
 import type { TaskWithPayload } from '../models.js';
 import { invokeAgentCli } from '../planner/agent.js';
+import { sanitizeFtsQuery, buildFtsMatchExpr } from '../db/ftsQuery.js';
 
 /**
  * Search for relevant memories and format as a prompt section.
@@ -12,15 +13,13 @@ export function buildMemoriesSection(db: Db, task: TaskWithPayload): string {
   const query = `${task.title} ${task.description ?? ''}`.trim();
   if (!query) return '';
 
-  // Sanitize FTS5 query: remove special chars that break MATCH
-  const sanitized = query.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const matchExpr = buildFtsMatchExpr(sanitizeFtsQuery(query));
 
   let memories: TaskMemory[] = [];
 
-  // 1. Try FTS5 full-text search
-  if (sanitized) {
+  if (matchExpr) {
     try {
-      memories = db.searchMemories(task.repo_id, sanitized, 5);
+      memories = db.searchMemories(task.repo_id, matchExpr, 5);
     } catch {
       // FTS query may fail with certain character combinations
     }
@@ -52,11 +51,11 @@ export function buildMemoriesSection(db: Db, task: TaskWithPayload): string {
  * prompt-ready section or empty string.
  */
 export function buildMemoriesSectionForQuery(db: Db, repoId: string, query: string, limit = 5): string {
-  const sanitized = (query ?? '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const matchExpr = buildFtsMatchExpr(sanitizeFtsQuery(query));
 
   let memories: TaskMemory[] = [];
-  if (sanitized) {
-    try { memories = db.searchMemories(repoId, sanitized, limit); } catch { /* ignore */ }
+  if (matchExpr) {
+    try { memories = db.searchMemories(repoId, matchExpr, limit); } catch { /* ignore */ }
   }
   if (memories.length === 0) {
     try {

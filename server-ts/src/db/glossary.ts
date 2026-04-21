@@ -9,6 +9,10 @@ export interface GlossaryTerm {
   created_at: string;
 }
 
+export interface GlossaryTermWithRank extends GlossaryTerm {
+  rank: number;
+}
+
 declare module './index.js' {
   interface Db {
     insertGlossaryTerm(repoId: string, term: string, description: string): GlossaryTerm;
@@ -16,6 +20,7 @@ declare module './index.js' {
     deleteGlossaryTerm(id: string): void;
     listGlossaryTerms(repoId: string): GlossaryTerm[];
     searchGlossaryTerms(repoId: string, query: string, limit?: number): GlossaryTerm[];
+    searchGlossaryTermsWithRank(repoId: string, query: string, limit?: number): GlossaryTermWithRank[];
     findGlossaryTermByName(repoId: string, term: string): GlossaryTerm | null;
   }
 }
@@ -90,4 +95,19 @@ Db.prototype.searchGlossaryTerms = function (
      ORDER BY bm25(glossary_terms_fts) LIMIT ?`,
   ).all(query, repoId, limit) as any[];
   return rows.map(rowToTerm);
+};
+
+Db.prototype.searchGlossaryTermsWithRank = function (
+  repoId: string,
+  query: string,
+  limit = 10,
+): GlossaryTermWithRank[] {
+  const db = this.connect();
+  const rows = db.prepare(
+    `SELECT g.*, bm25(glossary_terms_fts) AS rank FROM glossary_terms g
+     JOIN glossary_terms_fts fts ON g.rowid = fts.rowid
+     WHERE glossary_terms_fts MATCH ? AND g.repo_id = ?
+     ORDER BY rank LIMIT ?`,
+  ).all(query, repoId, limit) as any[];
+  return rows.map((r) => ({ ...rowToTerm(r), rank: typeof r.rank === 'number' ? r.rank : 0 }));
 };

@@ -1,9 +1,33 @@
 import { Router, type Request, type Response } from 'express';
 import { ApiError } from '../errors.js';
+import { sanitizeFtsQuery, buildFtsMatchExpr } from '../db/ftsQuery.js';
 import type { AppState } from '../state.js';
 
 export function memoryRoutes(): Router {
   const router = Router();
+
+  // GET /api/memories/fts-test?repoId=...&q=... — FTS diagnostic: sanitized query + BM25-ranked results
+  router.get('/api/memories/fts-test', (req: Request, res: Response) => {
+    const state = req.app.locals.state as AppState;
+    try {
+      const repoId = String(req.query.repoId ?? '');
+      if (!repoId) return ApiError.badRequest('repoId is required.').toResponse(res);
+      const raw = String(req.query.q ?? '');
+      const sanitized = sanitizeFtsQuery(raw);
+      const matchExpr = buildFtsMatchExpr(sanitized);
+      const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '10'), 10) || 10));
+      if (!matchExpr) return res.json({ raw, sanitized, matchExpr: '', results: [] });
+      try {
+        const results = state.db.searchMemoriesWithRank(repoId, matchExpr, limit);
+        return res.json({ raw, sanitized, matchExpr, results });
+      } catch (err) {
+        return res.json({ raw, sanitized, matchExpr, results: [], error: err instanceof Error ? err.message : String(err) });
+      }
+    } catch (e) {
+      if (e instanceof ApiError) return e.toResponse(res);
+      return ApiError.internal(e).toResponse(res);
+    }
+  });
 
   // GET /api/memories?repoId=...&q=...&page=...&limit=... — search or list memories
   router.get('/api/memories', (req: Request, res: Response) => {
@@ -16,9 +40,9 @@ export function memoryRoutes(): Router {
       if (!repoId) return ApiError.badRequest('repoId is required.').toResponse(res);
 
       if (query) {
-        const sanitized = query.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (!sanitized) return res.json({ memories: [], total: 0, page, limit });
-        const memories = state.db.searchMemories(repoId, sanitized, limit);
+        const matchExpr = buildFtsMatchExpr(sanitizeFtsQuery(query));
+        if (!matchExpr) return res.json({ memories: [], total: 0, page, limit });
+        const memories = state.db.searchMemories(repoId, matchExpr, limit);
         return res.json({ memories, total: memories.length, page: 1, limit });
       }
 

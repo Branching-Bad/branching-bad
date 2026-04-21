@@ -3,6 +3,7 @@ import type { TaskMemory } from "../../hooks/useMemoryState";
 import { IconX } from "../icons";
 import { inputClass, btnSecondary } from "../shared";
 import { ImportDialog } from "../ImportDialog";
+import { FtsTestBox } from "../FtsTestBox";
 
 export function MemoryPanel({
   selectedRepoId,
@@ -34,6 +35,26 @@ export function MemoryPanel({
   const [memoryImportOpen, setMemoryImportOpen] = useState(false);
   return (
     <div className="space-y-4">
+      {selectedRepoId && (
+        <FtsTestBox<TaskMemory & { rank: number }>
+          repoId={selectedRepoId}
+          endpoint="/api/memories/fts-test"
+          placeholder="Paste a task prompt to see which memories the planner would surface..."
+          renderItem={(r) => (
+            <>
+              <div className="text-xs font-medium text-text-primary">{r.title}</div>
+              <div className="text-[11px] text-text-secondary leading-relaxed whitespace-pre-wrap">{r.summary}</div>
+              {r.files_changed.length > 0 && (
+                <div className="text-[10px] text-text-muted mt-0.5">
+                  Files: {r.files_changed.slice(0, 5).join(", ")}
+                  {r.files_changed.length > 5 && ` (+${r.files_changed.length - 5} more)`}
+                </div>
+              )}
+            </>
+          )}
+        />
+      )}
+
       <div>
         <label className="mb-1.5 block text-xs font-semibold text-text-muted uppercase tracking-wider">Search Memories</label>
         <div className="flex items-center gap-2">
