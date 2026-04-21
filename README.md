@@ -2,7 +2,9 @@
 
 Local-first, approval-first coding agent with a pluggable provider system. Create tasks locally or sync from external services, generate AI implementation plans, review and approve before any code is written, then let the agent execute in an isolated git worktree while you keep working.
 
-![Kanban Board](docs/screenshots/kanban-board.png)
+<video src="screenshots/demo-movie.mov" controls muted width="900"></video>
+
+> [Watch the demo video](screenshots/demo-movie.mov) if the inline player doesn't load.
 
 ## Features
 
@@ -15,12 +17,14 @@ Local-first, approval-first coding agent with a pluggable provider system. Creat
 - **Multi-Agent Support** — Choose between Claude Code, Codex, Gemini CLI, OpenCode, or Cursor per task
 - **Isolated Execution** — Agent runs in a git worktree, your main branch stays clean
 - **Task Analyst** — AI-powered requirement clarification chat with multi-repo context support, produces structured task definitions
+- **Standalone Chat (REPL)** — Prompt an agent CLI outside the task/plan flow for quick questions, research, or brainstorming — with live streaming, session history, and memory summarization so chat insights feed back into future plans
+- **Follow-up Chat** — Send messages to running or completed task agents with session resume support
 - **Live Streaming** — Watch agent thinking, tool calls, and results in real-time
 - **Code Review** — Inline diff viewer with file tree, inline comments, and batch review
 - **Review Feedback Loop** — Submit feedback, agent fixes, review again — iterate until satisfied
 - **Merge Controls** — Squash merge, merge commit, or rebase strategies with push and PR creation via `gh` CLI
-- **Follow-up Chat** — Send messages to running or completed agents with session resume support
 - **Task Memory** — Automatically learns from completed tasks using FTS5/BM25 search, injecting relevant past experience into future plans
+- **SSH Client** — Built-in connection manager with groups, password/key auth, port forwarding (local + remote), jump hosts, host key verification, PTY terminal (xterm.js), and JSON import/export for sharing configurations. Credentials stored via OS keychain (`keytar`).
 
 ## How It Works
 
@@ -38,19 +42,13 @@ Create tasks directly on the kanban board — just a title and description. Or s
 
 The AI analyzes your codebase — walks the file tree, scores files by keyword relevance — and generates a structured implementation plan with markdown and a machine-readable tasklist.
 
-![Plan Review](docs/screenshots/plan-review.png)
-
 Each plan includes phased subtasks with:
 - Dependency graphs (blocked_by / blocks)
 - Affected files list
 - Acceptance criteria
 - Complexity rating and suggested model tier per subtask
 
-You can also have a separate AI agent **review the plan** before approving — catch issues before any code is written.
-
-![Plan Modal](docs/screenshots/plan-review-modal.png)
-
-You can also have a different AI agent **review the plan** before approving — select an agent from the dropdown and hit "Review Plan" to get a second opinion.
+You can also have a different AI agent **review the plan** before approving — select an agent from the dropdown and hit "Review Plan" to get a second opinion and catch issues before any code is written.
 
 Three actions: **Approve**, **Request Revision** (with comments — AI regenerates), or **Reject**.
 
@@ -58,15 +56,11 @@ Three actions: **Approve**, **Request Revision** (with comments — AI regenerat
 
 Once approved, the agent spawns in an isolated git worktree and streams output in real-time. You see thinking blocks, tool calls, file edits, and results as they happen. The main branch stays untouched — keep editing in your IDE.
 
-![Run Output](docs/screenshots/run-output.png)
-
 Follow-up chat lets you send messages to the running agent or resume a completed session with context.
 
 ### 4. Review & Iterate
 
 When the agent finishes, the task moves to **In Review**. Review the diff with file tree navigation, apply to main with your preferred merge strategy, push, and create a PR — all from the UI.
-
-![Code Review](docs/screenshots/review-git.png)
 
 Submit feedback to trigger another agent run on the same worktree — the agent picks up where it left off. Iterate until the code is right.
 
@@ -79,17 +73,13 @@ When a task completes successfully, Branching Bad automatically generates a conc
 When generating plans for new tasks, the system searches for relevant past memories and injects them into the planning prompt. The agent learns from your project's history — similar problems get better solutions over time.
 
 - Summaries generated via agent CLI (Haiku-tier) with deterministic fallback
-- FTS5 full-text search with BM25 relevance ranking
+- FTS5 full-text search with BM25 relevance ranking (Unicode-aware — works with Turkish and other non-ASCII scripts)
 - Scoped per repository — memories don't leak across projects
 - Viewable and deletable via API (`GET /api/memories`, `DELETE /api/memories/:id`)
-
-![Review Modal](docs/screenshots/review-git-modal.png)
 
 ## Providers
 
 Connect external services to sync tasks, import issues, analyze databases, and scan code quality — all from the extensions panel. No provider is required — you can use Branching Bad purely with local tasks.
-
-![Extensions Panel](docs/screenshots/extensions-panel.png)
 
 | Provider | Description |
 |----------|-------------|
@@ -101,8 +91,6 @@ Connect external services to sync tasks, import issues, analyze databases, and s
 | **Elasticsearch** | Connect to Elasticsearch clusters for log and index analysis |
 
 Each provider has a settings modal for connection configuration and a drawer section for quick actions like sync, scan, and issue browsing.
-
-![SonarQube Issues](docs/screenshots/extension-modal.png)
 
 ## Architecture
 
@@ -121,9 +109,16 @@ Monorepo with two main parts:
 
 ### Install & Run
 
+Two self-contained npm projects — install each, then run each in its own terminal.
+
 ```bash
-# Install all dependencies and start development
-npm install && npm --prefix server-ts install && npm --prefix web install && npm run dev
+# Install
+cd server-ts && npm install
+cd web && npm install
+
+# Dev (two terminals)
+cd server-ts && npm run dev    # backend on :4310
+cd web && npm run dev          # frontend on :5173
 ```
 
 Open http://localhost:5173 — backend runs on http://localhost:4310 (frontend proxies `/api` automatically).
@@ -131,12 +126,11 @@ Open http://localhost:5173 — backend runs on http://localhost:4310 (frontend p
 ### Commands
 
 ```bash
-npm run dev              # Run backend + frontend concurrently
-npm run dev:server       # TypeScript backend only (tsx watch)
-npm run dev:web          # Vite frontend only
-npm run build            # Production build (web + tsc)
-npm run typecheck        # Frontend type checking
-npm run check:server     # tsc --noEmit on server-ts
+cd server-ts && npm run dev    # TypeScript backend (tsx watch)
+cd web && npm run dev          # Vite frontend
+cd server-ts && npm run build  # tsc --noEmit
+cd web && npm run build        # Production build (tsc -b && vite build)
+cd web && npm run lint         # ESLint
 ```
 
 ## Configuration
