@@ -2,9 +2,7 @@
 
 Local-first, approval-first coding agent with a pluggable provider system. Create tasks locally or sync from external services, generate AI implementation plans, review and approve before any code is written, then let the agent execute in an isolated git worktree while you keep working.
 
-<video src="screenshots/demo-movie.mov" controls muted width="900"></video>
-
-> [Watch the demo video](screenshots/demo-movie.mov) if the inline player doesn't load.
+[**Watch the demo video →**](https://github.com/Branching-Bad/branching-bad/releases/download/demo-assets/demo-movie.mov) (70 MB, hosted on GitHub Releases)
 
 ## Features
 
