@@ -1,0 +1,20 @@
+{
+  "name": "branching-bad",
+  "version": "1.0.0",
+  "description": "Local-first, approval-first coding agent with pluggable provider system",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm --prefix server-ts run dev",
+    "dev:web": "npm --prefix web run dev",
+    "dev:analyst": "npm --prefix analyst run dev",
+    "build": "npm --prefix web run build && npm --prefix server-ts run build",
+    "typecheck": "npm --prefix web run build && npm --prefix server-ts run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -6,21 +6,22 @@ Local-first, approval-first coding agent. Pluggable provider system (Jira, Sentr
 
 ## Commands
 
-Two self-contained npm projects (`server-ts/` and `web/`). Run commands from inside each.
+Run from repo root — `concurrently` orchestrates both subprojects.
 
 ```bash
-# Install (once per project)
-cd server-ts && npm install
-cd web && npm install
+# Install (once at root + each subproject)
+npm install
+npm --prefix server-ts install
+npm --prefix web install
 
-# Dev (two terminals)
-cd server-ts && npm run dev    # backend — tsx watch src/main.ts
-cd web && npm run dev          # frontend — vite dev server
+# Dev
+npm run dev              # backend (tsx watch) + frontend (vite) concurrently
+npm run dev:server       # backend only
+npm run dev:web          # frontend only
 
 # Build / type-check
-cd server-ts && npm run build  # tsc --noEmit
-cd web && npm run build        # tsc -b && vite build
-cd web && npm run lint         # eslint .
+npm run build            # web build + server tsc --noEmit
+cd web && npm run lint   # eslint .
 ```
 
 Backend: `:4310`, Frontend: `:5173` (proxies `/api` to backend).
