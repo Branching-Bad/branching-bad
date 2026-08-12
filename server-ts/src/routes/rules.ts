@@ -133,7 +133,7 @@ export function rulesRoutes(): Router {
         return ApiError.badRequest('Agent profile not found.').toResponse(res);
       }
 
-      const agentCommand = buildAgentCommand(profile);
+      const agentCommand = buildAgentCommand(profile, profile.effort_default);
 
       const rulesText = allRules
         .map((r, i) => `${i + 1}. ${r.content}`)

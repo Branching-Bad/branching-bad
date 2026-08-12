@@ -75,6 +75,12 @@ export class SentryClient {
       `/api/0/organizations/${this.orgSlug}/issues/`,
       {
         query: queryStr,
+        // The org-level issues endpoint scopes results by the `project` query
+        // param (numeric IDs), NOT by the `project:` search token. Without it,
+        // the endpoint uses the token's default project set — empty for org
+        // auth tokens — and returns 200 with []. `-1` = all accessible
+        // projects; the `project:` token above narrows back to this one.
+        project: '-1',
         sort: 'date',
         limit: '100',
       },
@@ -86,6 +92,11 @@ export class SentryClient {
     for (const item of items) {
       const id = String(item.id ?? '');
       if (!id) continue;
+
+      // Defensive: `project=-1` scopes to every accessible project, so guard
+      // against cross-project bleed if the `project:` search token is ignored.
+      const itemSlug = item.project?.slug;
+      if (itemSlug && String(itemSlug) !== projectSlug) continue;
 
       const countRaw = item.count;
       let count = 1;

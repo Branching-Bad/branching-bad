@@ -121,7 +121,7 @@ export function chatReplRoutes(): Router {
     const profile = state.db.getAgentProfileById(profileId);
     if (!profile) throw ApiError.notFound('Agent profile not found');
 
-    const agentCommand = buildAgentCommand(profile);
+    const agentCommand = buildAgentCommand(profile, profile.effort_default);
     if (!agentCommand.trim()) throw ApiError.badRequest('Agent profile has no command');
 
     const sessionId = randomUUID();
@@ -164,7 +164,7 @@ export function chatReplRoutes(): Router {
 
     const profile = state.db.getAgentProfileById(profileId);
     if (!profile) throw ApiError.notFound('Agent profile not found');
-    const agentCommand = buildAgentCommand(profile);
+    const agentCommand = buildAgentCommand(profile, profile.effort_default);
     if (!agentCommand.trim()) throw ApiError.badRequest('Agent profile has no command');
 
     if (dbSession.profile_id !== profileId) {
@@ -229,7 +229,7 @@ export function chatReplRoutes(): Router {
 
     const profile = state.db.getAgentProfileById(dbSession.profile_id);
     if (!profile) throw ApiError.notFound('Session agent profile missing');
-    const agentCommand = buildAgentCommand(profile);
+    const agentCommand = buildAgentCommand(profile, profile.effort_default);
 
     const repo = state.db.getRepoById(dbSession.repo_id);
     if (!repo) throw ApiError.notFound('Repo not found');

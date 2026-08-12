@@ -7,6 +7,7 @@ export interface AgentProfile {
   source: string;
   discovery_kind: string;
   metadata_json: string;
+  effort_default: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,6 +21,7 @@ export interface AgentProfileWithMetadata {
   source: string;
   discovery_kind: string;
   metadata: any;
+  effort_default: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -135,7 +135,7 @@ export function submitReview(
   }
 
   const profile = resolveAgentProfile(state, payload.profileId, task);
-  const agentCommand = buildAgentCommand(profile);
+  const agentCommand = buildAgentCommand(profile, task.effort_override ?? profile.effort_default);
 
   const run = state.db.createRun(
     task.id,
@@ -229,7 +229,7 @@ export function resendReview(
   state.db.updateReviewCommentStatus(rc.id, 'processing');
 
   const profile = resolveAgentProfile(state, profileId, task);
-  const agentCommand = buildAgentCommand(profile);
+  const agentCommand = buildAgentCommand(profile, task.effort_override ?? profile.effort_default);
 
   const run = state.db.createRun(
     task.id,

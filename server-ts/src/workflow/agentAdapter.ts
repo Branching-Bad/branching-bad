@@ -53,7 +53,7 @@ export async function runAgentNode(input: RunAgentInput): Promise<RunAgentResult
   const profile = state.db.getAgentProfileById(node.agentProfileId);
   if (!profile) throw new Error(`agent profile ${node.agentProfileId} not found`);
 
-  const agentCommand = buildAgentCommand(profile);
+  const agentCommand = buildAgentCommand(profile, profile.effort_default);
   if (!agentCommand.trim()) throw new Error(`agent profile ${node.agentProfileId} has no command`);
 
   const promptBody = node.promptTemplate
@@ -133,7 +133,7 @@ export async function runMcpNode(input: RunMcpInput): Promise<RunAgentResult> {
   const profile = state.db.getAgentProfileById(node.agentProfileId);
   if (!profile) throw new Error(`agent profile ${node.agentProfileId} not found`);
 
-  const agentCommand = buildAgentCommand(profile);
+  const agentCommand = buildAgentCommand(profile, profile.effort_default);
   if (!agentCommand.trim()) throw new Error(`agent profile ${node.agentProfileId} has no command`);
 
   const server = state.db.getMcpServer(node.mcpServerId);

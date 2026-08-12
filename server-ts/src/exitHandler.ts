@@ -295,7 +295,8 @@ function scheduleMemoryCreation(db: Db, taskId: string, runId: string): void {
       const repo = db.getRepoById(task.repo_id);
       if (!repo) return;
 
-      const agentCommand = buildAgentCommand(profile);
+      const effort = task.effort_override ?? profile.effort_default ?? null;
+      const agentCommand = buildAgentCommand(profile, effort);
       await createMemoryFromRun(db, taskId, runId, agentCommand, repo.path);
     } catch {
       // Ignore — memory creation is best-effort

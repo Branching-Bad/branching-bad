@@ -17,6 +17,7 @@ export interface TaskWithPayload {
   last_pipeline_error: string | null;
   last_pipeline_at: string | null;
   agent_profile_id: string | null;
+  effort_override: string | null;
   source: string;
   pr_url: string | null;
   pr_number: number | null;

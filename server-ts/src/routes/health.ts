@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 
+import { discoverAgentProfiles } from '../discovery.js';
 import { ApiError } from '../errors.js';
 import type { AppState } from '../state.js';
 
@@ -15,6 +16,19 @@ export function healthRoutes(): Router {
     const state = req.app.locals.state as AppState;
     try {
       const repos = state.db.listRepos();
+
+      // Refresh agent_profiles from the provider-models.json catalog + CLI
+      // configs on every bootstrap so the UI (kanban, analyst, plan modal)
+      // never starts from a stale DB snapshot. Discovery is cheap: a few
+      // `which` lookups plus reading one or two config files.
+      try {
+        const discovered = discoverAgentProfiles();
+        const keepIds = state.db.upsertAgentProfiles(discovered);
+        state.db.pruneStaleAgentProfiles(keepIds);
+      } catch (err) {
+        console.warn('[bootstrap] agent discovery failed, returning DB state as-is:', err);
+      }
+
       const agentProfiles = state.db.listAgentProfiles();
 
       const providerMetas = state.registry.allMetas();

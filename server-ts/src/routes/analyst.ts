@@ -155,7 +155,7 @@ export function analystRoutes(): Router {
     const profile = state.db.getAgentProfileById(profileId);
     if (!profile) throw ApiError.notFound('Agent profile not found');
 
-    const agentCommand = buildAgentCommand(profile);
+    const agentCommand = buildAgentCommand(profile, profile.effort_default);
     if (!agentCommand.trim()) throw ApiError.badRequest('Agent profile has no command');
 
     const repos: AnalystRepo[] = [{ name: repo.name, path: repo.path, repoId }];
@@ -213,7 +213,7 @@ export function analystRoutes(): Router {
 
     const profile = state.db.getAgentProfileById(profileId);
     if (!profile) throw ApiError.notFound('Agent profile not found');
-    const agentCommand = buildAgentCommand(profile);
+    const agentCommand = buildAgentCommand(profile, profile.effort_default);
     if (!agentCommand.trim()) throw ApiError.badRequest('Agent profile has no command');
 
     // Update profile if changed

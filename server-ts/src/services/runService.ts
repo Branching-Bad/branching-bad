@@ -38,7 +38,7 @@ export async function startRunInternal(
   const parallelRunActive = state.db.hasRunningRunForRepo(repo.id);
 
   const profile = resolveAgentProfile(state, payload, task, repo.id);
-  const agentCommand = buildAgentCommand(profile);
+  const agentCommand = buildAgentCommand(profile, task.effort_override ?? profile.effort_default);
   const branchName = buildBranchName(task, profile, payload);
   const baseSha = getHeadSha(repo.path) ?? null;
 
@@ -139,7 +139,7 @@ export async function resumeRunInternal(
   }
 
   const profile = resolveAgentProfile(state, payload, task, repo.id);
-  const agentCommand = buildAgentCommand(profile);
+  const agentCommand = buildAgentCommand(profile, task.effort_override ?? profile.effort_default);
   const workingDir = (prevRun.worktree_path && fs.existsSync(prevRun.worktree_path))
     ? prevRun.worktree_path : repo.path;
   const baseSha = prevRun.base_sha ?? (getHeadSha(repo.path) ?? null);

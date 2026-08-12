@@ -4,6 +4,7 @@ import { ViewShell } from "./ViewShell";
 
 export function AgentsView(props: {
   agentProfiles: AgentProfile[];
+  setAgentProfiles?: (profiles: AgentProfile[]) => void;
   selectedProfileId: string;
   setSelectedProfileId: (v: string) => void;
   selectedProfile: AgentProfile | null;

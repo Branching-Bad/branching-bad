@@ -19,6 +19,7 @@ export function spawnPlanGenerationJob(
   generationMode: string,
   store: MsgStore,
   autostartJobId: string | undefined,
+  providerId?: string,
 ): void {
   persistStoreOutputs(store, state.db, task.id);
 
@@ -101,6 +102,7 @@ export function spawnPlanGenerationJob(
         rulesSection,
         memoriesSection,
         glossarySection,
+        providerId,
       );
     } catch (error) {
       failJob(`plan pipeline failed: ${error instanceof Error ? error.message : String(error)}`);

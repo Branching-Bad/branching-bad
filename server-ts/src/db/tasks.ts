@@ -26,6 +26,7 @@ declare module './index.js' {
       agentProfileId?: string,
     ): void;
     updateTaskPr(taskId: string, prUrl: string, prNumber?: number): void;
+    setTaskEffortOverride(taskId: string, effort: string | null): void;
     getNextQueueTask(repoId: string): TaskWithPayload | null;
     reorderTasks(taskIds: string[]): void;
   }
@@ -52,6 +53,7 @@ function rowToTask(row: any): TaskWithPayload {
     last_pipeline_error: row.last_pipeline_error,
     last_pipeline_at: row.last_pipeline_at,
     agent_profile_id: row.agent_profile_id,
+    effort_override: row.effort_override ?? null,
     pr_url: row.pr_url,
     pr_number: row.pr_number,
     sort_order: row.sort_order ?? 0,
@@ -62,7 +64,7 @@ function rowToTask(row: any): TaskWithPayload {
 }
 
 const TASK_COLS =
-  'id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, carry_dirty_state, last_pipeline_error, last_pipeline_at, agent_profile_id, pr_url, pr_number, sort_order, payload_json, created_at, updated_at';
+  'id, repo_id, jira_account_id, jira_board_id, jira_issue_key, title, description, assignee, status, priority, source, require_plan, auto_start, auto_approve_plan, use_worktree, carry_dirty_state, last_pipeline_error, last_pipeline_at, agent_profile_id, effort_override, pr_url, pr_number, sort_order, payload_json, created_at, updated_at';
 
 Db.prototype.listTasksByRepo = function (repoId: string): TaskWithPayload[] {
   const db = this.connect();
@@ -214,6 +216,18 @@ Db.prototype.updateTaskPr = function (
       nowIso(),
       taskId,
     );
+};
+
+Db.prototype.setTaskEffortOverride = function (
+  taskId: string,
+  effort: string | null,
+): void {
+  const db = this.connect();
+  db.prepare('UPDATE tasks SET effort_override = ?, updated_at = ? WHERE id = ?').run(
+    effort,
+    nowIso(),
+    taskId,
+  );
 };
 
 Db.prototype.getNextQueueTask = function (repoId: string): TaskWithPayload | null {

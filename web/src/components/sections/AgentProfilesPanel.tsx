@@ -1,10 +1,14 @@
 import type { AgentProfile } from "../../types";
+import { api } from "../../api";
+import { useAgentCatalog } from "../../hooks/useAgentCatalog";
+import { EffortSelect } from "../EffortSelect";
 import { IconRefresh } from "../icons";
 import { selectClass, btnPrimary, btnSecondary } from "../shared";
 import { AgentProfileMcpPanel } from "../../mcp/AgentProfileMcpPanel";
 
 export function AgentProfilesPanel({
   agentProfiles,
+  setAgentProfiles,
   selectedProfileId,
   setSelectedProfileId,
   selectedProfile,
@@ -13,6 +17,7 @@ export function AgentProfilesPanel({
   saveAgentSelection,
 }: {
   agentProfiles: AgentProfile[];
+  setAgentProfiles?: (profiles: AgentProfile[]) => void;
   selectedProfileId: string;
   setSelectedProfileId: (v: string) => void;
   selectedProfile: AgentProfile | null;
@@ -20,6 +25,24 @@ export function AgentProfilesPanel({
   discoverAgents: () => void;
   saveAgentSelection: () => void;
 }) {
+  const { providerById } = useAgentCatalog();
+  const provider = providerById(selectedProfile?.provider);
+
+  const updateEffort = async (effort: string | null) => {
+    if (!selectedProfile) return;
+    try {
+      const resp = await api<{ profile: AgentProfile }>(
+        `/api/agents/${selectedProfile.id}/effort`,
+        { method: "POST", body: JSON.stringify({ effort }) },
+      );
+      if (setAgentProfiles && resp.profile) {
+        setAgentProfiles(agentProfiles.map((p) => (p.id === resp.profile.id ? resp.profile : p)));
+      }
+    } catch (e) {
+      console.error("Failed to update effort default:", e);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div>
@@ -36,6 +59,25 @@ export function AgentProfilesPanel({
           </p>
         )}
       </div>
+      {selectedProfile && (
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-text-muted uppercase tracking-wider">
+            Reasoning Effort
+          </label>
+          <EffortSelect
+            provider={provider}
+            value={selectedProfile.effort_default ?? null}
+            onChange={updateEffort}
+            emptyLabel="Provider default"
+            className="w-full rounded-md border border-border-strong bg-surface-100 px-2 py-1.5 text-sm text-text-secondary focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          {provider?.effort?.supported === false && (
+            <p className="mt-1.5 text-[11px] text-text-muted">
+              {provider.name} doesn&apos;t expose reasoning effort via CLI.
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex gap-2">
         <button onClick={saveAgentSelection} disabled={busy} className={btnPrimary}>Save for Repo</button>
         <button onClick={discoverAgents} disabled={busy} className={btnSecondary}>

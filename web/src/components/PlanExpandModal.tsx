@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Task, Plan, PlanJob, RunLogEntry, AgentProfile } from "../types";
+import { useAgentCatalog } from "../hooks/useAgentCatalog";
 import { IconX } from "./icons";
 import { LogViewer } from "./LogViewer";
 import { AgentProfileSelect } from "./AgentProfileSelect";
@@ -74,9 +75,19 @@ export function PlanExpandModal({
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  const { modelIdsForProvider } = useAgentCatalog();
+
   if (!open) return null;
 
-  const modelOptions = ["haiku", "sonnet", "opus"];
+  const activeProviderId = (() => {
+    const profileId = selectedTask.agent_profile_id;
+    if (!profileId || !agentProfiles) return null;
+    return agentProfiles.find((p) => p.id === profileId)?.provider ?? null;
+  })();
+  const modelOptions = (() => {
+    const ids = modelIdsForProvider(activeProviderId);
+    return ids.length > 0 ? ids : ["haiku", "sonnet", "opus"];
+  })();
 
   // Parse tasklist for overview
   let tasklistOverview: React.ReactNode = null;

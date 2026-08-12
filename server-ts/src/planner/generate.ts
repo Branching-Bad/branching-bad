@@ -21,6 +21,7 @@ export async function generatePlanAndTasklistWithAgentStrict(
   rulesSection: string,
   memoriesSection = '',
   glossarySection = '',
+  providerId?: string,
 ): Promise<GeneratedPlanTasklist> {
   emitProgressText(progress, 'Starting strict plan generation...');
 
@@ -45,6 +46,7 @@ export async function generatePlanAndTasklistWithAgentStrict(
     planResult.plan_markdown,
     targetPlanVersion,
     progress,
+    providerId,
   );
 
   emitProgressText(progress, 'Strict tasklist JSON validated.');
@@ -109,8 +111,9 @@ export async function generateTasklistFromPlanStrict(
   planMarkdown: string,
   targetPlanVersion: number,
   progress: ProgressCallback | null,
+  providerId?: string,
 ): Promise<any> {
-  const prompt = buildTasklistPrompt(task, planMarkdown, targetPlanVersion);
+  const prompt = buildTasklistPrompt(task, planMarkdown, targetPlanVersion, providerId);
   const errors: string[] = [];
 
   for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt++) {

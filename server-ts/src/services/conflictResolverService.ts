@@ -66,7 +66,7 @@ export async function resolveConflicts(
   const recordedWorktreePath = worktreeExists ? worktreePath : undefined;
 
   const profile = resolveAgentProfile(state, undefined, task as any);
-  const agentCommand = buildAgentCommand(profile);
+  const agentCommand = buildAgentCommand(profile, (task as any).effort_override ?? profile.effort_default);
 
   const run = state.db.createRun(
     task.id,

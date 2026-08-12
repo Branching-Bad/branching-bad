@@ -1,9 +1,12 @@
 import { Router, type Request, type Response } from 'express';
 
+import { CANONICAL_EFFORTS } from '../discovery.js';
 import { ApiError } from '../errors.js';
 import { cleanupTaskWorktrees, finalizeTaskDone } from '../services/taskLifecycle.js';
 import type { AppState } from '../state.js';
 import { enqueueAutostartIfEnabled, isTodoLaneStatus } from './shared.js';
+
+const VALID_EFFORTS = new Set<string>(CANONICAL_EFFORTS);
 
 interface UpdateTaskPayload {
   title?: string;
@@ -15,6 +18,7 @@ interface UpdateTaskPayload {
   useWorktree?: boolean;
   carryDirtyState?: boolean;
   agentProfileId?: string | null;
+  effortOverride?: string | null;
 }
 
 interface UpdateTaskStatusPayload {
@@ -74,6 +78,18 @@ export function taskCrudUpdateRoutes(): Router {
         carryDirtyState,
         agentProfileId,
       );
+
+      if (payload.effortOverride !== undefined) {
+        const raw = payload.effortOverride;
+        const effort: string | null =
+          raw === null || raw === '' ? null : String(raw);
+        if (effort !== null && !VALID_EFFORTS.has(effort)) {
+          return ApiError.badRequest(
+            `Invalid effortOverride. Allowed: ${[...VALID_EFFORTS].join(', ')}`,
+          ).toResponse(res);
+        }
+        state.db.setTaskEffortOverride(task.id, effort);
+      }
 
       const updated = state.db.getTaskById(task.id);
       if (!updated) {

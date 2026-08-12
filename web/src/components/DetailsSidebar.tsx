@@ -1,4 +1,5 @@
 import type { Task, Plan, PlanJob, AgentProfile, RunLogEntry, RunResponse, ReviewComment, LineComment, ActiveRun, ChatMessage, ApplyToMainOptions, GitStatusInfo } from "../types";
+import { useAgentCatalog } from "../hooks/useAgentCatalog";
 import { IconX, IconRocket, IconGitBranch, IconFastForward, IconDocument, IconBolt, IconExpand } from "./icons";
 import { useEffect, useRef } from "react";
 import { LogEntry } from "./LogEntry";
@@ -137,6 +138,17 @@ export function DetailsSidebar({
 }) {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? latestPlan;
   tasklistProgress = tasklistProgress ?? {};
+
+  const { modelIdsForProvider } = useAgentCatalog();
+  const activeProviderId = (() => {
+    const profileId = selectedTask.agent_profile_id;
+    if (!profileId || !agentProfiles) return null;
+    return agentProfiles.find((p) => p.id === profileId)?.provider ?? null;
+  })();
+  const tasklistModelOptions = (() => {
+    const ids = modelIdsForProvider(activeProviderId);
+    return ids.length > 0 ? ids : ["haiku", "sonnet", "opus"];
+  })();
 
   return (
     <>
@@ -581,7 +593,7 @@ export function DetailsSidebar({
                       in_progress: { icon: "\u25B6", color: "text-status-caution bg-status-caution/15 border-status-caution/30 animate-pulse" },
                       pending: { icon: "\u2022", color: "text-text-muted bg-surface-300 border-border-default" },
                     };
-                    const modelOptions = ["haiku", "sonnet", "opus"];
+                    const modelOptions = tasklistModelOptions;
                     const updateTaskModel = (taskId: string, newModel: string) => {
                       try {
                         const parsed = JSON.parse(manualTasklistJsonText);

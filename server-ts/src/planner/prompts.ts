@@ -1,4 +1,5 @@
 import type { TaskWithPayload } from '../models.js';
+import { getTierModelMap } from '../discovery.js';
 import { buildSentryPromptSection } from './helpers.js';
 import { collectRepoContext } from './context.js';
 
@@ -93,7 +94,21 @@ export function buildTasklistPrompt(
   task: TaskWithPayload,
   planMarkdown: string,
   targetPlanVersion: number,
+  providerId?: string,
 ): string {
+  const tiers = providerId ? getTierModelMap(providerId) : null;
+  const modelEnum = tiers
+    ? Array.from(new Set([tiers.low, tiers.medium, tiers.high, ...tiers.all])).join('|')
+    : 'opus|sonnet|haiku';
+  const modelGuidance = tiers
+    ? `  - "${tiers.low}": low complexity tasks (simple edits, config changes)
+  - "${tiers.medium}": medium complexity tasks (standard feature work, multi-file changes)
+  - "${tiers.high}": high complexity tasks (architecture, complex logic, critical code)
+  - Other values in the enum are acceptable when you have a specific reason; the three above are the defaults per complexity tier.`
+    : `  - "haiku": low complexity tasks (simple edits, config changes)
+  - "sonnet": medium complexity tasks (standard feature work, multi-file changes)
+  - "opus": high complexity tasks (architecture, complex logic, critical code)`;
+
   return `You are decomposing an approved implementation plan into a strict tasklist.
 
 Return JSON only. No markdown fences. No extra text.
@@ -123,7 +138,7 @@ Output schema (exact keys, no extra keys, no null values):
             "suggested_subagent": "string",
             "estimated_size": "S|M|L",
             "complexity": "low|medium|high",
-            "suggested_model": "opus|sonnet|haiku"
+            "suggested_model": "${modelEnum}"
           }
         ]
       }
@@ -149,9 +164,7 @@ Constraints:
   - "medium": multi-file changes, moderate logic, standard patterns
   - "high": cross-cutting changes, complex logic, architectural decisions, risky refactors
 - \`suggested_model\` is REQUIRED for every task. Choose based on complexity:
-  - "haiku": low complexity tasks (simple edits, config changes)
-  - "sonnet": medium complexity tasks (standard feature work, multi-file changes)
-  - "opus": high complexity tasks (architecture, complex logic, critical code)
+${modelGuidance}
 - IMPLEMENTATION-ONLY TASKS: Every task must be a concrete implementation action (create file, modify function, add route, update config, etc.). Do NOT create tasks for discovery, exploration, analysis, investigation, or reviewing existing code. The plan already contains all the context needed.
 - NO TEST TASKS: Do NOT create tasks for writing tests unless the original task description explicitly requests tests. The final task should be build verification only.
 - Include a final task for build verification (e.g. "Run type check and build") — not for writing tests.

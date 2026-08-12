@@ -5,29 +5,113 @@ import { fileURLToPath } from 'url';
 import which from 'which';
 import type { DiscoveredProfile } from './models.js';
 
-interface ModelEntry {
+export type ModelTier = 'low' | 'medium' | 'high';
+
+export type CanonicalEffort = 'minimal' | 'low' | 'medium' | 'high' | 'max';
+
+export const CANONICAL_EFFORTS: CanonicalEffort[] = ['minimal', 'low', 'medium', 'high', 'max'];
+
+export type EffortCapability =
+  | { supported: false }
+  | {
+      supported: true;
+      default: CanonicalEffort;
+      arg_template: string;
+      canonical_to_native: Record<CanonicalEffort, string>;
+    };
+
+export interface ModelEntry {
   id: string;
   name: string;
   description: string;
+  tier?: ModelTier;
 }
 
-interface ProviderEntry {
+export interface ProviderEntry {
   id: string;
   name: string;
   binary: string;
   model_flag: string;
+  effort?: EffortCapability;
   models: ModelEntry[];
 }
 
-interface ProviderModelsFile {
+export interface ProviderModelsFile {
   providers: ProviderEntry[];
 }
 
+let providerCatalogCache: ProviderModelsFile | null = null;
+
 function loadProviderModels(): ProviderModelsFile {
+  if (providerCatalogCache) return providerCatalogCache;
   const thisDir = path.dirname(fileURLToPath(import.meta.url));
   const jsonPath = path.join(thisDir, 'provider-models.json');
   const raw = fs.readFileSync(jsonPath, 'utf-8');
-  return JSON.parse(raw) as ProviderModelsFile;
+  providerCatalogCache = JSON.parse(raw) as ProviderModelsFile;
+  return providerCatalogCache;
+}
+
+/** Public access to the full provider/model catalog (cached). */
+export function getProviderCatalog(): ProviderModelsFile {
+  return loadProviderModels();
+}
+
+/** Look up a provider entry by id. Returns null if not in the catalog. */
+export function getProviderEntry(providerId: string): ProviderEntry | null {
+  const catalog = loadProviderModels();
+  return catalog.providers.find((p) => p.id === providerId) ?? null;
+}
+
+/**
+ * Effort capability for the given provider id, or null if unknown.
+ * Callers should check `.supported` before using template / mapping.
+ */
+export function getEffortCapability(providerId: string): EffortCapability | null {
+  const provider = getProviderEntry(providerId);
+  return provider?.effort ?? null;
+}
+
+/**
+ * Translate a canonical effort level into the provider's native CLI arg
+ * fragment, or null if the provider doesn't support effort or the canonical
+ * value is missing from its mapping. The returned string is ready to be
+ * tokenised by `splitCommand` before spawning.
+ */
+export function renderEffortArg(
+  providerId: string,
+  canonical: CanonicalEffort | null | undefined,
+): string | null {
+  if (!canonical) return null;
+  const cap = getEffortCapability(providerId);
+  if (!cap || !cap.supported) return null;
+  const native = cap.canonical_to_native[canonical];
+  if (!native) return null;
+  return cap.arg_template.replace('{native}', native);
+}
+
+/**
+ * For a given provider, return the model id at each tier. Falls back to the
+ * first model in the list if a tier is missing. Used by the planner prompt
+ * so the agent suggests model ids the user's CLI can actually accept.
+ */
+export function getTierModelMap(
+  providerId: string,
+): { low: string; medium: string; high: string; all: string[] } | null {
+  const provider = getProviderEntry(providerId);
+  if (!provider || provider.models.length === 0) return null;
+
+  const byTier = (tier: ModelTier): string | null => {
+    const match = provider.models.find((m) => m.tier === tier);
+    return match ? match.id : null;
+  };
+
+  const fallback = provider.models[0].id;
+  return {
+    low: byTier('low') ?? fallback,
+    medium: byTier('medium') ?? fallback,
+    high: byTier('high') ?? fallback,
+    all: provider.models.map((m) => m.id),
+  };
 }
 
 export function discoverAgentProfiles(): DiscoveredProfile[] {
@@ -89,7 +173,7 @@ export function discoverAgentProfiles(): DiscoveredProfile[] {
     profiles.push({
       provider: 'codex',
       agent_name: 'Codex CLI',
-      model: 'gpt-5.4',
+      model: 'gpt-5.6-terra',
       command: 'codex',
       source: 'inferred',
       discovery_kind: 'inferred',

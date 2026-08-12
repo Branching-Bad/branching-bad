@@ -7,6 +7,7 @@ import type { AppState } from '../state.js';
 import {
   enqueueAutostartIfEnabled,
   resolveAgentCommand,
+  resolveAgentProviderId,
 } from './shared.js';
 
 interface CreatePlanPayload {
@@ -49,7 +50,17 @@ export function planRoutes(): Router {
         return ApiError.badRequest('Select an AI profile for this repo before plan generation.').toResponse(res);
       }
 
-      const job = await ensurePlanJobRunning(state, task, repo.path, agentCommand, 'manual', payload.revisionComment);
+      const providerId = resolveAgentProviderId(state, task.repo_id) ?? undefined;
+      const job = await ensurePlanJobRunning(
+        state,
+        task,
+        repo.path,
+        agentCommand,
+        'manual',
+        payload.revisionComment,
+        undefined,
+        providerId,
+      );
       return res.status(202).json({ job });
     } catch (e) {
       if (e instanceof ApiError) return e.toResponse(res);
@@ -128,8 +139,18 @@ export function planRoutes(): Router {
             return ApiError.badRequest('Select an AI profile for this repo before plan revision.').toResponse(res);
           }
 
+          const providerId = resolveAgentProviderId(state, task.repo_id) ?? undefined;
           const comment = payload.comment ?? 'Please revise this plan.';
-          const job = await ensurePlanJobRunning(state, task, repo.path, agentCommand, 'revise', comment);
+          const job = await ensurePlanJobRunning(
+            state,
+            task,
+            repo.path,
+            agentCommand,
+            'revise',
+            comment,
+            undefined,
+            providerId,
+          );
           return res.status(202).json({ status: 'revising', job });
         }
 

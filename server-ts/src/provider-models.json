@@ -5,12 +5,24 @@
       "name": "Claude Code",
       "binary": "claude",
       "model_flag": "--model",
+      "effort": {
+        "supported": true,
+        "default": "medium",
+        "arg_template": "--effort {native}",
+        "canonical_to_native": {
+          "minimal": "low",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "max": "max"
+        }
+      },
       "models": [
-        { "id": "opus",       "name": "Opus",              "description": "Most capable, deep reasoning" },
-        { "id": "opus[1m]",   "name": "Opus (1M context)",  "description": "Opus with 1M context window" },
-        { "id": "sonnet",     "name": "Sonnet",            "description": "Balanced performance" },
-        { "id": "sonnet[1m]", "name": "Sonnet (1M context)","description": "Sonnet with 1M context window" },
-        { "id": "haiku",      "name": "Haiku",             "description": "Fast and cost-effective" }
+        { "id": "fable",      "name": "Fable 5",             "description": "Most capable Claude, hardest long-horizon work", "tier": "high"   },
+        { "id": "opus",       "name": "Opus 5",              "description": "Agentic coding flagship, deep reasoning",        "tier": "high"   },
+        { "id": "opus[1m]",   "name": "Opus 5 (1M context)", "description": "Opus with 1M context window",                    "tier": "high"   },
+        { "id": "sonnet",     "name": "Sonnet 5",            "description": "Balanced performance, default choice",           "tier": "medium" },
+        { "id": "haiku",      "name": "Haiku 4.5",           "description": "Fast and cost-effective",                        "tier": "low"    }
       ]
     },
     {
@@ -18,12 +30,22 @@
       "name": "Codex CLI",
       "binary": "codex",
       "model_flag": "-m",
+      "effort": {
+        "supported": true,
+        "default": "medium",
+        "arg_template": "-c model_reasoning_effort=\"{native}\"",
+        "canonical_to_native": {
+          "minimal": "minimal",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "max": "xhigh"
+        }
+      },
       "models": [
-        { "id": "gpt-5.4",            "name": "GPT-5.4",             "description": "Most capable, latest" },
-        { "id": "gpt-5.3-codex",      "name": "GPT-5.3 Codex",       "description": "Strong reasoning, fast" },
-        { "id": "gpt-5.3-codex-spark","name": "GPT-5.3 Codex Spark", "description": "Near-instant, text-only" },
-        { "id": "gpt-5-codex-mini",   "name": "GPT-5 Codex Mini",    "description": "Cost-effective" },
-        { "id": "o3",                 "name": "o3",                   "description": "Deep reasoning" }
+        { "id": "gpt-5.6-sol",   "name": "GPT-5.6 Sol",   "description": "Ambiguous, high-value tasks needing extra analysis", "tier": "high"   },
+        { "id": "gpt-5.6-terra", "name": "GPT-5.6 Terra", "description": "Pragmatic all-rounder, everyday workhorse",          "tier": "medium" },
+        { "id": "gpt-5.6-luna",  "name": "GPT-5.6 Luna",  "description": "Fast mini model for responsive tasks and subagents", "tier": "low"    }
       ]
     },
     {
@@ -31,12 +53,13 @@
       "name": "Gemini CLI",
       "binary": "gemini",
       "model_flag": "-m",
+      "effort": {
+        "supported": false
+      },
       "models": [
-        { "id": "gemini-3.1-pro-preview",       "name": "Gemini 3.1 Pro",       "description": "Most capable" },
-        { "id": "gemini-3-flash",               "name": "Gemini 3 Flash",       "description": "Fast, balanced" },
-        { "id": "gemini-3.1-flash-lite-preview", "name": "Gemini 3.1 Flash Lite","description": "Budget-friendly" },
-        { "id": "gemini-2.5-pro",               "name": "Gemini 2.5 Pro",       "description": "Previous-gen pro, 1M context" },
-        { "id": "gemini-2.5-flash",             "name": "Gemini 2.5 Flash",     "description": "Previous-gen flash" }
+        { "id": "gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro",   "description": "Most capable, advanced reasoning, 1M context", "tier": "high"   },
+        { "id": "gemini-3-pro-preview",   "name": "Gemini 3 Pro",     "description": "Previous-gen pro, advanced reasoning",         "tier": "high"   },
+        { "id": "gemini-3-flash-preview", "name": "Gemini 3 Flash",   "description": "Fast, balanced",                               "tier": "medium" }
       ]
     },
     {
@@ -44,8 +67,9 @@
       "name": "OpenCode",
       "binary": "opencode",
       "model_flag": "",
+      "effort": { "supported": false },
       "models": [
-        { "id": "default", "name": "Default", "description": "Provider default model" }
+        { "id": "default", "name": "Default", "description": "Provider default model", "tier": "medium" }
       ]
     },
     {
@@ -53,8 +77,9 @@
       "name": "Cursor",
       "binary": "cursor",
       "model_flag": "--model",
+      "effort": { "supported": false },
       "models": [
-        { "id": "default", "name": "Default", "description": "Provider default model" }
+        { "id": "default", "name": "Default", "description": "Provider default model", "tier": "medium" }
       ]
     }
   ]

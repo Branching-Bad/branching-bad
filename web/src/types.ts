@@ -3,6 +3,7 @@ export type Repo = { id: string; name: string; path: string; default_branch: str
 export type AgentProfile = {
   id: string; provider: string; agent_name: string;
   model: string; command: string; source: string; discovery_kind: string;
+  effort_default?: string | null;
 };
 export type Task = {
   id: string; jira_issue_key: string; title: string;
@@ -15,6 +16,7 @@ export type Task = {
   last_pipeline_error?: string | null;
   last_pipeline_at?: string | null;
   agent_profile_id?: string | null;
+  effort_override?: string | null;
   pr_url?: string | null;
   pr_number?: number | null;
   sort_order?: number;

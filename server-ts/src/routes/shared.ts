@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 
 import type { Db } from '../db/index.js';
+import { renderEffortArg } from '../discovery.js';
 import { ApiError } from '../errors.js';
 import type { AgentProfile, RepositoryRule, TaskWithPayload } from '../models.js';
 import type { AppState } from '../state.js';
@@ -83,7 +84,7 @@ export function worktreesRootFor(repoPath: string): string {
 
 // -- Agent command resolution --
 
-export function resolveAgentCommand(state: AppState, repoId: string): string | null {
+export function resolveAgentCommand(state: AppState, repoId: string, taskId?: string): string | null {
   const pref = state.db.getRepoAgentPreference(repoId);
   if (!pref) {
     return null;
@@ -92,7 +93,33 @@ export function resolveAgentCommand(state: AppState, repoId: string): string | n
   if (!profile) {
     return null;
   }
-  return buildAgentCommand(profile);
+  const effort = resolveEffort(state, profile, taskId);
+  return buildAgentCommand(profile, effort);
+}
+
+/** Return the provider id of the repo's selected agent profile, or null. */
+export function resolveAgentProviderId(state: AppState, repoId: string): string | null {
+  const pref = state.db.getRepoAgentPreference(repoId);
+  if (!pref) return null;
+  const profile = state.db.getAgentProfileById(pref.agent_profile_id);
+  return profile?.provider ?? null;
+}
+
+/**
+ * Canonical effort resolution: task override → profile default → null.
+ * Returning null means buildAgentCommand will not append any effort flag,
+ * which lets the CLI fall back to its own internal default.
+ */
+export function resolveEffort(
+  state: AppState,
+  profile: AgentProfile,
+  taskId?: string,
+): string | null {
+  if (taskId) {
+    const task = state.db.getTaskById(taskId);
+    if (task?.effort_override) return task.effort_override;
+  }
+  return profile.effort_default ?? null;
 }
 
 // -- 3-tier agent profile resolution --
@@ -133,7 +160,7 @@ export function resolveAgentProfile(
 
 // -- Build agent command with model flags --
 
-export function buildAgentCommand(profile: AgentProfile): string {
+export function buildAgentCommand(profile: AgentProfile, effort?: string | null): string {
   const command = profile.command.trim();
   if (!command) {
     return profile.command;
@@ -142,19 +169,17 @@ export function buildAgentCommand(profile: AgentProfile): string {
   const provider = profile.provider.toLowerCase();
   const model = profile.model.trim();
 
-  if (!model || model.toLowerCase() === 'default') {
-    return command;
+  let withModel = command;
+  if (model && model.toLowerCase() !== 'default') {
+    if (provider.includes('codex')) {
+      withModel = `${command} -m ${model}`;
+    } else if (provider.includes('claude') || provider.includes('gemini') || provider.includes('cursor')) {
+      withModel = `${command} --model ${model}`;
+    }
   }
 
-  if (provider.includes('codex')) {
-    return `${command} -m ${model}`;
-  }
-
-  if (provider.includes('claude') || provider.includes('gemini') || provider.includes('cursor')) {
-    return `${command} --model ${model}`;
-  }
-
-  return command;
+  const effortArg = renderEffortArg(profile.provider, effort as any);
+  return effortArg ? `${withModel} ${effortArg}` : withModel;
 }
 
 // -- Autostart queueing --

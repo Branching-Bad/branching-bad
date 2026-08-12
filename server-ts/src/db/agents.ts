@@ -7,21 +7,29 @@ import type {
 } from '../models.js';
 import { Db, nowIso } from './index.js';
 
+export interface PruneResult {
+  deletedProfiles: number;
+  unassignedTasks: number;
+}
+
 declare module './index.js' {
   interface Db {
-    upsertAgentProfiles(profiles: DiscoveredProfile[]): number;
+    upsertAgentProfiles(profiles: DiscoveredProfile[]): string[];
+    pruneStaleAgentProfiles(keepIds: string[]): PruneResult;
     listAgentProfiles(): AgentProfileWithMetadata[];
     getAgentProfileById(profileId: string): AgentProfile | null;
+    setAgentProfileEffortDefault(profileId: string, effort: string | null): void;
     setRepoAgentPreference(repoId: string, agentProfileId: string): RepoAgentPreference;
     getRepoAgentPreference(repoId: string): RepoAgentPreference | null;
   }
 }
 
-Db.prototype.upsertAgentProfiles = function (profiles: DiscoveredProfile[]): number {
-  if (profiles.length === 0) return 0;
+Db.prototype.upsertAgentProfiles = function (profiles: DiscoveredProfile[]): string[] {
+  if (profiles.length === 0) return [];
 
   const db = this.connect();
     const ts = nowIso();
+    const ids: string[] = [];
     const tx = this.transaction(() => {
       for (const profile of profiles) {
         const existing = db
@@ -37,6 +45,7 @@ Db.prototype.upsertAgentProfiles = function (profiles: DiscoveredProfile[]): num
           ) as { id: string } | undefined;
 
         const id = existing?.id ?? uuidv4();
+        ids.push(id);
 
         db.prepare(
           `INSERT INTO agent_profiles (
@@ -62,14 +71,53 @@ Db.prototype.upsertAgentProfiles = function (profiles: DiscoveredProfile[]): num
     });
     tx();
 
-    return profiles.length;
+    return ids;
+};
+
+/**
+ * Remove agent_profiles whose IDs are not in keepIds. tasks.agent_profile_id is
+ * not enforced by a FK, so we null it out manually; repo_agent_preferences and
+ * runs cascade or stay as historical records. After cleanup, repos that lose
+ * their preference will return null from resolveAgentCommand, prompting the
+ * user to pick a fresh profile from the dropdown.
+ *
+ * keepIds == [] is treated as "no discovery ran, do nothing" to avoid wiping
+ * the table when the catalog is temporarily unreachable.
+ */
+Db.prototype.pruneStaleAgentProfiles = function (keepIds: string[]): PruneResult {
+  if (keepIds.length === 0) return { deletedProfiles: 0, unassignedTasks: 0 };
+
+  const db = this.connect();
+  const placeholders = keepIds.map(() => '?').join(',');
+
+  let deletedProfiles = 0;
+  let unassignedTasks = 0;
+
+  const tx = this.transaction(() => {
+    const taskResult = db
+      .prepare(
+        `UPDATE tasks SET agent_profile_id = NULL, updated_at = ?
+         WHERE agent_profile_id IS NOT NULL
+           AND agent_profile_id NOT IN (${placeholders})`,
+      )
+      .run(nowIso(), ...keepIds);
+    unassignedTasks = Number(taskResult.changes);
+
+    const profileResult = db
+      .prepare(`DELETE FROM agent_profiles WHERE id NOT IN (${placeholders})`)
+      .run(...keepIds);
+    deletedProfiles = Number(profileResult.changes);
+  });
+  tx();
+
+  return { deletedProfiles, unassignedTasks };
 };
 
 Db.prototype.listAgentProfiles = function (): AgentProfileWithMetadata[] {
   const db = this.connect();
     const rows = db
       .prepare(
-        'SELECT id, provider, agent_name, model, command, source, discovery_kind, metadata_json, created_at, updated_at FROM agent_profiles ORDER BY provider ASC, agent_name ASC, model ASC, updated_at DESC',
+        'SELECT id, provider, agent_name, model, command, source, discovery_kind, metadata_json, effort_default, created_at, updated_at FROM agent_profiles ORDER BY provider ASC, agent_name ASC, model ASC, updated_at DESC',
       )
       .all() as any[];
     return rows.map((row) => ({
@@ -81,6 +129,7 @@ Db.prototype.listAgentProfiles = function (): AgentProfileWithMetadata[] {
       source: row.source,
       discovery_kind: row.discovery_kind,
       metadata: JSON.parse(row.metadata_json || '{}'),
+      effort_default: row.effort_default ?? null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     }));
@@ -90,7 +139,7 @@ Db.prototype.getAgentProfileById = function (profileId: string): AgentProfile | 
   const db = this.connect();
     const row = db
       .prepare(
-        'SELECT id, provider, agent_name, model, command, source, discovery_kind, metadata_json, created_at, updated_at FROM agent_profiles WHERE id = ?',
+        'SELECT id, provider, agent_name, model, command, source, discovery_kind, metadata_json, effort_default, created_at, updated_at FROM agent_profiles WHERE id = ?',
       )
       .get(profileId) as any | undefined;
     return row
@@ -103,10 +152,23 @@ Db.prototype.getAgentProfileById = function (profileId: string): AgentProfile | 
           source: row.source,
           discovery_kind: row.discovery_kind,
           metadata_json: row.metadata_json,
+          effort_default: row.effort_default ?? null,
           created_at: row.created_at,
           updated_at: row.updated_at,
         }
       : null;
+};
+
+Db.prototype.setAgentProfileEffortDefault = function (
+  profileId: string,
+  effort: string | null,
+): void {
+  const db = this.connect();
+  db.prepare('UPDATE agent_profiles SET effort_default = ?, updated_at = ? WHERE id = ?').run(
+    effort,
+    nowIso(),
+    profileId,
+  );
 };
 
 Db.prototype.setRepoAgentPreference = function (

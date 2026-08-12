@@ -467,6 +467,7 @@ export default function App() {
           {route === "agents" && (
             <AgentsView
               agentProfiles={boot.agentProfiles}
+              setAgentProfiles={boot.setAgentProfiles}
               selectedProfileId={repo.selectedProfileId}
               setSelectedProfileId={repo.setSelectedProfileId}
               selectedProfile={repo.selectedProfile}

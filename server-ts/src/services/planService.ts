@@ -63,6 +63,7 @@ export async function ensurePlanJobRunning(
   mode: string,
   revisionComment?: string,
   autostartJobId?: string,
+  providerId?: string,
 ): Promise<PlanJob> {
   const { spawnPlanGenerationJob } = await import('./planGenerator.js');
 
@@ -84,7 +85,7 @@ export async function ensurePlanJobRunning(
     const { MsgStore: MsgStoreClass } = await import('../msgStore.js');
     const store = new MsgStoreClass();
     state.processManager.registerStore(planStoreKey(job.id), store);
-    spawnPlanGenerationJob(state, job, task, repoPath, agentCommand, mode, store, autostartJobId);
+    spawnPlanGenerationJob(state, job, task, repoPath, agentCommand, mode, store, autostartJobId, providerId);
   }
 
   return job;
